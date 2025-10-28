@@ -16,16 +16,14 @@ struct HoverableGlossyCard<Content: View>: View {
         content
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(.ultraThinMaterial.opacity(0.8))
+                    .fill(Color(red: 0.10, green: 0.12, blue: 0.20).opacity(0.85))
                     .background(
                         RoundedRectangle(cornerRadius: 20)
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        Color(red: 0.12, green: 0.14, blue: 0.22).opacity(0.4), // Deep tech blue
-                                        Color(red: 0.08, green: 0.10, blue: 0.18).opacity(0.2), // Blue-charcoal
-                                        Color(red: 0.05, green: 0.06, blue: 0.12).opacity(0.1), // Rich blue-black
-                                        Color(red: 0.10, green: 0.12, blue: 0.20).opacity(0.3)  // Dark blue accent
+                                        Color(red: 0.10, green: 0.12, blue: 0.20).opacity(0.4),
+                                        Color(red: 0.06, green: 0.08, blue: 0.14).opacity(0.25)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -34,12 +32,9 @@ struct HoverableGlossyCard<Content: View>: View {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
-                            .stroke(Color.white.opacity(isHovered ? 0.4 : 0.2), lineWidth: isHovered ? 1.5 : 1)
-                            .blur(radius: 0.5)
+                            .stroke(Color.white.opacity(isHovered ? 0.35 : 0.18), lineWidth: isHovered ? 1.5 : 1)
                     )
-                    .shadow(color: Color(red: 0.02, green: 0.03, blue: 0.06).opacity(isHovered ? 0.8 : 0.5), radius: isHovered ? 40 : 30, x: 0, y: isHovered ? 20 : 15)
-                    .shadow(color: Color(red: 0.01, green: 0.02, blue: 0.04).opacity(isHovered ? 0.6 : 0.3), radius: isHovered ? 20 : 12, x: 0, y: isHovered ? 8 : 5)
-                    .shadow(color: Color(red: 0.06, green: 0.08, blue: 0.15).opacity(isHovered ? 0.3 : 0.1), radius: isHovered ? 8 : 4, x: 0, y: isHovered ? 3 : 2)
+                    .shadow(color: Color.black.opacity(isHovered ? 0.45 : 0.28), radius: isHovered ? 24 : 18, x: 0, y: isHovered ? 12 : 8)
             )
             .brightness(isHovered && !excludeInteractiveElements ? 0.02 : 0.0)
             .onHover { hovering in
@@ -93,16 +88,14 @@ struct EnhancedGlassButtonStyle: ButtonStyle {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(.ultraThinMaterial.opacity(0.9))
+                    .fill(Color(red: 0.12, green: 0.14, blue: 0.24).opacity(0.9))
                     .background(
                         RoundedRectangle(cornerRadius: 10)
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        Color(red: 0.15, green: 0.17, blue: 0.28).opacity(isHovered ? 0.5 : 0.3), // Deep tech blue
-                                        Color(red: 0.08, green: 0.10, blue: 0.18).opacity(isHovered ? 0.3 : 0.15), // Blue-charcoal
-                                        Color(red: 0.05, green: 0.06, blue: 0.12).opacity(0.1), // Rich blue-black
-                                        Color(red: 0.12, green: 0.14, blue: 0.24).opacity(isHovered ? 0.4 : 0.2)  // Dark blue accent
+                                        Color(red: 0.12, green: 0.14, blue: 0.24).opacity(isHovered ? 0.45 : 0.3),
+                                        Color(red: 0.07, green: 0.09, blue: 0.16).opacity(isHovered ? 0.25 : 0.15)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -111,11 +104,9 @@ struct EnhancedGlassButtonStyle: ButtonStyle {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.white.opacity(isHovered ? 0.4 : 0.25), lineWidth: isHovered ? 1.5 : 1)
-                            .blur(radius: 0.3)
+                            .stroke(Color.white.opacity(isHovered ? 0.35 : 0.22), lineWidth: isHovered ? 1.5 : 1)
                     )
-                    .shadow(color: Color(red: 0.02, green: 0.03, blue: 0.06).opacity(isHovered ? 0.7 : 0.4), radius: isHovered ? 15 : 10, x: 0, y: isHovered ? 8 : 5)
-                    .shadow(color: Color(red: 0.06, green: 0.08, blue: 0.15).opacity(isHovered ? 0.3 : 0.15), radius: isHovered ? 6 : 3, x: 0, y: isHovered ? 3 : 2)
+                    .shadow(color: Color.black.opacity(isHovered ? 0.5 : 0.3), radius: isHovered ? 14 : 10, x: 0, y: isHovered ? 7 : 5)
             )
             .scaleEffect(configuration.isPressed ? 0.96 : (isHovered ? 1.05 : 1.0))
             .brightness(isHovered ? 0.05 : 0.0)
