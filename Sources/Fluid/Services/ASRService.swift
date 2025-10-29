@@ -6,6 +6,14 @@ import FluidAudio
 import CoreAudio
 import AppKit
 
+private actor TranscriptionExecutor
+{
+    func run<T>(_ operation: @escaping () async throws -> T) async rethrows -> T
+    {
+        try await operation()
+    }
+}
+
 /// A comprehensive speech recognition service that handles real-time audio transcription.
 ///
 /// This service manages the entire ASR (Automatic Speech Recognition) pipeline including:
@@ -78,6 +86,7 @@ final class ASRService: ObservableObject
     private var skipNextChunk: Bool = false
     private var previousFullTranscription: String = ""
     private let processingLock = NSLock() // Prevent concurrent CoreML access
+    private let transcriptionExecutor = TranscriptionExecutor()
 
     private var audioLevelSubject = PassthroughSubject<CGFloat, Never>()
     var audioLevelPublisher: AnyPublisher<CGFloat, Never> { audioLevelSubject.eraseToAnyPublisher() }
@@ -221,8 +230,10 @@ final class ASRService: ObservableObject
         guard isRunning else { return "" }
         
         // CRITICAL: Wait for any in-flight transcription to complete
+        DebugLogger.shared.debug("stop(): waiting for processing lock", source: "ASRService")
         processingLock.lock()
         processingLock.unlock()
+        DebugLogger.shared.debug("stop(): processing lock cleared", source: "ASRService")
         
         stopStreamingTimer()
         removeEngineTap()
@@ -247,7 +258,11 @@ final class ASRService: ObservableObject
             }
             
             DebugLogger.shared.debug("Starting transcription with \(pcm.count) samples (\(Float(pcm.count)/16000.0) seconds)", source: "ASRService")
-            let result = try await manager.transcribe(pcm, source: AudioSource.microphone)
+            DebugLogger.shared.debug("stop(): starting full transcription (samples: \(pcm.count))", source: "ASRService")
+            let result = try await transcriptionExecutor.run {
+                try await manager.transcribe(pcm, source: AudioSource.microphone)
+            }
+            DebugLogger.shared.debug("stop(): full transcription finished", source: "ASRService")
             DebugLogger.shared.debug("Transcription completed: '\(result.text)' (confidence: \(result.confidence))", source: "ASRService")
             // Do not update self.finalText here to avoid instant binding insert in playground
             return result.text
@@ -728,7 +743,10 @@ final class ASRService: ObservableObject
             return
         }
         
-        defer { processingLock.unlock() }
+        defer {
+            DebugLogger.shared.debug("Streaming chunk releasing processing lock", source: "ASRService")
+            processingLock.unlock()
+        }
         
         // Double-check processing flag
         guard !isProcessingChunk else {
@@ -756,12 +774,16 @@ final class ASRService: ObservableObject
         let startTime = Date()
         
         do {
-            // Run transcription on a dedicated queue to avoid blocking main thread updates
-            let result = try await Task.detached(priority: .userInitiated) {
-                try await manager.transcribe(chunk, source: .microphone)
-            }.value
+            DebugLogger.shared.debug("Streaming chunk starting CoreML transcription (samples: \(chunk.count))", source: "ASRService")
+            let result = try await transcriptionExecutor.run {
+                try await manager.transcribe(chunk, source: AudioSource.microphone)
+            }
             
             let duration = Date().timeIntervalSince(startTime)
+            DebugLogger.shared.debug(
+                "Streaming chunk CoreML transcription finished in \(String(format: "%.2f", duration))s",
+                source: "ASRService"
+            )
             let newText = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
             
             if !newText.isEmpty {
