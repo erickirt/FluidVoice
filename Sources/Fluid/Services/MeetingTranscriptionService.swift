@@ -153,7 +153,7 @@ final class MeetingTranscriptionService: ObservableObject {
     
     /// Export transcription result to text file
     nonisolated func exportToText(_ result: TranscriptionResult, to destinationURL: URL) throws {
-        var content = """
+        let content = """
         Transcription: \(result.fileName)
         Date: \(result.timestamp.formatted())
         Duration: \(String(format: "%.1f", result.duration))s

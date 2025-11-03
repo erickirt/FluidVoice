@@ -33,7 +33,7 @@ struct MeetingTranscriptionView: View {
             VStack(spacing: 8) {
                 Image(systemName: "waveform.circle.fill")
                     .font(.system(size: 48))
-                    .foregroundStyle(.blue.gradient)
+                    .foregroundStyle(.green.gradient)
                 
                 Text("Meeting Transcription")
                     .font(.title2)
@@ -96,7 +96,7 @@ struct MeetingTranscriptionView: View {
                 HStack {
                     Image(systemName: "doc.fill")
                         .font(.title2)
-                        .foregroundColor(.blue)
+                        .foregroundColor(.green)
                     
                     VStack(alignment: .leading, spacing: 4) {
                         Text(fileURL.lastPathComponent)
@@ -163,7 +163,7 @@ struct MeetingTranscriptionView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [8]))
-                        .foregroundColor(.blue.opacity(0.3))
+                        .foregroundColor(.green.opacity(0.3))
                 )
             }
         }
