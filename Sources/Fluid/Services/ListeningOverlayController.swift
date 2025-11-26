@@ -1,5 +1,11 @@
 import AppKit
 
+enum OverlayMode: String {
+    case dictation = "Dictation"
+    case rewrite = "Rewrite"
+    case command = "Command"
+}
+
 final class ListeningOverlayController
 {
     private var panel: NSPanel?
@@ -10,10 +16,17 @@ final class ListeningOverlayController
     private var unifiedContainer: NSView?
     private var orbView: NSView?
     private var isShowingPreview: Bool = true
+    private var modeLabel: NSTextField?
+    private var currentMode: OverlayMode = .dictation
 
     init(asrService: ASRService)
     {
         self.asrService = asrService
+    }
+    
+    func setMode(_ mode: OverlayMode) {
+        currentMode = mode
+        updateModeLabel()
     }
 
     func show(with view: NSView, showPreview: Bool = true)
@@ -64,6 +77,9 @@ final class ListeningOverlayController
         view.frame = NSRect(x: 0, y: orbY, width: width, height: 70)
         containerView.addSubview(view)
         orbView = view
+        
+        // Add mode indicator label (top-right corner, small)
+        setupModeLabel(in: containerView, width: width)
         
         // Add text fields to container (at bottom) - only if preview enabled
         if showPreview {
@@ -119,6 +135,71 @@ final class ListeningOverlayController
             // Hide panel after animation completes
             self.panel?.orderOut(nil)
         })
+    }
+    
+    /// Show a brief toast message in the overlay area
+    func showToast(_ message: String, duration: TimeInterval = 1.5) {
+        // Clean up any existing panel
+        if let existingPanel = panel {
+            existingPanel.orderOut(nil)
+            existingPanel.contentView = nil
+            panel = nil
+        }
+        
+        let width: CGFloat = 280
+        let height: CGFloat = 50
+        
+        let style: NSWindow.StyleMask = [.borderless, .nonactivatingPanel]
+        let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+                        styleMask: style,
+                        backing: .buffered,
+                        defer: false)
+        p.level = .statusBar
+        p.isOpaque = false
+        p.hasShadow = true
+        p.hidesOnDeactivate = false
+        p.ignoresMouseEvents = true
+        p.collectionBehavior = [.canJoinAllSpaces, .transient, .fullScreenAuxiliary]
+        p.backgroundColor = .clear
+        p.titleVisibility = .hidden
+        p.titlebarAppearsTransparent = true
+        panel = p
+        
+        // Create container with dark background
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: width, height: height))
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.85).cgColor
+        container.layer?.cornerRadius = 10
+        unifiedContainer = container
+        
+        // Create message label
+        let label = NSTextField(frame: NSRect(x: 10, y: 10, width: width - 20, height: height - 20))
+        label.isEditable = false
+        label.isBordered = false
+        label.drawsBackground = false
+        label.textColor = .white
+        label.alignment = .center
+        label.font = NSFont.systemFont(ofSize: 13, weight: .medium)
+        label.stringValue = message
+        container.addSubview(label)
+        
+        panel?.contentView = container
+        positionCenteredLower()
+        
+        // Animate in
+        container.alphaValue = 0.0
+        panel?.orderFrontRegardless()
+        
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.2
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            container.animator().alphaValue = 1.0
+        })
+        
+        // Auto-hide after duration
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+            self?.hide()
+        }
     }
 
     private func activeScreen() -> NSScreen?
@@ -204,6 +285,51 @@ final class ListeningOverlayController
         field.alphaValue = alpha
         field.translatesAutoresizingMaskIntoConstraints = false
         return field
+    }
+    
+    private func setupModeLabel(in containerView: NSView, width: CGFloat) {
+        // Remove existing label if any
+        modeLabel?.removeFromSuperview()
+        
+        let label = NSTextField(frame: .zero)
+        label.isEditable = false
+        label.isBordered = false
+        label.drawsBackground = false
+        label.alignment = .center
+        label.font = NSFont.systemFont(ofSize: 9, weight: .semibold)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        
+        containerView.addSubview(label)
+        modeLabel = label
+        
+        // Position at top-right
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 6),
+            label.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -10)
+        ])
+        
+        updateModeLabel()
+    }
+    
+    private func updateModeLabel() {
+        guard let label = modeLabel else { return }
+        
+        switch currentMode {
+        case .dictation:
+            // Hide for normal dictation mode (it's the default)
+            label.alphaValue = 0
+            label.stringValue = ""
+        case .rewrite:
+            // Show "Rewrite" badge in blue
+            label.stringValue = "✏️ Rewrite"
+            label.textColor = NSColor(calibratedRed: 0.4, green: 0.6, blue: 1.0, alpha: 1.0)
+            label.alphaValue = 1.0
+        case .command:
+            // Show "Command" badge in green
+            label.stringValue = "⚡ Command"
+            label.textColor = NSColor(calibratedRed: 0.4, green: 0.8, blue: 0.4, alpha: 1.0)
+            label.alphaValue = 1.0
+        }
     }
     
     func setPreviewEnabled(_ enabled: Bool) {

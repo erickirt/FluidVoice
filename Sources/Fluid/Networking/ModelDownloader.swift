@@ -319,27 +319,24 @@ extension HuggingFaceModelDownloader
         // Check if new structure exists
         let hasNewStructure = fm.fileExists(atPath: preprocessorUrl.path) && fm.fileExists(atPath: encoderUrl.path)
         
-        let preprocessor: MLModel
-        let encoder: MLModel
+        let melEncoder: MLModel
         
         if hasNewStructure {
             // Load with new structure (separate Preprocessor and Encoder)
+            // For FluidAudio API, we use the Encoder as melEncoder
             print("[ModelDL] Loading with new model structure (Preprocessor + Encoder)")
-            preprocessor = try MLModel(contentsOf: preprocessorUrl, configuration: config)
-            encoder = try MLModel(contentsOf: encoderUrl, configuration: config)
+            print("[ModelDL] Using Encoder as melEncoder for FluidAudio API")
+            melEncoder = try MLModel(contentsOf: encoderUrl, configuration: config)
         } else {
-            // Fallback: Try old structure (MelEncoder as both preprocessor and encoder)
+            // Fallback: Try old structure (MelEncoder)
             let melEncUrl = repoDirectory.appendingPathComponent("MelEncoder.mlmodelc")
             print("[ModelDL] New structure not found, trying legacy MelEncoder")
             print("[ModelDL] MelEncoder path: \(melEncUrl.path)")
             print("[ModelDL] MelEncoder exists: \(fm.fileExists(atPath: melEncUrl.path))")
             
             if fm.fileExists(atPath: melEncUrl.path) {
-                let melEncoder = try MLModel(contentsOf: melEncUrl, configuration: config)
-                // Use MelEncoder for both preprocessor and encoder
-                preprocessor = melEncoder
-                encoder = melEncoder
-                print("[ModelDL] Using MelEncoder for both preprocessor and encoder (legacy mode)")
+                melEncoder = try MLModel(contentsOf: melEncUrl, configuration: config)
+                print("[ModelDL] Using MelEncoder (legacy mode)")
             } else {
                 throw NSError(domain: "ModelDL", code: -1, userInfo: [
                     NSLocalizedDescriptionKey: "Neither new model structure (Preprocessor + Encoder) nor legacy structure (MelEncoder) found"
@@ -364,13 +361,10 @@ extension HuggingFaceModelDownloader
             if let idx = Int(k) { vocabulary[idx] = v }
         }
 
-        print("[ModelDL] Creating AsrModels (unified v3)")
-        
-        // Use the encoder as melEncoder (works with both old and new models)
-        // When using new model structure (Preprocessor + Encoder), encoder is separate
-        // When using old structure (MelEncoder), encoder IS the melEncoder
+        print("[ModelDL] Creating AsrModels")
+
         return AsrModels(
-            melEncoder: encoder,
+            melEncoder: melEncoder,
             decoder: decoder,
             joint: joint,
             configuration: config,

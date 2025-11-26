@@ -57,8 +57,18 @@ final class ASRService: ObservableObject
     @Published var micStatus: AVAuthorizationStatus = .notDetermined
     @Published var isAsrReady: Bool = false
     @Published var isDownloadingModel: Bool = false
+    @Published var isLoadingModel: Bool = false  // True when loading cached model into memory (not downloading)
     @Published var modelsExistOnDisk: Bool = false
     @Published var selectedModel: ModelOption = .parakeetTdt06bV3
+    
+    /// Returns a user-friendly status message for model loading state
+    var modelStatusMessage: String {
+        if isAsrReady { return "Model ready" }
+        if isDownloadingModel { return "Downloading model..." }
+        if isLoadingModel { return "Loading model into memory..." }
+        if modelsExistOnDisk { return "Model cached, needs loading" }
+        return "Model not downloaded"
+    }
 
     enum ModelOption: String, CaseIterable, Identifiable, Hashable
     {
@@ -550,44 +560,58 @@ final class ASRService: ObservableObject
         
         if isAsrReady == false
         {
+            let totalStartTime = Date()
             do
             {
-                DebugLogger.shared.debug("Starting ASR initialization...", source: "ASRService")
+                DebugLogger.shared.info("=== ASR INITIALIZATION START ===", source: "ASRService")
 
                 // Use separate cache directory for v3 models
                 let baseCacheDir = AsrModels.defaultCacheDirectory().deletingLastPathComponent()
                 let cacheDir = baseCacheDir.appendingPathComponent("parakeet-tdt-0.6b-v3-coreml")
-                DebugLogger.shared.debug("Model cache directory (v3): \(cacheDir.path)", source: "ASRService")
-                DebugLogger.shared.debug("Cache directory exists: \(FileManager.default.fileExists(atPath: cacheDir.path))", source: "ASRService")
+                let modelsAlreadyCached = FileManager.default.fileExists(atPath: cacheDir.path)
+                
+                DebugLogger.shared.info("Model cache directory: \(cacheDir.path)", source: "ASRService")
+                DebugLogger.shared.info("Models already cached on disk: \(modelsAlreadyCached)", source: "ASRService")
 
                 let originalStderr = dup(STDERR_FILENO)
                 let devNull = open("/dev/null", O_WRONLY)
                 dup2(devNull, STDERR_FILENO)
                 close(devNull)
 
-                DebugLogger.shared.debug("Using FluidAudio's v3 loader (AsrModels.downloadAndLoad)", source: "ASRService")
-
                 // Force v3: remove any v2 cache directory so no fallback occurs
                 let v2CacheDir = baseCacheDir.appendingPathComponent("parakeet-tdt-0.6b-v2-coreml")
                 if FileManager.default.fileExists(atPath: v2CacheDir.path) {
                     try FileManager.default.removeItem(at: v2CacheDir)
-                    DebugLogger.shared.debug("Removed v2 cache directory to force v3 download", source: "ASRService")
+                    DebugLogger.shared.debug("Removed v2 cache directory to force v3", source: "ASRService")
                 }
 
+                // Set correct loading state based on whether models are cached
                 DispatchQueue.main.async {
-                    self.isDownloadingModel = true
-                    DebugLogger.shared.info("Model download flagged as in-progress", source: "ASRService")
+                    if modelsAlreadyCached {
+                        self.isLoadingModel = true
+                        self.isDownloadingModel = false
+                        DebugLogger.shared.info("📦 LOADING cached model into memory (this takes 30-60 sec)...", source: "ASRService")
+                    } else {
+                        self.isDownloadingModel = true
+                        self.isLoadingModel = false
+                        DebugLogger.shared.info("⬇️ DOWNLOADING model from Hugging Face...", source: "ASRService")
+                    }
                 }
-                DebugLogger.shared.debug("Invoking AsrModels.downloadAndLoad()", source: "ASRService")
+                
+                // This call either downloads (if needed) OR just loads from cache
+                let downloadStartTime = Date()
+                DebugLogger.shared.info("Calling AsrModels.downloadAndLoad()...", source: "ASRService")
                 let models = try await AsrModels.downloadAndLoad()
-                DebugLogger.shared.info("AsrModels.downloadAndLoad() returned successfully", source: "ASRService")
+                let downloadDuration = Date().timeIntervalSince(downloadStartTime)
+                DebugLogger.shared.info("✓ AsrModels.downloadAndLoad() completed in \(String(format: "%.1f", downloadDuration)) seconds", source: "ASRService")
+                
                 DispatchQueue.main.async {
                     self.isDownloadingModel = false
+                    self.isLoadingModel = false
                     self.modelsExistOnDisk = true
-                    DebugLogger.shared.info("Model download marked complete", source: "ASRService")
                 }
-                DebugLogger.shared.debug("FluidAudio models loaded successfully (v3)", source: "ASRService")
                 
+                // Initialize AsrManager
                 if self.asrManager == nil
                 {
                     DebugLogger.shared.debug("Creating new AsrManager...", source: "ASRService")
@@ -595,25 +619,27 @@ final class ASRService: ObservableObject
                 }
                 if let manager = self.asrManager
                 {
-                    DebugLogger.shared.debug("Initializing AsrManager with models...", source: "ASRService")
+                    let initStartTime = Date()
+                    DebugLogger.shared.info("Initializing AsrManager with loaded models...", source: "ASRService")
                     try await manager.initialize(models: models)
-                      DebugLogger.shared.debug("AsrManager initialized successfully", source: "ASRService")
-                  }
+                    let initDuration = Date().timeIntervalSince(initStartTime)
+                    DebugLogger.shared.info("✓ AsrManager.initialize() completed in \(String(format: "%.1f", initDuration)) seconds", source: "ASRService")
+                }
 
                 dup2(originalStderr, STDERR_FILENO)
                 close(originalStderr)
 
-                DebugLogger.shared.info("ASR initialization completed successfully", source: "ASRService")
+                let totalDuration = Date().timeIntervalSince(totalStartTime)
+                DebugLogger.shared.info("=== ASR INITIALIZATION COMPLETE ===", source: "ASRService")
+                DebugLogger.shared.info("Total initialization time: \(String(format: "%.1f", totalDuration)) seconds", source: "ASRService")
             }
             catch
             {
                 DebugLogger.shared.error("ASR initialization failed with error: \(error)", source: "ASRService")
                 DebugLogger.shared.error("Error details: \(error.localizedDescription)", source: "ASRService")
                 DispatchQueue.main.async {
-                    if self.isDownloadingModel {
-                        DebugLogger.shared.warning("Model download aborted due to error; resetting state", source: "ASRService")
-                    }
                     self.isDownloadingModel = false
+                    self.isLoadingModel = false
                 }
                 throw error
             }
@@ -631,8 +657,8 @@ final class ASRService: ObservableObject
         Task
         { [weak self] in
             guard let self = self else { return }
-            DebugLogger.shared.debug("Starting model predownload...", source: "ASRService")
-            await MainActor.run { self.isDownloadingModel = true }
+            DebugLogger.shared.info("Starting model predownload...", source: "ASRService")
+            // ensureAsrReady handles setting the correct loading/downloading state
             do
             {
                 try await self.ensureAsrReady()
@@ -641,23 +667,21 @@ final class ASRService: ObservableObject
             catch
             {
                 DebugLogger.shared.error("Model predownload failed: \(error)", source: "ASRService")
-                DebugLogger.shared.error("Error details: \(error.localizedDescription)", source: "ASRService")
             }
-            await MainActor.run { self.isDownloadingModel = false }
         }
     }
 
     func preloadModelAfterSelection() async
     {
-        await MainActor.run { self.isDownloadingModel = true }
+        // ensureAsrReady handles setting the correct loading/downloading state
         do
         {
             try await self.ensureAsrReady()
         }
         catch
         {
+            DebugLogger.shared.error("Model preload failed: \(error)", source: "ASRService")
         }
-        await MainActor.run { self.isDownloadingModel = false }
     }
 
 

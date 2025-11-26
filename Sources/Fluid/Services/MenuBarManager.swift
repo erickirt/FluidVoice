@@ -119,6 +119,14 @@ final class MenuBarManager: ObservableObject {
         overlay?.setPreviewEnabled(enabled)
     }
     
+    func setOverlayMode(_ mode: OverlayMode) {
+        overlay?.setMode(mode)
+    }
+    
+    func showToast(_ message: String) {
+        overlay?.showToast(message)
+    }
+    
     private func setupMenuBarSafely() {
         // Check if window server connection is available
         guard NSApp.isActive || NSApp.isRunning else {

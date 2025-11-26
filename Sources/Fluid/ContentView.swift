@@ -28,6 +28,8 @@ enum SidebarItem: Hashable {
     case meetingTools
     case stats
     case feedback
+    case commandMode
+    case rewriteMode
 }
 
 // MARK: - Listening Overlay View (using modular components)
@@ -77,6 +79,8 @@ struct ContentView: View {
     @StateObject private var audioObserver = AudioHardwareObserver()
     @StateObject private var asr = ASRService()
     @StateObject private var mouseTracker = MousePositionTracker()
+    @StateObject private var commandModeService = CommandModeService()
+    @StateObject private var rewriteModeService = RewriteModeService()
     @EnvironmentObject private var menuBarManager: MenuBarManager
     @Environment(\.theme) private var theme
     @State private var hotkeyManager: GlobalHotkeyManager? = nil
@@ -85,7 +89,12 @@ struct ContentView: View {
     @State private var appear = false
     @State private var accessibilityEnabled = false
     @State private var hotkeyShortcut: HotkeyShortcut = SettingsStore.shared.hotkeyShortcut
+    @State private var commandModeHotkeyShortcut: HotkeyShortcut = SettingsStore.shared.commandModeHotkeyShortcut
+    @State private var rewriteModeHotkeyShortcut: HotkeyShortcut = SettingsStore.shared.rewriteModeHotkeyShortcut
+    @State private var isRecordingForRewrite: Bool = false  // Track if current recording is for rewrite mode
+    @State private var isRecordingForCommand: Bool = false  // Track if current recording is for command mode
     @State private var isRecordingShortcut = false
+    @State private var isRecordingRewriteShortcut = false
     @State private var pendingModifierFlags: NSEvent.ModifierFlags = []
     @State private var pendingModifierKeyCode: UInt16?
     @State private var pendingModifierOnly = false
@@ -94,6 +103,9 @@ struct ContentView: View {
     @State private var selectedSidebarItem: SidebarItem? = .welcome
     @State private var playgroundUsed: Bool = SettingsStore.shared.playgroundUsed
     @State private var recordingAppInfo: (name: String, bundleId: String, windowTitle: String)? = nil
+    
+    // Command Mode State
+    // @State private var showCommandMode: Bool = false
 
     // Audio Settings Tab State
     @State private var visualizerNoiseThreshold: Double = SettingsStore.shared.visualizerNoiseThreshold
@@ -302,7 +314,8 @@ struct ContentView: View {
                 let eventModifiers = event.modifierFlags.intersection([.function, .command, .option, .control, .shift])
                 let shortcutModifiers = hotkeyShortcut.modifierFlags.intersection([.function, .command, .option, .control, .shift])
                 
-                DebugLogger.shared.debug("NSEvent \(event.type) keyCode=\(event.keyCode) recordingShortcut=\(isRecordingShortcut)", source: "ContentView")
+                let isRecordingAnyShortcut = isRecordingShortcut || isRecordingRewriteShortcut
+                DebugLogger.shared.debug("NSEvent \(event.type) keyCode=\(event.keyCode) recordingShortcut=\(isRecordingShortcut) recordingRewrite=\(isRecordingRewriteShortcut)", source: "ContentView")
 
                 if event.type == .keyDown {
                     if event.keyCode == hotkeyShortcut.keyCode && eventModifiers == shortcutModifiers {
@@ -310,7 +323,7 @@ struct ContentView: View {
                         return event
                     }
 
-                    guard isRecordingShortcut else {
+                    guard isRecordingAnyShortcut else {
                         if event.keyCode == 53 && asr.isRunning {
                             DebugLogger.shared.debug("NSEvent monitor: Escape pressed, cancelling ASR recording", source: "ContentView")
                             asr.stopWithoutTranscription()
@@ -324,6 +337,7 @@ struct ContentView: View {
                     if keyCode == 53 {
                         DebugLogger.shared.debug("NSEvent monitor: Escape pressed, cancelling shortcut recording", source: "ContentView")
                         isRecordingShortcut = false
+                        isRecordingRewriteShortcut = false
                         resetPendingShortcutState()
                         return nil
                     }
@@ -331,12 +345,20 @@ struct ContentView: View {
                     let combinedModifiers = pendingModifierFlags.union(eventModifiers)
                     let newShortcut = HotkeyShortcut(keyCode: keyCode, modifierFlags: combinedModifiers)
                     DebugLogger.shared.debug("NSEvent monitor: Recording new shortcut: \(newShortcut.displayString)", source: "ContentView")
-                    hotkeyShortcut = newShortcut
-                    SettingsStore.shared.hotkeyShortcut = newShortcut
-                    hotkeyManager?.updateShortcut(newShortcut)
-                    isRecordingShortcut = false
+                    
+                    if isRecordingRewriteShortcut {
+                        rewriteModeHotkeyShortcut = newShortcut
+                        SettingsStore.shared.rewriteModeHotkeyShortcut = newShortcut
+                        hotkeyManager?.updateRewriteModeShortcut(newShortcut)
+                        isRecordingRewriteShortcut = false
+                    } else {
+                        hotkeyShortcut = newShortcut
+                        SettingsStore.shared.hotkeyShortcut = newShortcut
+                        hotkeyManager?.updateShortcut(newShortcut)
+                        isRecordingShortcut = false
+                    }
                     resetPendingShortcutState()
-                    DebugLogger.shared.debug("NSEvent monitor: Finished recording shortcut, isRecordingShortcut set to false", source: "ContentView")
+                    DebugLogger.shared.debug("NSEvent monitor: Finished recording shortcut", source: "ContentView")
                     return nil
                 } else if event.type == .flagsChanged {
                     if hotkeyShortcut.modifierFlags.isEmpty {
@@ -347,7 +369,7 @@ struct ContentView: View {
                         }
                     }
 
-                    guard isRecordingShortcut else {
+                    guard isRecordingAnyShortcut else {
                         resetPendingShortcutState()
                         return event
                     }
@@ -356,12 +378,20 @@ struct ContentView: View {
                         if pendingModifierOnly, let modifierKeyCode = pendingModifierKeyCode {
                             let newShortcut = HotkeyShortcut(keyCode: modifierKeyCode, modifierFlags: [])
                             DebugLogger.shared.debug("NSEvent monitor: Recording modifier-only shortcut: \(newShortcut.displayString)", source: "ContentView")
-                            hotkeyShortcut = newShortcut
-                            SettingsStore.shared.hotkeyShortcut = newShortcut
-                            hotkeyManager?.updateShortcut(newShortcut)
-                            isRecordingShortcut = false
+                            
+                            if isRecordingRewriteShortcut {
+                                rewriteModeHotkeyShortcut = newShortcut
+                                SettingsStore.shared.rewriteModeHotkeyShortcut = newShortcut
+                                hotkeyManager?.updateRewriteModeShortcut(newShortcut)
+                                isRecordingRewriteShortcut = false
+                            } else {
+                                hotkeyShortcut = newShortcut
+                                SettingsStore.shared.hotkeyShortcut = newShortcut
+                                hotkeyManager?.updateShortcut(newShortcut)
+                                isRecordingShortcut = false
+                            }
                             resetPendingShortcutState()
-                            DebugLogger.shared.debug("NSEvent monitor: Finished recording modifier shortcut, isRecordingShortcut set to false", source: "ContentView")
+                            DebugLogger.shared.debug("NSEvent monitor: Finished recording modifier shortcut", source: "ContentView")
                             return nil
                         }
 
@@ -501,6 +531,16 @@ struct ContentView: View {
                 Label("Preferences", systemImage: "gearshape.fill")
                     .font(.system(size: 15, weight: .medium))
             }
+            
+            NavigationLink(value: SidebarItem.commandMode) {
+                Label("Command Mode", systemImage: "terminal.fill")
+                    .font(.system(size: 15, weight: .medium))
+            }
+            
+            NavigationLink(value: SidebarItem.rewriteMode) {
+                Label("Rewrite Mode", systemImage: "pencil.and.outline")
+                    .font(.system(size: 15, weight: .medium))
+            }
 
             NavigationLink(value: SidebarItem.meetingTools) {
                 Label("File Transcription", systemImage: "doc.text.fill")
@@ -553,6 +593,10 @@ struct ContentView: View {
                     statsView
                 case .feedback:
                     feedbackView
+                case .commandMode:
+                    commandModeView
+                case .rewriteMode:
+                    rewriteModeView
                 }
             }
             .transition(.opacity)
@@ -697,6 +741,8 @@ struct ContentView: View {
             accessibilityEnabled: $accessibilityEnabled,
             hotkeyShortcut: $hotkeyShortcut,
             isRecordingShortcut: $isRecordingShortcut,
+            rewriteShortcut: $rewriteModeHotkeyShortcut,
+            isRecordingRewriteShortcut: $isRecordingRewriteShortcut,
             hotkeyManagerInitialized: $hotkeyManagerInitialized,
             pressAndHoldModeEnabled: $pressAndHoldModeEnabled,
             enableStreamingPreview: $enableStreamingPreview,
@@ -719,6 +765,18 @@ struct ContentView: View {
             stopAndProcessTranscription: { await stopAndProcessTranscription() },
             startRecording: startRecording
         )
+    }
+    
+    private var commandModeView: some View {
+        CommandModeView(service: commandModeService, asr: asr, onClose: {
+            self.selectedSidebarItem = .welcome
+        })
+    }
+    
+    private var rewriteModeView: some View {
+        RewriteModeView(service: rewriteModeService, asr: asr, onClose: {
+            self.selectedSidebarItem = .welcome
+        })
     }
 
     // MARK: - AI Settings Tab
@@ -752,11 +810,11 @@ struct ContentView: View {
 
                             // Model status indicator with action buttons
                             HStack(spacing: 12) {
-                                if asr.isDownloadingModel {
+                                if asr.isDownloadingModel || asr.isLoadingModel {
                                     HStack(spacing: 8) {
                                         ProgressView()
                                             .controlSize(.small)
-                                        Text("Downloading…")
+                                        Text(asr.isLoadingModel ? "Loading model…" : "Downloading…")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -824,9 +882,14 @@ struct ContentView: View {
                                     )
                             )
                             
-                            // Download warning message
-                            if asr.isDownloadingModel {
-                                Text("Download might take a while...")
+                            // Loading/Download status message
+                            if asr.isLoadingModel {
+                                Text("Loading model into memory (30-60 sec)...")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.leading, 4)
+                            } else if asr.isDownloadingModel {
+                                Text("Downloading model (~500MB)...")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                                     .padding(.leading, 4)
@@ -1855,7 +1918,7 @@ struct ContentView: View {
     private func providerKey(for providerID: String) -> String {
         if providerID == "openai" || providerID == "groq" { return providerID }
         // Saved providers use their stable id
-        return providerID.isEmpty ? currentProvider : "custom:\\(providerID)"
+        return providerID.isEmpty ? currentProvider : "custom:\(providerID)"
     }
 
     private func defaultModels(for providerKey: String) -> [String] {
@@ -2215,11 +2278,37 @@ struct ContentView: View {
     private func stopAndProcessTranscription() async {
         DebugLogger.shared.debug("stopAndProcessTranscription called", source: "ContentView")
 
+        // Check if we're in rewrite or command mode
+        let wasRewriteMode = isRecordingForRewrite
+        let wasCommandMode = isRecordingForCommand
+        if wasRewriteMode {
+            isRecordingForRewrite = false
+            menuBarManager.setOverlayMode(.dictation) // Reset overlay mode
+        }
+        if wasCommandMode {
+            isRecordingForCommand = false
+            menuBarManager.setOverlayMode(.dictation) // Reset overlay mode
+        }
+
         // Stop the ASR service and wait for transcription to complete
         let transcribedText = await asr.stop()
 
         guard transcribedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             DebugLogger.shared.debug("Transcription returned empty text", source: "ContentView")
+            return
+        }
+
+        // If this was a rewrite recording, process the rewrite instead of typing
+        if wasRewriteMode {
+            DebugLogger.shared.info("Processing rewrite with instruction: \(transcribedText)", source: "ContentView")
+            await processRewriteWithVoiceInstruction(transcribedText)
+            return
+        }
+        
+        // If this was a command recording, process the command
+        if wasCommandMode {
+            DebugLogger.shared.info("Processing command: \(transcribedText)", source: "ContentView")
+            await processCommandWithVoice(transcribedText)
             return
         }
 
@@ -2260,6 +2349,48 @@ struct ContentView: View {
                 asr.typeTextToActiveField(finalText)
             }
         }
+    }
+    
+    // MARK: - Rewrite Mode Voice Processing
+    private func processRewriteWithVoiceInstruction(_ instruction: String) async {
+        DebugLogger.shared.info("Processing rewrite - instruction: '\(instruction)', originalText length: \(rewriteModeService.originalText.count)", source: "ContentView")
+        
+        guard !rewriteModeService.originalText.isEmpty else {
+            DebugLogger.shared.warning("No original text captured for rewrite", source: "ContentView")
+            return
+        }
+        
+        // Process the rewrite request
+        await rewriteModeService.processRewriteRequest(instruction)
+        
+        // If rewrite was successful, type the result
+        if !rewriteModeService.rewrittenText.isEmpty {
+            DebugLogger.shared.info("Rewrite successful, typing result (chars: \(rewriteModeService.rewrittenText.count))", source: "ContentView")
+            
+            // Copy to clipboard as backup
+            if SettingsStore.shared.copyTranscriptionToClipboard {
+                ClipboardService.copyToClipboard(rewriteModeService.rewrittenText)
+            }
+            
+            // Type the rewritten text
+            asr.typeTextToActiveField(rewriteModeService.rewrittenText)
+            
+            // Clear the rewrite service state for next use
+            rewriteModeService.clearState()
+        } else {
+            DebugLogger.shared.error("Rewrite failed - no result", source: "ContentView")
+        }
+    }
+    
+    // MARK: - Command Mode Voice Processing
+    private func processCommandWithVoice(_ command: String) async {
+        DebugLogger.shared.info("Processing voice command: '\(command)'", source: "ContentView")
+        
+        // Process the command through CommandModeService
+        // This stores the conversation history and executes any terminal commands
+        await commandModeService.processUserCommand(command)
+        
+        DebugLogger.shared.info("Command processed, conversation stored in Command Mode", source: "ContentView")
     }
 
     // Capture app context at start to avoid mismatches if the user switches apps mid-session
@@ -2571,12 +2702,16 @@ struct ContentView: View {
     }
 
     private func getModelStatusText() -> String {
-        if asr.isDownloadingModel {
-            return "Model is downloading... Please wait."
+        if asr.isLoadingModel {
+            return "Loading model into memory... (30-60 sec)"
+        } else if asr.isDownloadingModel {
+            return "Downloading model... Please wait."
         } else if asr.isAsrReady {
             return "Model is ready to use!"
+        } else if asr.modelsExistOnDisk {
+            return "Model cached. Will load on first use."
         } else {
-            return "Model will auto-download when needed (or click Download Model Now)."
+            return "Model will download when needed."
         }
     }
     
@@ -2744,19 +2879,56 @@ struct ContentView: View {
         }
     }
     
-    // MARK: - Hotkey Manager Initialization Helpers
     private func initializeHotkeyManagerIfNeeded() {
         guard hotkeyManager == nil else { return }
         
-        if UserDefaults.standard.bool(forKey: "enableDebugLogs") {
-            print("[ContentView] Initializing hotkey manager with accessibility enabled: \(accessibilityEnabled)")
-        }
+        hotkeyManager = GlobalHotkeyManager(
+            asrService: asr,
+            shortcut: hotkeyShortcut,
+            commandModeShortcut: commandModeHotkeyShortcut,
+            rewriteModeShortcut: rewriteModeHotkeyShortcut,
+            stopAndProcessCallback: {
+                await stopAndProcessTranscription()
+            },
+            commandModeCallback: {
+                DebugLogger.shared.info("Command mode triggered", source: "ContentView")
+                
+                // Set flag so stopAndProcessTranscription knows to process as command
+                self.isRecordingForCommand = true
+                
+                // Set overlay mode to command
+                self.menuBarManager.setOverlayMode(.command)
+                
+                // Start recording immediately for the command
+                DebugLogger.shared.info("Starting voice recording for command", source: "ContentView")
+                self.asr.start()
+            },
+            rewriteModeCallback: {
+                // Capture text first while still in the other app
+                let captured = self.rewriteModeService.captureSelectedText()
+                DebugLogger.shared.info("Rewrite mode triggered, text captured: \(captured)", source: "ContentView")
+                
+                guard captured else {
+                    DebugLogger.shared.warning("No text captured for rewrite", source: "ContentView")
+                    self.menuBarManager.showToast("No text selected")
+                    return
+                }
+                
+                // Set flag so stopAndProcessTranscription knows to process as rewrite
+                self.isRecordingForRewrite = true
+                
+                // Set overlay mode to rewrite
+                self.menuBarManager.setOverlayMode(.rewrite)
+                
+                // Start recording immediately for the rewrite instruction
+                DebugLogger.shared.info("Starting voice recording for rewrite instruction", source: "ContentView")
+                self.asr.start()
+            }
+        )
         
-        hotkeyManager = GlobalHotkeyManager(asrService: asr, shortcut: hotkeyShortcut)
+        hotkeyManagerInitialized = hotkeyManager?.validateEventTapHealth() ?? false
+        
         hotkeyManager?.enablePressAndHoldMode(pressAndHoldModeEnabled)
-        hotkeyManager?.setStopAndProcessCallback {
-            await self.stopAndProcessTranscription()
-        }
         
         // Monitor initialization status
         Task {
@@ -2771,10 +2943,18 @@ struct ContentView: View {
                 
                 // If still not initialized and accessibility is enabled, try reinitializing
                 if !self.hotkeyManagerInitialized && self.accessibilityEnabled {
+                    self.hotkeyManagerInitialized = self.hotkeyManager?.validateEventTapHealth() ?? false
                     if UserDefaults.standard.bool(forKey: "enableDebugLogs") {
-                        print("[ContentView] Hotkey manager not healthy, attempting reinitalization")
+                        print("[ContentView] Initial hotkey manager health check: \(self.hotkeyManagerInitialized)")
                     }
-                    self.hotkeyManager?.reinitialize()
+                    
+                    // If still not initialized and accessibility is enabled, try reinitializing
+                    if !self.hotkeyManagerInitialized && self.accessibilityEnabled {
+                        if UserDefaults.standard.bool(forKey: "enableDebugLogs") {
+                            print("[ContentView] Hotkey manager not healthy, attempting reinitalization")
+                        }
+                        self.hotkeyManager?.reinitialize()
+                    }
                 }
             }
         }

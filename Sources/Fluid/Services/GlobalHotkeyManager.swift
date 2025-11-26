@@ -7,22 +7,40 @@ final class GlobalHotkeyManager: NSObject
     private var runLoopSource: CFRunLoopSource?
     private let asrService: ASRService
     private var shortcut: HotkeyShortcut
+    private var commandModeShortcut: HotkeyShortcut
+    private var rewriteModeShortcut: HotkeyShortcut
     private var stopAndProcessCallback: (() async -> Void)?
+    private var commandModeCallback: (() async -> Void)?
+    private var rewriteModeCallback: (() async -> Void)?
     private var pressAndHoldMode: Bool = SettingsStore.shared.pressAndHoldMode
     private var isKeyPressed = false
+    private var isCommandModeKeyPressed = false
+    private var isRewriteKeyPressed = false
     
     private var isInitialized = false
     private var initializationTask: Task<Void, Never>?
     private var healthCheckTask: Task<Void, Never>?
-    private let maxRetryAttempts = 5
-    private let retryDelay: TimeInterval = 0.5
-    private let healthCheckInterval: TimeInterval = 30.0
+    private var maxRetryAttempts = 5
+    private var retryDelay: TimeInterval = 0.5
+    private var healthCheckInterval: TimeInterval = 30.0
 
-    init(asrService: ASRService, shortcut: HotkeyShortcut, stopAndProcessCallback: (() async -> Void)? = nil)
+    init(
+        asrService: ASRService,
+        shortcut: HotkeyShortcut,
+        commandModeShortcut: HotkeyShortcut,
+        rewriteModeShortcut: HotkeyShortcut,
+        stopAndProcessCallback: (() async -> Void)? = nil,
+        commandModeCallback: (() async -> Void)? = nil,
+        rewriteModeCallback: (() async -> Void)? = nil
+    )
     {
         self.asrService = asrService
         self.shortcut = shortcut
+        self.commandModeShortcut = commandModeShortcut
+        self.rewriteModeShortcut = rewriteModeShortcut
         self.stopAndProcessCallback = stopAndProcessCallback
+        self.commandModeCallback = commandModeCallback
+        self.rewriteModeCallback = rewriteModeCallback
         super.init()
         
         initializeWithDelay()
@@ -43,6 +61,34 @@ final class GlobalHotkeyManager: NSObject
     func setStopAndProcessCallback(_ callback: @escaping () async -> Void)
     {
         self.stopAndProcessCallback = callback
+    }
+    
+    func setCommandModeCallback(_ callback: @escaping () async -> Void)
+    {
+        self.commandModeCallback = callback
+    }
+    
+    func updateShortcut(_ newShortcut: HotkeyShortcut)
+    {
+        self.shortcut = newShortcut
+        DebugLogger.shared.info("Updated transcription hotkey", source: "GlobalHotkeyManager")
+    }
+    
+    func updateCommandModeShortcut(_ newShortcut: HotkeyShortcut)
+    {
+        self.commandModeShortcut = newShortcut
+        DebugLogger.shared.info("Updated command mode hotkey", source: "GlobalHotkeyManager")
+    }
+    
+    func setRewriteModeCallback(_ callback: @escaping () async -> Void)
+    {
+        self.rewriteModeCallback = callback
+    }
+    
+    func updateRewriteModeShortcut(_ newShortcut: HotkeyShortcut)
+    {
+        self.rewriteModeShortcut = newShortcut
+        DebugLogger.shared.info("Updated rewrite mode hotkey", source: "GlobalHotkeyManager")
     }
 
     private func setupGlobalHotkeyWithRetry() {
@@ -160,6 +206,53 @@ final class GlobalHotkeyManager: NSObject
         switch type
         {
         case .keyDown:
+            // Check command mode hotkey first
+            if matchesCommandModeShortcut(keyCode: keyCode, modifiers: eventModifiers)
+            {
+                if pressAndHoldMode {
+                    // Press and hold: start on keyDown, stop on keyUp
+                    if !isCommandModeKeyPressed {
+                        isCommandModeKeyPressed = true
+                        DebugLogger.shared.info("Command mode shortcut pressed (hold mode) - starting", source: "GlobalHotkeyManager")
+                        triggerCommandMode()
+                    }
+                } else {
+                    // Toggle mode: press to start, press again to stop
+                    if asrService.isRunning {
+                        DebugLogger.shared.info("Command mode shortcut pressed while recording - stopping", source: "GlobalHotkeyManager")
+                        stopRecordingIfNeeded()
+                    } else {
+                        DebugLogger.shared.info("Command mode shortcut triggered - starting", source: "GlobalHotkeyManager")
+                        triggerCommandMode()
+                    }
+                }
+                return nil
+            }
+            
+            // Check dedicated rewrite mode hotkey
+            if matchesRewriteModeShortcut(keyCode: keyCode, modifiers: eventModifiers)
+            {
+                if pressAndHoldMode {
+                    // Press and hold: start on keyDown, stop on keyUp
+                    if !isRewriteKeyPressed {
+                        isRewriteKeyPressed = true
+                        DebugLogger.shared.info("Rewrite mode shortcut pressed (hold mode) - starting", source: "GlobalHotkeyManager")
+                        triggerRewriteMode()
+                    }
+                } else {
+                    // Toggle mode: press to start, press again to stop
+                    if asrService.isRunning {
+                        DebugLogger.shared.info("Rewrite mode shortcut pressed while recording - stopping", source: "GlobalHotkeyManager")
+                        stopRecordingIfNeeded()
+                    } else {
+                        DebugLogger.shared.info("Rewrite mode shortcut triggered - starting", source: "GlobalHotkeyManager")
+                        triggerRewriteMode()
+                    }
+                }
+                return nil
+            }
+            
+            // Then check transcription hotkey
             if matchesShortcut(keyCode: keyCode, modifiers: eventModifiers)
             {
                 if pressAndHoldMode
@@ -178,6 +271,25 @@ final class GlobalHotkeyManager: NSObject
             }
 
         case .keyUp:
+            // Command mode key up (press and hold mode)
+            if pressAndHoldMode && isCommandModeKeyPressed && matchesCommandModeShortcut(keyCode: keyCode, modifiers: eventModifiers)
+            {
+                isCommandModeKeyPressed = false
+                DebugLogger.shared.info("Command mode shortcut released (hold mode) - stopping", source: "GlobalHotkeyManager")
+                stopRecordingIfNeeded()
+                return nil
+            }
+            
+            // Rewrite mode key up (press and hold mode)
+            if pressAndHoldMode && isRewriteKeyPressed && matchesRewriteModeShortcut(keyCode: keyCode, modifiers: eventModifiers)
+            {
+                isRewriteKeyPressed = false
+                DebugLogger.shared.info("Rewrite mode shortcut released (hold mode) - stopping", source: "GlobalHotkeyManager")
+                stopRecordingIfNeeded()
+                return nil
+            }
+            
+            // Transcription key up
             if pressAndHoldMode && isKeyPressed && matchesShortcut(keyCode: keyCode, modifiers: eventModifiers)
             {
                 isKeyPressed = false
@@ -186,13 +298,74 @@ final class GlobalHotkeyManager: NSObject
             }
 
         case .flagsChanged:
-            guard shortcut.modifierFlags.isEmpty else { break }
-
             let isModifierPressed = flags.contains(.maskSecondaryFn)
                 || flags.contains(.maskCommand)
                 || flags.contains(.maskAlternate)
                 || flags.contains(.maskControl)
                 || flags.contains(.maskShift)
+            
+            // Check command mode shortcut (if it's a modifier-only shortcut)
+            if commandModeShortcut.modifierFlags.isEmpty && keyCode == commandModeShortcut.keyCode
+            {
+                if isModifierPressed
+                {
+                    if pressAndHoldMode {
+                        if !isCommandModeKeyPressed {
+                            isCommandModeKeyPressed = true
+                            DebugLogger.shared.info("Command mode modifier pressed (hold mode) - starting", source: "GlobalHotkeyManager")
+                            triggerCommandMode()
+                        }
+                    } else {
+                        // Toggle mode
+                        if asrService.isRunning {
+                            DebugLogger.shared.info("Command mode modifier pressed while recording - stopping", source: "GlobalHotkeyManager")
+                            stopRecordingIfNeeded()
+                        } else {
+                            DebugLogger.shared.info("Command mode modifier pressed - starting", source: "GlobalHotkeyManager")
+                            triggerCommandMode()
+                        }
+                    }
+                } else if pressAndHoldMode && isCommandModeKeyPressed {
+                    // Key released in press-and-hold mode
+                    isCommandModeKeyPressed = false
+                    DebugLogger.shared.info("Command mode modifier released (hold mode) - stopping", source: "GlobalHotkeyManager")
+                    stopRecordingIfNeeded()
+                }
+                return nil
+            }
+            
+            // Check rewrite mode shortcut (if it's a modifier-only shortcut)
+            if rewriteModeShortcut.modifierFlags.isEmpty && keyCode == rewriteModeShortcut.keyCode
+            {
+                if isModifierPressed
+                {
+                    if pressAndHoldMode {
+                        if !isRewriteKeyPressed {
+                            isRewriteKeyPressed = true
+                            DebugLogger.shared.info("Rewrite mode modifier pressed (hold mode) - starting", source: "GlobalHotkeyManager")
+                            triggerRewriteMode()
+                        }
+                    } else {
+                        // Toggle mode
+                        if asrService.isRunning {
+                            DebugLogger.shared.info("Rewrite mode modifier pressed while recording - stopping", source: "GlobalHotkeyManager")
+                            stopRecordingIfNeeded()
+                        } else {
+                            DebugLogger.shared.info("Rewrite mode modifier pressed - starting", source: "GlobalHotkeyManager")
+                            triggerRewriteMode()
+                        }
+                    }
+                } else if pressAndHoldMode && isRewriteKeyPressed {
+                    // Key released in press-and-hold mode
+                    isRewriteKeyPressed = false
+                    DebugLogger.shared.info("Rewrite mode modifier released (hold mode) - stopping", source: "GlobalHotkeyManager")
+                    stopRecordingIfNeeded()
+                }
+                return nil
+            }
+
+            // Check transcription shortcut (if it's a modifier-only shortcut)
+            guard shortcut.modifierFlags.isEmpty else { break }
 
             if keyCode == shortcut.keyCode
             {
@@ -224,6 +397,24 @@ final class GlobalHotkeyManager: NSObject
         }
 
         return Unmanaged.passUnretained(event)
+    }
+    
+    private func triggerCommandMode()
+    {
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            DebugLogger.shared.info("Command mode hotkey triggered", source: "GlobalHotkeyManager")
+            await self.commandModeCallback?()
+        }
+    }
+    
+    private func triggerRewriteMode()
+    {
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            DebugLogger.shared.info("Rewrite mode hotkey triggered", source: "GlobalHotkeyManager")
+            await self.rewriteModeCallback?()
+        }
     }
 
     func enablePressAndHoldMode(_ enable: Bool)
@@ -294,24 +485,19 @@ final class GlobalHotkeyManager: NSObject
         let shortcutModifiers = shortcut.modifierFlags.intersection([.function, .command, .option, .control, .shift])
         return keyCode == shortcut.keyCode && relevantModifiers == shortcutModifiers
     }
-
-    func updateShortcut(_ newShortcut: HotkeyShortcut)
+    
+    private func matchesCommandModeShortcut(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool
     {
-        shortcut = newShortcut
-        
-        if UserDefaults.standard.bool(forKey: "enableDebugLogs") {
-            print("[GlobalHotkeyManager] Updating shortcut to: \(newShortcut.displayString)")
-        }
-        
-        if setupGlobalHotkey() {
-            isInitialized = true
-            if UserDefaults.standard.bool(forKey: "enableDebugLogs") {
-                print("[GlobalHotkeyManager] Shortcut update successful")
-            }
-            startHealthCheckTimer()
-        } else {
-            print("[GlobalHotkeyManager] ERROR: Failed to update shortcut")
-        }
+        let relevantModifiers: NSEvent.ModifierFlags = modifiers.intersection([.function, .command, .option, .control, .shift])
+        let shortcutModifiers = commandModeShortcut.modifierFlags.intersection([.function, .command, .option, .control, .shift])
+        return keyCode == commandModeShortcut.keyCode && relevantModifiers == shortcutModifiers
+    }
+    
+    private func matchesRewriteModeShortcut(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool
+    {
+        let relevantModifiers: NSEvent.ModifierFlags = modifiers.intersection([.function, .command, .option, .control, .shift])
+        let shortcutModifiers = rewriteModeShortcut.modifierFlags.intersection([.function, .command, .option, .control, .shift])
+        return keyCode == rewriteModeShortcut.keyCode && relevantModifiers == shortcutModifiers
     }
     
     func isEventTapEnabled() -> Bool {

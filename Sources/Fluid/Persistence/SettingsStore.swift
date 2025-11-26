@@ -2,8 +2,9 @@ import Foundation
 import ServiceManagement
 import ApplicationServices
 import AppKit
+import Combine
 
-final class SettingsStore
+final class SettingsStore: ObservableObject
 {
     static let shared = SettingsStore()
     private let defaults = UserDefaults.standard
@@ -35,6 +36,16 @@ final class SettingsStore
         static let lastUpdateCheckDate = "LastUpdateCheckDate"
         static let lastSeenVersion = "LastSeenVersion"
         static let playgroundUsed = "PlaygroundUsed"
+        
+        // Command Mode Keys
+        static let commandModeSelectedModel = "CommandModeSelectedModel"
+        static let commandModeSelectedProviderID = "CommandModeSelectedProviderID"
+        static let commandModeHotkeyShortcut = "CommandModeHotkeyShortcut"
+        static let commandModeConfirmBeforeExecute = "CommandModeConfirmBeforeExecute"
+        static let commandModeLinkedToGlobal = "CommandModeLinkedToGlobal"
+        
+        // Rewrite Mode Keys
+        static let rewriteModeHotkeyShortcut = "RewriteModeHotkeyShortcut"
     }
 
     struct SavedProvider: Codable, Identifiable, Hashable
@@ -58,49 +69,73 @@ final class SettingsStore
     var enableAIProcessing: Bool
     {
         get { defaults.bool(forKey: Keys.enableAIProcessing) }
-        set { defaults.set(newValue, forKey: Keys.enableAIProcessing) }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: Keys.enableAIProcessing)
+        }
     }
 
     var availableModels: [String]
     {
         get { (defaults.array(forKey: Keys.availableAIModels) as? [String]) ?? [] }
-        set { defaults.set(newValue, forKey: Keys.availableAIModels) }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: Keys.availableAIModels)
+        }
     }
 
     var availableModelsByProvider: [String: [String]]
     {
         get { (defaults.dictionary(forKey: Keys.availableModelsByProvider) as? [String: [String]]) ?? [:] }
-        set { defaults.set(newValue, forKey: Keys.availableModelsByProvider) }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: Keys.availableModelsByProvider)
+        }
     }
 
      var enableDebugLogs: Bool
      {
          get { defaults.bool(forKey: Keys.enableDebugLogs) }
-         set { defaults.set(newValue, forKey: Keys.enableDebugLogs) }
+         set {
+             objectWillChange.send()
+             defaults.set(newValue, forKey: Keys.enableDebugLogs)
+         }
      }
 
     var selectedModel: String?
     {
         get { defaults.string(forKey: Keys.selectedAIModel) }
-        set { defaults.set(newValue, forKey: Keys.selectedAIModel) }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: Keys.selectedAIModel)
+        }
     }
 
     var selectedModelByProvider: [String: String]
     {
         get { (defaults.dictionary(forKey: Keys.selectedModelByProvider) as? [String: String]) ?? [:] }
-        set { defaults.set(newValue, forKey: Keys.selectedModelByProvider) }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: Keys.selectedModelByProvider)
+        }
     }
 
     var providerAPIKeys: [String: String]
     {
         get { (defaults.dictionary(forKey: Keys.providerAPIKeys) as? [String: String]) ?? [:] }
-        set { defaults.set(newValue, forKey: Keys.providerAPIKeys) }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: Keys.providerAPIKeys)
+        }
     }
 
     var selectedProviderID: String
     {
         get { defaults.string(forKey: Keys.selectedProviderID) ?? "openai" }
-        set { defaults.set(newValue, forKey: Keys.selectedProviderID) }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: Keys.selectedProviderID)
+        }
     }
 
     var savedProviders: [SavedProvider]
@@ -113,6 +148,7 @@ final class SettingsStore
         }
         set
         {
+            objectWillChange.send()
             if let encoded = try? JSONEncoder().encode(newValue)
             {
                 defaults.set(encoded, forKey: Keys.savedProviders)
@@ -133,12 +169,14 @@ final class SettingsStore
         }
         set
         {
+            objectWillChange.send()
             if let data = try? JSONEncoder().encode(newValue)
             {
                 defaults.set(data, forKey: Keys.hotkeyShortcutKey)
             }
         }
     }
+
 
     var pressAndHoldMode: Bool
     {
@@ -273,6 +311,94 @@ final class SettingsStore
         get { defaults.bool(forKey: Keys.playgroundUsed) }
         set { defaults.set(newValue, forKey: Keys.playgroundUsed) }
     }
+    
+    // MARK: - Command Mode Settings
+    
+    var commandModeSelectedModel: String?
+    {
+        get { defaults.string(forKey: Keys.commandModeSelectedModel) }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: Keys.commandModeSelectedModel)
+        }
+    }
+    
+    var commandModeSelectedProviderID: String
+    {
+        get { defaults.string(forKey: Keys.commandModeSelectedProviderID) ?? "openai" }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: Keys.commandModeSelectedProviderID)
+        }
+    }
+    
+    var commandModeLinkedToGlobal: Bool
+    {
+        get { defaults.bool(forKey: Keys.commandModeLinkedToGlobal) } // Default to false (let user opt-in, or true if preferred)
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: Keys.commandModeLinkedToGlobal)
+        }
+    }
+    
+    var commandModeHotkeyShortcut: HotkeyShortcut
+    {
+        get
+        {
+            if let data = defaults.data(forKey: Keys.commandModeHotkeyShortcut),
+               let shortcut = try? JSONDecoder().decode(HotkeyShortcut.self, from: data)
+            {
+                return shortcut
+            }
+            // Default to Right Command key (keyCode: 54, no modifiers for the key itself)
+            return HotkeyShortcut(keyCode: 54, modifierFlags: [])
+        }
+        set
+        {
+            objectWillChange.send()
+            if let data = try? JSONEncoder().encode(newValue)
+            {
+                defaults.set(data, forKey: Keys.commandModeHotkeyShortcut)
+            }
+        }
+    }
+    
+    var commandModeConfirmBeforeExecute: Bool
+    {
+        get {
+            // Default to true (safer - ask before running commands)
+            let value = defaults.object(forKey: Keys.commandModeConfirmBeforeExecute)
+            return value as? Bool ?? true
+        }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: Keys.commandModeConfirmBeforeExecute)
+        }
+    }
+    
+    // MARK: - Rewrite Mode Settings
+    
+    var rewriteModeHotkeyShortcut: HotkeyShortcut
+    {
+        get
+        {
+            if let data = defaults.data(forKey: Keys.rewriteModeHotkeyShortcut),
+               let shortcut = try? JSONDecoder().decode(HotkeyShortcut.self, from: data)
+            {
+                return shortcut
+            }
+            // Default to Option+R (keyCode: 15 is R, with Option modifier)
+            return HotkeyShortcut(keyCode: 15, modifierFlags: [.option])
+        }
+        set
+        {
+            objectWillChange.send()
+            if let data = try? JSONEncoder().encode(newValue)
+            {
+                defaults.set(data, forKey: Keys.rewriteModeHotkeyShortcut)
+            }
+        }
+    }
 
     func shouldShowWhatsNew() -> Bool {
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
@@ -354,5 +480,3 @@ final class SettingsStore
         #endif
     }
 }
-
-

@@ -22,6 +22,8 @@ struct SettingsView: View {
     @Binding var accessibilityEnabled: Bool
     @Binding var hotkeyShortcut: HotkeyShortcut
     @Binding var isRecordingShortcut: Bool
+    @Binding var rewriteShortcut: HotkeyShortcut
+    @Binding var isRecordingRewriteShortcut: Bool
     @Binding var hotkeyManagerInitialized: Bool
     @Binding var pressAndHoldModeEnabled: Bool
     @Binding var enableStreamingPreview: Bool
@@ -523,6 +525,72 @@ struct SettingsView: View {
                                 .onChange(of: copyToClipboard) { newValue in
                                     SettingsStore.shared.copyTranscriptionToClipboard = newValue
                                 }
+                                
+                                Divider()
+                                    .padding(.vertical, 4)
+                                
+                                // Rewrite Mode Shortcut
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Rewrite Mode Shortcut")
+                                                .font(.subheadline)
+                                                .fontWeight(.medium)
+                                            Text("Select text, press shortcut, speak how to rewrite")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        // Shortcut display
+                                        if isRecordingRewriteShortcut {
+                                            Text("Press new shortcut...")
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundStyle(.orange)
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 5)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 6)
+                                                        .fill(.orange.opacity(0.2))
+                                                )
+                                        } else {
+                                            Text(rewriteShortcut.displayString)
+                                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                                .foregroundStyle(.primary)
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 5)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 6)
+                                                        .fill(.quaternary.opacity(0.5))
+                                                        .overlay(
+                                                            RoundedRectangle(cornerRadius: 6)
+                                                                .stroke(.primary.opacity(0.2), lineWidth: 1)
+                                                        )
+                                                )
+                                        }
+                                        
+                                        // Change button
+                                        Button {
+                                            isRecordingRewriteShortcut = true
+                                        } label: {
+                                            Text("Change")
+                                                .font(.system(size: 12, weight: .medium))
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .disabled(isRecordingRewriteShortcut)
+                                    }
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(.ultraThinMaterial.opacity(0.5))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(.white.opacity(0.08), lineWidth: 1)
+                                        )
+                                )
                             }
                         } else {
                             // Hotkey disabled - accessibility not enabled

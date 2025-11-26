@@ -183,4 +183,16 @@ SettingsStore.xcuserstate
 **/.vscode/
 
 .mcp_temp/
+
+# Build and release scripts (developer-specific)
+build_dev.sh
+build_and_notarize.sh
 release.sh
+
+
+RELEASE_NOTES_*
+.cursor
+**.wav
+
+# Documentation backups (for future reference, not needed in repo)
+docs/
