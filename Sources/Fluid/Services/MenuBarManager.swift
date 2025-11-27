@@ -140,6 +140,26 @@ final class MenuBarManager: ObservableObject {
         NotchOverlayManager.shared.setMode(mode)
     }
     
+    func setProcessing(_ processing: Bool) {
+        if processing {
+            // Cancel any pending hide - we want to keep the overlay visible for AI processing
+            pendingHideOperation?.cancel()
+            pendingHideOperation = nil
+            overlayVisible = true
+        } else {
+            // When processing ends, schedule the hide
+            overlayVisible = false
+            let hideItem = DispatchWorkItem { [weak self] in
+                guard let self = self, !self.overlayVisible else { return }
+                NotchOverlayManager.shared.hide()
+                self.pendingHideOperation = nil
+            }
+            pendingHideOperation = hideItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(100), execute: hideItem)
+        }
+        NotchOverlayManager.shared.setProcessing(processing)
+    }
+    
     private func setupMenuBarSafely() {
         // Check if window server connection is available
         guard NSApp.isActive || NSApp.isRunning else {

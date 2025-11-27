@@ -517,7 +517,7 @@ struct ContentView: View {
             }
             
             NavigationLink(value: SidebarItem.rewriteMode) {
-                Label("Rewrite Mode", systemImage: "pencil.and.outline")
+                Label("Write Mode", systemImage: "pencil.and.outline")
                     .font(.system(size: 15, weight: .medium))
             }
 
@@ -2296,7 +2296,14 @@ struct ContentView: View {
         
         if shouldUseAI {
             DebugLogger.shared.debug("Routing transcription through AI post-processing", source: "ContentView")
+            
+            // Show processing animation in notch
+            menuBarManager.setProcessing(true)
+            
             finalText = await processTextWithAI(transcribedText)
+            
+            // Hide processing animation
+            menuBarManager.setProcessing(false)
         } else {
             finalText = transcribedText
         }
@@ -2330,10 +2337,16 @@ struct ContentView: View {
         let hasOriginalText = !rewriteModeService.originalText.isEmpty
         DebugLogger.shared.info("Processing \(hasOriginalText ? "rewrite" : "write/improve") - instruction: '\(instruction)', originalText length: \(rewriteModeService.originalText.count)", source: "ContentView")
         
+        // Show processing animation
+        menuBarManager.setProcessing(true)
+        
         // Process the request - service handles both cases:
         // - With originalText: rewrites existing text based on instruction
         // - Without originalText: improves/refines the spoken text
         await rewriteModeService.processRewriteRequest(instruction)
+        
+        // Hide processing animation
+        menuBarManager.setProcessing(false)
         
         // If rewrite was successful, type the result
         if !rewriteModeService.rewrittenText.isEmpty {
@@ -2358,9 +2371,15 @@ struct ContentView: View {
     private func processCommandWithVoice(_ command: String) async {
         DebugLogger.shared.info("Processing voice command: '\(command)'", source: "ContentView")
         
+        // Show processing animation
+        menuBarManager.setProcessing(true)
+        
         // Process the command through CommandModeService
         // This stores the conversation history and executes any terminal commands
         await commandModeService.processUserCommand(command)
+        
+        // Hide processing animation
+        menuBarManager.setProcessing(false)
         
         DebugLogger.shared.info("Command processed, conversation stored in Command Mode", source: "ContentView")
     }

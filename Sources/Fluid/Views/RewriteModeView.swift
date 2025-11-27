@@ -16,7 +16,7 @@ struct RewriteModeView: View {
                 Image(systemName: "pencil.and.outline")
                     .font(.title2)
                     .foregroundStyle(.blue)
-                Text("Rewrite Mode")
+                Text("Write Mode")
                     .font(.title2)
                     .fontWeight(.bold)
                 

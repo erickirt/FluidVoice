@@ -448,16 +448,16 @@ struct SettingsView: View {
                                     Divider()
                                         .padding(.vertical, 2)
                                     
-                                    // Rewrite Mode Shortcut
+                                    // Write Mode Shortcut
                                     shortcutRow(
                                         icon: "pencil.and.outline",
                                         iconColor: .secondary,
-                                        title: "Rewrite Mode",
-                                        description: "Select text and speak how to rewrite",
+                                        title: "Write Mode",
+                                        description: "Select text and speak how to rewrite, or write new content",
                                         shortcut: rewriteShortcut,
                                         isRecording: isRecordingRewriteShortcut,
                                         onChangePressed: {
-                                            DebugLogger.shared.debug("Starting to record new rewrite shortcut", source: "SettingsView")
+                                            DebugLogger.shared.debug("Starting to record new write mode shortcut", source: "SettingsView")
                                             isRecordingRewriteShortcut = true
                                         }
                                     )

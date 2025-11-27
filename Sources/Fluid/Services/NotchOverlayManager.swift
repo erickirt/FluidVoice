@@ -25,6 +25,9 @@ final class NotchOverlayManager {
     private var notch: DynamicNotch<NotchExpandedView, NotchCompactLeadingView, NotchCompactTrailingView>?
     private var currentMode: OverlayMode = .dictation
     
+    // Store last audio publisher for re-showing during processing
+    private var lastAudioPublisher: AnyPublisher<CGFloat, Never>?
+    
     // State machine to prevent race conditions
     private enum State {
         case idle
@@ -79,6 +82,9 @@ final class NotchOverlayManager {
     private func showInternal(audioLevelPublisher: AnyPublisher<CGFloat, Never>, mode: OverlayMode) {
         guard state == .idle else { return }
         
+        // Store for potential re-show during processing
+        lastAudioPublisher = audioLevelPublisher
+        
         // Increment generation for this operation
         generation &+= 1
         let currentGeneration = generation
@@ -117,6 +123,9 @@ final class NotchOverlayManager {
         // Cancel any pending retry operations
         pendingRetryTask?.cancel()
         pendingRetryTask = nil
+        
+        // Safety: reset processing state when hiding
+        NotchContentState.shared.setProcessing(false)
         
         // Increment generation to invalidate any pending show tasks
         generation &+= 1
@@ -162,6 +171,19 @@ final class NotchOverlayManager {
     
     func updateTranscriptionText(_ text: String) {
         NotchContentState.shared.updateTranscription(text)
+    }
+    
+    func setProcessing(_ processing: Bool) {
+        NotchContentState.shared.setProcessing(processing)
+        
+        if processing {
+            // If notch isn't visible, re-show it for processing state
+            if state == .idle || state == .hiding {
+                // Use stored publisher or create empty one
+                let publisher = lastAudioPublisher ?? Empty<CGFloat, Never>().eraseToAnyPublisher()
+                show(audioLevelPublisher: publisher, mode: currentMode)
+            }
+        }
     }
 }
 
