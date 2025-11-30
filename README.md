@@ -11,6 +11,26 @@ Fully open source voice-to-text dictation app for macOS with AI enhancement.
 
 [![Star History Chart](https://api.star-history.com/svg?repos=altic-dev/Fluid-oss&type=Date)](https://star-history.com/#altic-dev/Fluid-oss&Date)
 
+## Demo
+
+### Command Mode
+
+https://github.com/altic-dev/Fluid-oss/raw/main/assets/FluidVoice_1.5_cmd_mode.mp4
+
+### Write Mode
+
+https://github.com/altic-dev/Fluid-oss/raw/main/assets/writemode_FluidVoice_1.5.mp4
+
+## Screenshots
+
+### Command Mode Preview
+
+![Command Mode Preview](assets/cmd_mode_ss.png)
+
+### FluidVoice History
+
+![FluidVoice History](assets/history__ss.png)
+
 ## Features
 - **Live Preview Mode**: Real-time transcription preview in overlay
 - **Real-time transcription** using Parakeet TDT v3 model
