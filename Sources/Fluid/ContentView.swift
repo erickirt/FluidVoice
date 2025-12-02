@@ -277,7 +277,6 @@ struct ContentView: View {
                 // Use models from saved provider
                 availableModels = saved.models
                 openAIBaseURL = saved.baseURL
-                providerAPIKeys[currentProvider] = saved.apiKey
             } else if let stored = availableModelsByProvider[currentProvider], !stored.isEmpty {
                 // Use provider-specific stored list if present
                 availableModels = stored
@@ -1288,8 +1287,6 @@ struct ContentView: View {
                                     if let provider = savedProviders.first(where: { $0.id == newValue }) {
                                         openAIBaseURL = provider.baseURL
                                         updateCurrentProvider()
-                                        providerAPIKeys[currentProvider] = provider.apiKey
-                                        saveProviderAPIKeys()
                                         let key = providerKey(for: newValue)
                                         availableModels = provider.models.isEmpty ? (availableModelsByProvider[key] ?? defaultModels(for: key)) : provider.models
                                         if let sel = selectedModelByProvider[key], availableModels.contains(sel) { selectedModel = sel }
@@ -1495,7 +1492,6 @@ struct ContentView: View {
                                             id: savedProviders[providerIndex].id,
                                             name: savedProviders[providerIndex].name,
                                             baseURL: savedProviders[providerIndex].baseURL,
-                                            apiKey: savedProviders[providerIndex].apiKey,
                                             models: list
                                         )
                                         savedProviders[providerIndex] = updatedProvider
@@ -1718,7 +1714,6 @@ struct ContentView: View {
                                         let newProvider = SettingsStore.SavedProvider(
                                             name: name,
                                             baseURL: base,
-                                            apiKey: api,
                                             models: models
                                         )
 
@@ -2745,7 +2740,6 @@ struct ContentView: View {
                 id: savedProviders[providerIndex].id,
                 name: savedProviders[providerIndex].name,
                 baseURL: savedProviders[providerIndex].baseURL,
-                apiKey: savedProviders[providerIndex].apiKey,
                 models: list
             )
             savedProviders[providerIndex] = updatedProvider
@@ -3305,7 +3299,6 @@ struct ContentView: View {
                 id: savedProviders[providerIndex].id,
                 name: savedProviders[providerIndex].name,
                 baseURL: savedProviders[providerIndex].baseURL,
-                apiKey: savedProviders[providerIndex].apiKey,
                 models: availableModels
             )
             savedProviders[providerIndex] = updatedProvider
