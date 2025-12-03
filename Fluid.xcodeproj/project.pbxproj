@@ -14,7 +14,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		7C078D8F2E3B339200FB7CAC /* FluidVoice.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = FluidVoice.app; path = "FluidVoice Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		7C078D8F2E3B339200FB7CAC /* FluidVoice Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "FluidVoice Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -50,7 +50,7 @@
 		7C078D902E3B339200FB7CAC /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				7C078D8F2E3B339200FB7CAC /* FluidVoice.app */,
+				7C078D8F2E3B339200FB7CAC /* FluidVoice Debug.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -81,7 +81,7 @@
 				7CE006BC2E80EBE600DDCCD6 /* AppUpdater */,
 			);
 			productName = FluidVoice;
-			productReference = 7C078D8F2E3B339200FB7CAC /* FluidVoice.app */;
+			productReference = 7C078D8F2E3B339200FB7CAC /* FluidVoice Debug.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -283,7 +283,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = V4J43B279J;
+				DEVELOPMENT_TEAM = J67LH9U7BN;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_CODE_COVERAGE = NO;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
@@ -334,11 +334,12 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Fluid.entitlements;
 				CODE_SIGN_IDENTITY = "Developer ID Application: Barathwaj Anandan (V4J43B279J)";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application: Barathwaj Anandan (V4J43B279J)";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = V4J43B279J;
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = J67LH9U7BN;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_CODE_COVERAGE = NO;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;

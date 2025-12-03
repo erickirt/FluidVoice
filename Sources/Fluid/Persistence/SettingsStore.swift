@@ -8,8 +8,12 @@ final class SettingsStore: ObservableObject
 {
     static let shared = SettingsStore()
     private let defaults = UserDefaults.standard
+    private let keychain = KeychainService.shared
 
-    private init() {}
+    private init() {
+        migrateProviderAPIKeysIfNeeded()
+        scrubSavedProviderAPIKeys()
+    }
 
     // Keys
     private enum Keys
@@ -22,6 +26,7 @@ final class SettingsStore: ObservableObject
         static let selectedModelByProvider = "SelectedModelByProvider"
         static let selectedProviderID = "SelectedProviderID"
         static let providerAPIKeys = "ProviderAPIKeys"
+        static let providerAPIKeyIdentifiers = "ProviderAPIKeyIdentifiers"
         static let savedProviders = "SavedProviders"
         static let hotkeyShortcutKey = "HotkeyShortcutKey"
          static let preferredInputDeviceUID = "PreferredInputDeviceUID"
@@ -62,7 +67,7 @@ final class SettingsStore: ObservableObject
         let apiKey: String
         let models: [String]
 
-        init(id: String = UUID().uuidString, name: String, baseURL: String, apiKey: String, models: [String] = [])
+        init(id: String = UUID().uuidString, name: String, baseURL: String, apiKey: String = "", models: [String] = [])
         {
             self.id = id
             self.name = name
@@ -126,12 +131,20 @@ final class SettingsStore: ObservableObject
         }
     }
 
-    var providerAPIKeys: [String: String]
-    {
-        get { (defaults.dictionary(forKey: Keys.providerAPIKeys) as? [String: String]) ?? [:] }
+    var providerAPIKeys: [String: String] {
+        get {
+            var result: [String: String] = [:]
+            for providerID in storedProviderKeyIDs {
+                if let value = try? keychain.fetchKey(for: providerID),
+                   value.isEmpty == false {
+                    result[providerID] = value
+                }
+            }
+            return result
+        }
         set {
             objectWillChange.send()
-            defaults.set(newValue, forKey: Keys.providerAPIKeys)
+            persistProviderAPIKeys(newValue)
         }
     }
 
@@ -144,19 +157,23 @@ final class SettingsStore: ObservableObject
         }
     }
 
-    var savedProviders: [SavedProvider]
-    {
-        get
-        {
+    var savedProviders: [SavedProvider] {
+        get {
             guard let data = defaults.data(forKey: Keys.savedProviders),
                   let decoded = try? JSONDecoder().decode([SavedProvider].self, from: data) else { return [] }
             return decoded
         }
-        set
-        {
+        set {
             objectWillChange.send()
-            if let encoded = try? JSONEncoder().encode(newValue)
-            {
+            let sanitized = newValue.map { provider -> SavedProvider in
+                if provider.apiKey.isEmpty { return provider }
+                return SavedProvider(id: provider.id,
+                                     name: provider.name,
+                                     baseURL: provider.baseURL,
+                                     apiKey: "",
+                                     models: provider.models)
+            }
+            if let encoded = try? JSONEncoder().encode(sanitized) {
                 defaults.set(encoded, forKey: Keys.savedProviders)
             }
         }
@@ -458,6 +475,102 @@ final class SettingsStore: ObservableObject
     }
 
     // MARK: - Private Methods
+
+    private var storedProviderKeyIDs: [String] {
+        get { defaults.stringArray(forKey: Keys.providerAPIKeyIdentifiers) ?? [] }
+        set {
+            let unique = Array(Set(newValue)).sorted()
+            defaults.set(unique, forKey: Keys.providerAPIKeyIdentifiers)
+        }
+    }
+
+    private func persistProviderAPIKeys(_ values: [String: String]) {
+        let trimmed = values.reduce(into: [String: String]()) { partialResult, pair in
+            let sanitizedValue = pair.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard sanitizedValue.isEmpty == false else { return }
+            partialResult[pair.key] = sanitizedValue
+        }
+
+        let existingIDs = Set(storedProviderKeyIDs)
+        let incomingIDs = Set(trimmed.keys)
+
+        for (providerID, apiKey) in trimmed {
+            do {
+                try keychain.storeKey(apiKey, for: providerID)
+            } catch {
+                DebugLogger.shared.error("Failed to store API key for \(providerID): \(error.localizedDescription)", source: "SettingsStore")
+            }
+        }
+
+        for providerID in existingIDs.subtracting(incomingIDs) {
+            do {
+                try keychain.deleteKey(for: providerID)
+            } catch {
+                DebugLogger.shared.error("Failed to delete API key for \(providerID): \(error.localizedDescription)", source: "SettingsStore")
+            }
+        }
+
+        storedProviderKeyIDs = Array(incomingIDs)
+    }
+
+    private func migrateProviderAPIKeysIfNeeded() {
+        if let legacy = defaults.dictionary(forKey: Keys.providerAPIKeys) as? [String: String],
+           legacy.isEmpty == false {
+            persistProviderAPIKeys(legacy)
+            defaults.removeObject(forKey: Keys.providerAPIKeys)
+        } else if storedProviderKeyIDs.isEmpty,
+                  let existing = try? keychain.allProviderIDs(),
+                  existing.isEmpty == false {
+            storedProviderKeyIDs = existing
+        }
+    }
+
+    private func scrubSavedProviderAPIKeys() {
+        guard let data = defaults.data(forKey: Keys.savedProviders),
+              var decoded = try? JSONDecoder().decode([SavedProvider].self, from: data) else { return }
+
+        var didModify = false
+        var migratedIDs: [String] = []
+        for index in decoded.indices {
+            let provider = decoded[index]
+            let trimmed = provider.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.isEmpty == false else { continue }
+
+            let keyID = canonicalProviderKey(for: provider.id)
+            do {
+                try keychain.storeKey(trimmed, for: keyID)
+                migratedIDs.append(keyID)
+                didModify = true
+            } catch {
+                DebugLogger.shared.error("Failed to migrate API key for \(provider.name): \(error.localizedDescription)", source: "SettingsStore")
+            }
+
+            decoded[index] = SavedProvider(id: provider.id,
+                                           name: provider.name,
+                                           baseURL: provider.baseURL,
+                                           apiKey: "",
+                                           models: provider.models)
+        }
+
+        if didModify,
+           let encoded = try? JSONEncoder().encode(decoded) {
+            defaults.set(encoded, forKey: Keys.savedProviders)
+        }
+
+        if didModify {
+            storedProviderKeyIDs = storedProviderKeyIDs + migratedIDs
+        }
+    }
+
+    private func canonicalProviderKey(for providerID: String) -> String {
+        if providerID == "openai" || providerID == "groq" {
+            return providerID
+        }
+        if providerID.hasPrefix("custom:") {
+            return providerID
+        }
+        return "custom:\(providerID)"
+    }
 
     private func updateLaunchAtStartup(_ enabled: Bool) {
         #if os(macOS)

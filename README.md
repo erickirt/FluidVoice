@@ -60,7 +60,7 @@ https://github.com/user-attachments/assets/c57ef6d5-f0a1-4a3f-a121-637533442c24
 2. Move to Applications folder
 3. Grant microphone and accessibility permissions when prompted
 4. Set your preferred hotkey in settings
-5. Optionally add an AI provider API key for enhanced transcription
+5. Optionally add an AI provider API key for enhanced transcription (keys are stored securely in your macOS Keychain)
 
 ## Requirements
 
