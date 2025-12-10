@@ -643,7 +643,7 @@ final class CommandModeService: ObservableObject {
         // Use Command Mode's independent provider/model settings
         let providerID = settings.commandModeSelectedProviderID
         let model = settings.commandModeSelectedModel ?? "gpt-4o"
-        let apiKey = settings.providerAPIKeys[providerID] ?? ""
+        let apiKey = settings.getAPIKey(for: providerID) ?? ""
         
         let baseURL: String
         if let provider = settings.savedProviders.first(where: { $0.id == providerID }) {
@@ -784,12 +784,14 @@ final class CommandModeService: ObservableObject {
         let enableStreaming = SettingsStore.shared.enableAIStreaming
         
         // Build request
+        let isReasoningModel = model.hasPrefix("o1") || model.hasPrefix("o3") || model.hasPrefix("gpt-5")
+        
         var body: [String: Any] = [
             "model": model,
             "messages": messages,
             "tools": [TerminalService.toolDefinition],
             "tool_choice": "auto",
-            "temperature": 0.1
+            "temperature": isReasoningModel ? 1.0 : 0.1
         ]
         
         if enableStreaming {

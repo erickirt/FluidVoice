@@ -110,6 +110,12 @@ struct ContentView: View {
     @State private var showingAddModel: Bool = false
     @State private var newModelName: String = ""
     
+    // Model Reasoning Configuration
+    @State private var showingReasoningConfig: Bool = false
+    @State private var editingReasoningParamName: String = "reasoning_effort"
+    @State private var editingReasoningParamValue: String = "low"
+    @State private var editingReasoningEnabled: Bool = false
+    
     // MARK: - Provider Management
     @State private var providerAPIKeys: [String: String] = [:] // [providerKey: apiKey]
     @State private var currentProvider: String = "openai" // canonical key: "openai" | "groq" | "custom:<id>"
@@ -135,6 +141,11 @@ struct ContentView: View {
     @State private var showAPIKeysGuide: Bool = false
     @State private var showKeychainPermissionAlert: Bool = false
     @State private var keychainPermissionMessage: String = ""
+    
+    // Edit Provider State
+    @State private var showingEditProvider: Bool = false
+    @State private var editProviderName: String = ""
+    @State private var editProviderBaseURL: String = ""
     
     // Feedback State
     @State private var feedbackText: String = ""
@@ -1337,7 +1348,25 @@ struct ContentView: View {
                                 }
                             }
                             
-                            // Always show delete button
+                            // Edit button for custom providers
+                            Button(action: {
+                                if let provider = savedProviders.first(where: { $0.id == selectedProviderID }) {
+                                    editProviderName = provider.name
+                                    editProviderBaseURL = provider.baseURL
+                                    showingEditProvider = true
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "pencil")
+                                    Text("Edit")
+                                }
+                                .font(.caption)
+                            }
+                            .buttonStyle(CompactButtonStyle())
+                            .buttonHoverEffect()
+                            .disabled(selectedProviderID == "openai" || selectedProviderID == "groq" || selectedProviderID == "apple-intelligence")
+                            
+                            // Delete button for custom providers
                             Button(action: {
                                 // Only delete if it's a custom provider
                                 if !selectedProviderID.isEmpty && selectedProviderID != "openai" && selectedProviderID != "groq" {
@@ -1379,6 +1408,79 @@ struct ContentView: View {
                             .buttonHoverEffect()
                         }
                         
+                        // Edit Provider Modal (Inline)
+                        if showingEditProvider {
+                            VStack(spacing: 12) {
+                                HStack {
+                                    Text("Edit Provider")
+                                        .font(.headline)
+                                        .fontWeight(.semibold)
+                                    Spacer()
+                                }
+                                
+                                HStack(spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Name")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        TextField("Provider name", text: $editProviderName)
+                                            .textFieldStyle(.roundedBorder)
+                                            .frame(width: 200)
+                                    }
+                                    
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Base URL")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        TextField("e.g., http://localhost:11434/v1", text: $editProviderBaseURL)
+                                            .textFieldStyle(.roundedBorder)
+                                            .font(.system(.body, design: .monospaced))
+                                    }
+                                }
+
+                                HStack(spacing: 8) {
+                                    Button("Save") {
+                                        let name = editProviderName.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        let base = editProviderBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        
+                                        guard !name.isEmpty, !base.isEmpty else { return }
+                                        
+                                        if let providerIndex = savedProviders.firstIndex(where: { $0.id == selectedProviderID }) {
+                                            let oldProvider = savedProviders[providerIndex]
+                                            let updatedProvider = SettingsStore.SavedProvider(
+                                                id: oldProvider.id,
+                                                name: name,
+                                                baseURL: base,
+                                                models: oldProvider.models
+                                            )
+                                            savedProviders[providerIndex] = updatedProvider
+                                            saveSavedProviders()
+                                            
+                                            openAIBaseURL = base
+                                            updateCurrentProvider()
+                                        }
+                                        
+                                        showingEditProvider = false
+                                        editProviderName = ""; editProviderBaseURL = ""
+                                    }
+                                    .buttonStyle(GlassButtonStyle())
+                                    .disabled(editProviderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || editProviderBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                                    Button("Cancel") {
+                                        showingEditProvider = false
+                                        editProviderName = ""; editProviderBaseURL = ""
+                                    }
+                                    .buttonStyle(GlassButtonStyle())
+                                }
+                            }
+                            .padding(12)
+                            .background(theme.palette.cardBackground.opacity(0.5))
+                            .cornerRadius(12)
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.palette.accent.opacity(0.3), lineWidth: 1))
+                            .padding(.vertical, 8)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+
                         // Apple Intelligence Badge (when selected)
                         if selectedProviderID == "apple-intelligence" {
                             HStack(spacing: 8) {
@@ -1409,33 +1511,7 @@ struct ContentView: View {
                             Divider()
                         }
                         
-                        // Base URL (for custom providers, not for Apple Intelligence)
-                        if !["openai", "groq", "apple-intelligence"].contains(selectedProviderID) {
-                            HStack(spacing: 12) {
-                                HStack {
-                                    Text("Base URL:")
-                                        .fontWeight(.medium)
-                                }
-                                .frame(width: 90, alignment: .leading)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(
-                                    LinearGradient(
-                                        colors: [theme.palette.accent.opacity(0.15), theme.palette.accent.opacity(0.05)],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .cornerRadius(6)
-                                
-                                TextField("e.g., http://localhost:11434/v1", text: $openAIBaseURL)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(.body, design: .monospaced))
-                                    .onChange(of: openAIBaseURL) { _ in
-                                        updateCurrentProvider()
-                                    }
-                            }
-                        }
+
                         
                         // API Key Management (not for Apple Intelligence)
                         if selectedProviderID != "apple-intelligence" {
@@ -1565,6 +1641,46 @@ struct ContentView: View {
                                 .buttonStyle(CompactButtonStyle())
                                 .buttonHoverEffect()
                             }
+                            
+                            // Reasoning Config button
+                            Button(action: {
+                                // Load current config for this model
+                                let providerKey = self.providerKey(for: selectedProviderID)
+                                if let config = SettingsStore.shared.getReasoningConfig(forModel: selectedModel, provider: providerKey) {
+                                    editingReasoningParamName = config.parameterName
+                                    editingReasoningParamValue = config.parameterValue
+                                    editingReasoningEnabled = config.isEnabled
+                                } else {
+                                    // Check if model has auto-detected defaults
+                                    let modelLower = selectedModel.lowercased()
+                                    if modelLower.hasPrefix("gpt-5") || modelLower.contains("gpt-5.") ||
+                                       modelLower.hasPrefix("o1") || modelLower.hasPrefix("o3") ||
+                                       modelLower.contains("gpt-oss") || modelLower.hasPrefix("openai/") {
+                                        editingReasoningParamName = "reasoning_effort"
+                                        editingReasoningParamValue = "low"
+                                        editingReasoningEnabled = true
+                                    } else if modelLower.contains("deepseek") && modelLower.contains("reasoner") {
+                                        editingReasoningParamName = "enable_thinking"
+                                        editingReasoningParamValue = "true"
+                                        editingReasoningEnabled = true
+                                    } else {
+                                        editingReasoningParamName = "reasoning_effort"
+                                        editingReasoningParamValue = "low"
+                                        editingReasoningEnabled = false
+                                    }
+                                }
+                                showingReasoningConfig = true
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: hasReasoningConfigForCurrentModel() ? "brain.fill" : "brain")
+                                    Text("Reasoning")
+                                }
+                                .font(.caption)
+                                .foregroundStyle(hasReasoningConfigForCurrentModel() ? theme.palette.accent : .secondary)
+                            }
+                            .buttonStyle(CompactButtonStyle())
+                            .buttonHoverEffect()
+                            .help("Configure reasoning/thinking parameters for this model")
                         }
                         
                         // Add model input (appears below on new line when in add mode)
@@ -1594,6 +1710,149 @@ struct ContentView: View {
                                 .buttonHoverEffect()
                             }
                             .padding(.leading, 122) // Align with model picker
+                        }
+                        
+                        // Reasoning Config Editor (appears below when editing)
+                        if showingReasoningConfig {
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack {
+                                    Image(systemName: "brain.head.profile")
+                                        .foregroundStyle(theme.palette.accent)
+                                    Text("Reasoning Config for \(selectedModel)")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                    Spacer()
+                                    
+                                    // Auto-detect indicator
+                                    if !SettingsStore.shared.hasCustomReasoningConfig(forModel: selectedModel, provider: providerKey(for: selectedProviderID)) && editingReasoningEnabled {
+                                        Text("Auto-detected")
+                                            .font(.caption2)
+                                            .foregroundStyle(.green)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(.green.opacity(0.15))
+                                            .cornerRadius(4)
+                                    }
+                                }
+                                
+                                Toggle("Enable reasoning parameter", isOn: $editingReasoningEnabled)
+                                    .toggleStyle(.switch)
+                                    .font(.caption)
+                                
+                                if editingReasoningEnabled {
+                                    HStack(spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Parameter Name")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                            Picker("", selection: $editingReasoningParamName) {
+                                                Text("reasoning_effort").tag("reasoning_effort")
+                                                Text("enable_thinking").tag("enable_thinking")
+                                                Text("thinking").tag("thinking")
+                                                Text("Custom...").tag("__custom__")
+                                            }
+                                            .pickerStyle(.menu)
+                                            .labelsHidden()
+                                            .frame(width: 150)
+                                        }
+                                        
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Value")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                            
+                                            if editingReasoningParamName == "reasoning_effort" {
+                                                Picker("", selection: $editingReasoningParamValue) {
+                                                    Text("minimal").tag("minimal")
+                                                    Text("low").tag("low")
+                                                    Text("medium").tag("medium")
+                                                    Text("high").tag("high")
+                                                }
+                                                .pickerStyle(.menu)
+                                                .labelsHidden()
+                                                .frame(width: 100)
+                                            } else if editingReasoningParamName == "enable_thinking" {
+                                                Picker("", selection: $editingReasoningParamValue) {
+                                                    Text("true").tag("true")
+                                                    Text("false").tag("false")
+                                                }
+                                                .pickerStyle(.menu)
+                                                .labelsHidden()
+                                                .frame(width: 100)
+                                            } else {
+                                                TextField("Value", text: $editingReasoningParamValue)
+                                                    .textFieldStyle(.roundedBorder)
+                                                    .frame(width: 100)
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Help text
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "info.circle")
+                                            .font(.caption2)
+                                        Text("gpt-5.x, o1, gpt-oss models use reasoning_effort. DeepSeek uses enable_thinking.")
+                                            .font(.caption2)
+                                    }
+                                    .foregroundStyle(.secondary)
+                                }
+                                
+                                HStack(spacing: 8) {
+                                    Button("Save") {
+                                        let providerKey = self.providerKey(for: selectedProviderID)
+                                        if editingReasoningEnabled {
+                                            let config = SettingsStore.ModelReasoningConfig(
+                                                parameterName: editingReasoningParamName,
+                                                parameterValue: editingReasoningParamValue,
+                                                isEnabled: true
+                                            )
+                                            SettingsStore.shared.setReasoningConfig(config, forModel: selectedModel, provider: providerKey)
+                                        } else {
+                                            // Save as disabled config to override auto-detection
+                                            let config = SettingsStore.ModelReasoningConfig(
+                                                parameterName: "",
+                                                parameterValue: "",
+                                                isEnabled: false
+                                            )
+                                            SettingsStore.shared.setReasoningConfig(config, forModel: selectedModel, provider: providerKey)
+                                        }
+                                        showingReasoningConfig = false
+                                    }
+                                    .buttonStyle(GlassButtonStyle())
+                                    .buttonHoverEffect()
+                                    
+                                    Button("Cancel") {
+                                        showingReasoningConfig = false
+                                    }
+                                    .buttonStyle(CompactButtonStyle())
+                                    .buttonHoverEffect()
+                                    
+                                    Spacer()
+                                    
+                                    // Reset to auto-detect
+                                    if SettingsStore.shared.hasCustomReasoningConfig(forModel: selectedModel, provider: providerKey(for: selectedProviderID)) {
+                                        Button("Reset to Auto") {
+                                            let providerKey = self.providerKey(for: selectedProviderID)
+                                            SettingsStore.shared.setReasoningConfig(nil, forModel: selectedModel, provider: providerKey)
+                                            showingReasoningConfig = false
+                                        }
+                                        .buttonStyle(CompactButtonStyle())
+                                        .buttonHoverEffect()
+                                        .foregroundStyle(.orange)
+                                    }
+                                }
+                            }
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(theme.palette.accent.opacity(0.08))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(theme.palette.accent.opacity(0.2), lineWidth: 1)
+                                    )
+                            )
+                            .padding(.leading, 122) // Align with model picker
+                            .transition(.opacity)
                         }
                         } // End of else block for non-Apple Intelligence model row
 
@@ -1799,7 +2058,7 @@ struct ContentView: View {
                                         showingSaveProvider = false
                                         newProviderName = ""; newProviderBaseURL = ""; newProviderApiKey = ""; newProviderModels = ""
                                     }
-                                    .buttonStyle(GlassButtonStyle())
+                            .buttonStyle(GlassButtonStyle())
                                     .buttonHoverEffect()
                                 }
                             }
@@ -2511,25 +2770,47 @@ struct ContentView: View {
         let systemPrompt = buildSystemPrompt(appInfo: appInfo)
         DebugLogger.shared.debug("Using app context for AI: app=\(appInfo.name), bundleId=\(appInfo.bundleId), title=\(appInfo.windowTitle)", source: "ContentView")
         
-        // Check if model is gpt-oss (Groq reasoning models) and add reasoning_effort parameter
-        let modelLower = selectedModel.lowercased()
-        let shouldAddReasoningEffort = modelLower.contains("gpt-oss") || modelLower.hasPrefix("openai/")
+        // Get reasoning config for this model (uses per-model settings or auto-detection)
+        let providerKey = self.providerKey(for: selectedProviderID)
+        let reasoningConfig = SettingsStore.shared.getReasoningConfig(forModel: selectedModel, provider: providerKey)
+        
+        if let config = reasoningConfig {
+            DebugLogger.shared.debug("Model '\(selectedModel)' reasoning config: \(config.parameterName)=\(config.parameterValue), enabled=\(config.isEnabled)", source: "ContentView")
+        } else {
+            DebugLogger.shared.debug("Model '\(selectedModel)' has no reasoning config", source: "ContentView")
+        }
         
         // Get streaming setting
         let enableStreaming = SettingsStore.shared.enableAIStreaming
         
-        let body = ChatRequest(
-            model: selectedModel,
-            messages: [
-                ChatMessage(role: "system", content: systemPrompt),
-                ChatMessage(role: "user", content: inputText)
+        // Build request body dynamically to support different reasoning parameters
+        var requestDict: [String: Any] = [
+            "model": selectedModel,
+            "messages": [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": inputText]
             ],
-            temperature: 0.2,
-            reasoning_effort: shouldAddReasoningEffort ? "low" : nil,
-            stream: enableStreaming ? true : nil
-        )
+            "temperature": 0.2
+        ]
+        
+        // Add reasoning parameter if configured for this model
+        if let config = reasoningConfig, config.isEnabled {
+            if config.parameterName == "enable_thinking" {
+                // DeepSeek uses boolean
+                requestDict[config.parameterName] = config.parameterValue == "true"
+            } else {
+                // OpenAI/Groq use string values
+                requestDict[config.parameterName] = config.parameterValue
+            }
+            DebugLogger.shared.debug("Added reasoning param: \(config.parameterName)=\(config.parameterValue)", source: "ContentView")
+        }
+        
+        // Add streaming if enabled
+        if enableStreaming {
+            requestDict["stream"] = true
+        }
 
-        guard let jsonData = try? JSONEncoder().encode(body) else {
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: requestDict, options: []) else {
             return "Error: Failed to encode request"
         }
         
@@ -2891,24 +3172,9 @@ struct ContentView: View {
         let baseURL = openAIBaseURL.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         let isLocal = isLocalEndpoint(baseURL)
 
-        // Debug logging
-        DebugLogger.shared.info("API connection test started (provider: \(currentProvider), baseURL: \(baseURL), isLocal: \(isLocal))", source: "ContentView")
-        DebugLogger.shared.debug("API key supplied: \(!apiKey.isEmpty), length: \(apiKey.count)", source: "ContentView")
-
-        // Only validate API key for non-local endpoints
-        if !isLocal {
-            if !apiKey.hasPrefix("sk-") {
-                DebugLogger.shared.warning("PROBLEM: API key doesn't start with 'sk-' - this is likely the cause of the 401 error!", source: "ContentView")
-            }
-            if apiKey.count < 20 || apiKey.count > 200 {
-                DebugLogger.shared.warning("PROBLEM: API key length is unusual - should be 20-200 characters!", source: "ContentView")
-            }
-        }
-
         // For local endpoints, only baseURL is required
         if isLocal {
             guard !baseURL.isEmpty else {
-                DebugLogger.shared.error("Missing required field - base URL is empty", source: "ContentView")
                 await MainActor.run {
                     connectionStatus = .failed
                     connectionErrorMessage = "Base URL is required"
@@ -2918,7 +3184,6 @@ struct ContentView: View {
         } else {
             // For remote endpoints, both API key and baseURL are required
             guard !apiKey.isEmpty && !baseURL.isEmpty else {
-                DebugLogger.shared.error("Missing required fields - API key or base URL is empty", source: "ContentView")
                 await MainActor.run {
                     connectionStatus = .failed
                     connectionErrorMessage = "API key and base URL are required"
@@ -2938,20 +3203,15 @@ struct ContentView: View {
             
             // Build the full URL - only append /chat/completions if not already present
             let fullURL: String
-            if endpoint.contains("/chat/completions") || 
-               endpoint.contains("/api/chat") || 
+            if endpoint.contains("/chat/completions") ||
+               endpoint.contains("/api/chat") ||
                endpoint.contains("/api/generate") {
-                // URL already has a complete path, use as-is
                 fullURL = endpoint
             } else {
-                // Append /chat/completions for OpenAI-compatible endpoints
                 fullURL = endpoint + "/chat/completions"
             }
-            
-            DebugLogger.shared.debug("Full endpoint URL: \(fullURL)", source: "ContentView")
 
             guard let url = URL(string: fullURL) else {
-                DebugLogger.shared.error("Failed to create URL from: \(fullURL)", source: "ContentView")
                 await MainActor.run {
                     connectionStatus = .failed
                     connectionErrorMessage = "Invalid Base URL format"
@@ -2959,30 +3219,37 @@ struct ContentView: View {
                 return
             }
 
-            DebugLogger.shared.debug("Successfully created URL: \(url.absoluteString)", source: "ContentView")
-
-            // Use the exact same format as the real API calls
-            struct TestChatMessage: Codable {
-                let role: String
-                let content: String
+            // Get reasoning config for this model (uses per-model settings or auto-detection)
+            let providerKey = self.providerKey(for: selectedProviderID)
+            let reasoningConfig = SettingsStore.shared.getReasoningConfig(forModel: selectedModel, provider: providerKey)
+            
+            // Build request body dynamically based on model requirements
+            let modelLower = selectedModel.lowercased()
+            let usesMaxCompletionTokens = modelLower.hasPrefix("gpt-5") || modelLower.contains("gpt-5.") ||
+                                          modelLower.hasPrefix("o1") || modelLower.hasPrefix("o3")
+            
+            var requestDict: [String: Any] = [
+                "model": selectedModel,
+                "messages": [["role": "user", "content": "test"]]
+            ]
+            
+            // Use appropriate token limit parameter
+            if usesMaxCompletionTokens {
+                requestDict["max_completion_tokens"] = 50
+            } else {
+                requestDict["max_tokens"] = 50
+            }
+            
+            // Add reasoning parameter if configured for this model
+            if let config = reasoningConfig, config.isEnabled {
+                if config.parameterName == "enable_thinking" {
+                    requestDict[config.parameterName] = config.parameterValue == "true"
+                } else {
+                    requestDict[config.parameterName] = config.parameterValue
+                }
             }
 
-            struct TestChatRequest: Codable {
-                let model: String
-                let messages: [TestChatMessage]
-                let max_tokens: Int
-            }
-
-            let testBody = TestChatRequest(
-                model: selectedModel, // Use the selected model from the UI
-                messages: [TestChatMessage(role: "user", content: "test")],
-                max_tokens: 1 // Minimal response to save tokens
-            )
-
-            print("Using model for test: \(selectedModel)")
-
-            guard let jsonData = try? JSONEncoder().encode(testBody) else {
-                print("[DEBUG] Failed to encode test request body")
+            guard let jsonData = try? JSONSerialization.data(withJSONObject: requestDict, options: []) else {
                 await MainActor.run {
                     connectionStatus = .failed
                     connectionErrorMessage = "Failed to encode test request"
@@ -2990,84 +3257,96 @@ struct ContentView: View {
                 return
             }
 
-            // Create request with proper logging
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 30
             
-            // Only add Authorization header for non-local endpoints
             if !isLocal {
                 request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
             }
             
             request.httpBody = jsonData
 
-            // Log request details (mask API key for security)
-            let maskedKey = apiKey.count > 8 ? "\(apiKey.prefix(4))****\(apiKey.suffix(4))" : "****"
-            print("[DEBUG] Request details:")
-            print("[DEBUG]   Method: \(request.httpMethod ?? "Unknown")")
-            print("[DEBUG]   URL: \(request.url?.absoluteString ?? "Unknown")")
-            print("[DEBUG]   Content-Type: \(request.value(forHTTPHeaderField: "Content-Type") ?? "Not set")")
-            if isLocal {
-                print("[DEBUG]   Authorization header: Skipped (local endpoint detected)")
-            } else {
-                print("[DEBUG]   Authorization header: \(request.value(forHTTPHeaderField: "Authorization") != nil ? "Set (Bearer \(maskedKey))" : "NOT SET - This is likely the problem!")")
-                print("[DEBUG]   Full Authorization header: \(request.value(forHTTPHeaderField: "Authorization") ?? "NOT SET")")
-            }
-            print("[DEBUG]   Body size: \(jsonData.count) bytes")
-            if let bodyString = String(data: jsonData, encoding: .utf8) {
-                print("[DEBUG]   Request body: \(bodyString)")
-            }
-
-            print("=== SENDING REQUEST ===")
-            print("URL: \(request.url?.absoluteString ?? "Unknown")")
-            print("Method: \(request.httpMethod ?? "Unknown")")
-            print("Authorization: \(request.value(forHTTPHeaderField: "Authorization") != nil ? "Set" : "NOT SET")")
-
-            let (_, response) = try await URLSession.shared.data(for: request)
-
-            print("=== RECEIVED RESPONSE ===")
+            let (data, response) = try await URLSession.shared.data(for: request)
 
             if let httpResponse = response as? HTTPURLResponse {
-                print("HTTP Status: \(httpResponse.statusCode)")
-                print("Response headers: \(httpResponse.allHeaderFields)")
-
                 if (200...299).contains(httpResponse.statusCode) {
-                    print("SUCCESS: Connection test passed!")
                     await MainActor.run {
                         connectionStatus = .success
                         connectionErrorMessage = ""
                     }
                 } else {
-                    print("FAILED: HTTP \(httpResponse.statusCode)")
-                    if httpResponse.statusCode == 401 {
-                        print("401 Error: This usually means:")
-                        print("  - API key is invalid or expired")
-                        print("  - API key doesn't start with 'sk-'")
-                        print("  - Insufficient credits on the account")
-                        print("  - Wrong API key type (using secret key instead of API key)")
+                    // Parse error response for better error messages
+                    var errorMessage = "HTTP \(httpResponse.statusCode)"
+                    
+                    if let responseBody = String(data: data, encoding: .utf8),
+                       let jsonData = responseBody.data(using: .utf8),
+                       let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+                        
+                        if let error = json["error"] as? [String: Any],
+                           let message = error["message"] as? String {
+                            errorMessage = message
+                        } else if let message = json["message"] as? String {
+                            errorMessage = message
+                        } else if let errorStr = json["error"] as? String {
+                            errorMessage = errorStr
+                        }
                     }
+                    
+                    // Provide helpful error messages based on status code
+                    if errorMessage == "HTTP \(httpResponse.statusCode)" {
+                        switch httpResponse.statusCode {
+                        case 400:
+                            errorMessage = "Bad Request - Model '\(selectedModel)' may be invalid"
+                        case 401:
+                            errorMessage = "Invalid API key or unauthorized"
+                        case 403:
+                            errorMessage = "Access forbidden - check API key permissions"
+                        case 404:
+                            errorMessage = "Model '\(selectedModel)' not found"
+                        case 429:
+                            errorMessage = "Rate limited - try again later"
+                        case 500...599:
+                            errorMessage = "Server error - provider may be down"
+                        default:
+                            break
+                        }
+                    }
+                    
                     await MainActor.run {
                         connectionStatus = .failed
-                        connectionErrorMessage = "HTTP \(httpResponse.statusCode): Invalid API key or insufficient credits"
+                        connectionErrorMessage = errorMessage
                     }
                 }
             } else {
-                print("[DEBUG] Invalid response type - not HTTPURLResponse")
                 await MainActor.run {
                     connectionStatus = .failed
                     connectionErrorMessage = "Invalid response from server"
                 }
             }
-        } catch {
-            print("[DEBUG] Network error during connection test:")
-            print("[DEBUG]   Error: \(error.localizedDescription)")
-            print("[DEBUG]   Error type: \(type(of: error))")
-            if let urlError = error as? URLError {
-                print("[DEBUG]   URL Error Code: \(urlError.code.rawValue)")
-                print("[DEBUG]   URL Error User Info: \(urlError.userInfo)")
+        } catch let urlError as URLError {
+            var errorMessage: String
+            switch urlError.code {
+            case .timedOut:
+                errorMessage = "Request timed out - server not responding"
+            case .cannotConnectToHost:
+                errorMessage = "Cannot connect to host - check URL"
+            case .notConnectedToInternet:
+                errorMessage = "No internet connection"
+            case .secureConnectionFailed:
+                errorMessage = "SSL/TLS connection failed"
+            case .serverCertificateUntrusted:
+                errorMessage = "Server certificate not trusted"
+            default:
+                errorMessage = urlError.localizedDescription
             }
 
+            await MainActor.run {
+                connectionStatus = .failed
+                connectionErrorMessage = errorMessage
+            }
+        } catch {
             await MainActor.run {
                 connectionStatus = .failed
                 connectionErrorMessage = error.localizedDescription
@@ -3076,12 +3355,6 @@ struct ContentView: View {
 
         await MainActor.run {
             isTestingConnection = false
-            print("🏁 ===== CONNECTION TEST COMPLETE =====")
-            print("🏁 Final Status: \(connectionStatus)")
-            if !connectionErrorMessage.isEmpty {
-                print("🏁 Error: \(connectionErrorMessage)")
-            }
-            print("🏁 ===== END OF TEST =====")
         }
     }
 
@@ -3400,6 +3673,25 @@ struct ContentView: View {
     private func isCustomModel(_ model: String) -> Bool {
         // Non-removable defaults are the provider's default models
         return !defaultModels(for: currentProvider).contains(model)
+    }
+    
+    /// Check if the current model has a reasoning config (either custom or auto-detected)
+    private func hasReasoningConfigForCurrentModel() -> Bool {
+        let providerKey = self.providerKey(for: selectedProviderID)
+        
+        // Check for custom config first
+        if SettingsStore.shared.hasCustomReasoningConfig(forModel: selectedModel, provider: providerKey) {
+            if let config = SettingsStore.shared.getReasoningConfig(forModel: selectedModel, provider: providerKey) {
+                return config.isEnabled
+            }
+        }
+        
+        // Check for auto-detected models
+        let modelLower = selectedModel.lowercased()
+        return modelLower.hasPrefix("gpt-5") || modelLower.contains("gpt-5.") ||
+               modelLower.hasPrefix("o1") || modelLower.hasPrefix("o3") ||
+               modelLower.contains("gpt-oss") || modelLower.hasPrefix("openai/") ||
+               (modelLower.contains("deepseek") && modelLower.contains("reasoner"))
     }
     
     private func removeModel(_ model: String) {

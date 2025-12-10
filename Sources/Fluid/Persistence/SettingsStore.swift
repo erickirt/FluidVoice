@@ -55,12 +55,42 @@ final class SettingsStore: ObservableObject
         static let rewriteModeSelectedProviderID = "RewriteModeSelectedProviderID"
         static let rewriteModeLinkedToGlobal = "RewriteModeLinkedToGlobal"
         
+        // Model Reasoning Config Keys
+        static let modelReasoningConfigs = "ModelReasoningConfigs"
+        
         // Stats Keys
         static let userTypingWPM = "UserTypingWPM"
 
         // Filler Words
         static let fillerWords = "FillerWords"
         static let removeFillerWordsEnabled = "RemoveFillerWordsEnabled"
+    }
+    
+    // MARK: - Model Reasoning Configuration
+    
+    /// Configuration for model-specific reasoning/thinking parameters
+    struct ModelReasoningConfig: Codable, Equatable {
+        /// The parameter name to use (e.g., "reasoning_effort", "enable_thinking", "thinking")
+        var parameterName: String
+        
+        /// The value to use for the parameter (e.g., "low", "medium", "high", "none", "true")
+        var parameterValue: String
+        
+        /// Whether this config is enabled (allows disabling without deleting)
+        var isEnabled: Bool
+        
+        init(parameterName: String = "reasoning_effort", parameterValue: String = "low", isEnabled: Bool = true) {
+            self.parameterName = parameterName
+            self.parameterValue = parameterValue
+            self.isEnabled = isEnabled
+        }
+        
+        /// Common presets for different model types
+        static let openAIGPT5 = ModelReasoningConfig(parameterName: "reasoning_effort", parameterValue: "low", isEnabled: true)
+        static let openAIO1 = ModelReasoningConfig(parameterName: "reasoning_effort", parameterValue: "medium", isEnabled: true)
+        static let groqGPTOSS = ModelReasoningConfig(parameterName: "reasoning_effort", parameterValue: "low", isEnabled: true)
+        static let deepSeekReasoner = ModelReasoningConfig(parameterName: "enable_thinking", parameterValue: "true", isEnabled: true)
+        static let disabled = ModelReasoningConfig(parameterName: "", parameterValue: "", isEnabled: false)
     }
 
     struct SavedProvider: Codable, Identifiable, Hashable
@@ -141,6 +171,17 @@ final class SettingsStore: ObservableObject
             objectWillChange.send()
             persistProviderAPIKeys(newValue)
         }
+    }
+    
+    /// Securely retrieve API key for a provider, handling custom prefix logic
+    func getAPIKey(for providerID: String) -> String? {
+        let keys = providerAPIKeys
+        // Try exact match first
+        if let key = keys[providerID] { return key }
+        
+        // Try canonical key format (custom:ID)
+        let canonical = canonicalProviderKey(for: providerID)
+        return keys[canonical]
     }
 
     var selectedProviderID: String
@@ -452,6 +493,83 @@ final class SettingsStore: ObservableObject
             objectWillChange.send()
             defaults.set(newValue, forKey: Keys.rewriteModeLinkedToGlobal)
         }
+    }
+    
+    // MARK: - Model Reasoning Configuration
+    
+    /// Per-model reasoning configuration storage
+    /// Key format: "provider:model" (e.g., "openai:gpt-5.1", "groq:gpt-oss-120b")
+    var modelReasoningConfigs: [String: ModelReasoningConfig]
+    {
+        get {
+            guard let data = defaults.data(forKey: Keys.modelReasoningConfigs),
+                  let decoded = try? JSONDecoder().decode([String: ModelReasoningConfig].self, from: data) else {
+                return [:]
+            }
+            return decoded
+        }
+        set {
+            objectWillChange.send()
+            if let encoded = try? JSONEncoder().encode(newValue) {
+                defaults.set(encoded, forKey: Keys.modelReasoningConfigs)
+            }
+        }
+    }
+    
+    /// Get reasoning config for a specific model, with smart defaults for known models
+    func getReasoningConfig(forModel model: String, provider: String) -> ModelReasoningConfig? {
+        let key = "\(provider):\(model)"
+        
+        // First check if user has a custom config
+        if let customConfig = modelReasoningConfigs[key] {
+            return customConfig.isEnabled ? customConfig : nil
+        }
+        
+        // Apply smart defaults for known model patterns
+        let modelLower = model.lowercased()
+        
+        // OpenAI gpt-5.x models
+        if modelLower.hasPrefix("gpt-5") || modelLower.contains("gpt-5.") {
+            return .openAIGPT5
+        }
+        
+        // OpenAI o1/o3 reasoning models
+        if modelLower.hasPrefix("o1") || modelLower.hasPrefix("o3") {
+            return .openAIO1
+        }
+        
+        // Groq gpt-oss models
+        if modelLower.contains("gpt-oss") || modelLower.hasPrefix("openai/") {
+            return .groqGPTOSS
+        }
+        
+        // DeepSeek reasoner models
+        if modelLower.contains("deepseek") && modelLower.contains("reasoner") {
+            return .deepSeekReasoner
+        }
+        
+        // No reasoning config needed for standard models (gpt-4.x, claude, llama, etc.)
+        return nil
+    }
+    
+    /// Set reasoning config for a specific model
+    func setReasoningConfig(_ config: ModelReasoningConfig?, forModel model: String, provider: String) {
+        let key = "\(provider):\(model)"
+        var configs = modelReasoningConfigs
+        
+        if let config = config {
+            configs[key] = config
+        } else {
+            configs.removeValue(forKey: key)
+        }
+        
+        modelReasoningConfigs = configs
+    }
+    
+    /// Check if a model has a custom (user-defined) reasoning config
+    func hasCustomReasoningConfig(forModel model: String, provider: String) -> Bool {
+        let key = "\(provider):\(model)"
+        return modelReasoningConfigs[key] != nil
     }
     
     // MARK: - Stats Settings

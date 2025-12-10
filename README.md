@@ -84,6 +84,41 @@ Build and run in Xcode. All dependencies are managed via Swift Package Manager.
 
 Contributions are welcome! Please create an issue first to discuss any major changes or feature requests before submitting a pull request.
 
+### Setting Up Your Development Environment
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/altic-dev/Fluid-oss.git
+   cd Fluid-oss
+   ```
+
+2. **Open in Xcode:**
+   ```bash
+   open Fluid.xcodeproj
+   ```
+
+3. **Configure your Team ID:**
+   - Select the project in Xcode's navigator
+   - Go to "Signing & Capabilities" tab
+   - Select your Apple Developer Team from the dropdown
+   - Xcode will save this locally in `xcuserdata/` (which is gitignored)
+
+4. **Build and run** - All dependencies are managed via Swift Package Manager
+
+5. **(Optional) Install pre-commit hook** to prevent accidental team ID commits:
+   ```bash
+   cp scripts/check-team-id.sh .git/hooks/pre-commit
+   chmod +x .git/hooks/pre-commit
+   ```
+
+### Pull Request Guidelines
+
+- **Keep changes focused and atomic** - one feature or fix per PR
+- **Update documentation** if adding new features
+- **Test thoroughly** on your machine before submitting
+- **Never commit personal team IDs or API keys** to `project.pbxproj`
+- **Check git diff** before committing to ensure no personal settings leaked in
+
 ## Connect
 
 Follow development updates on X: [@ALTIC_DEV](https://x.com/ALTIC_DEV)

@@ -128,7 +128,7 @@ final class RewriteModeService: ObservableObject {
         }
         
         let model = settings.rewriteModeSelectedModel ?? "gpt-4o"
-        let apiKey = settings.providerAPIKeys[providerID] ?? ""
+        let apiKey = settings.getAPIKey(for: providerID) ?? ""
         
         let baseURL: String
         if let provider = settings.savedProviders.first(where: { $0.id == providerID }) {
@@ -180,10 +180,12 @@ final class RewriteModeService: ObservableObject {
         // Check streaming setting
         let enableStreaming = settings.enableAIStreaming
         
+        let isReasoningModel = model.hasPrefix("o1") || model.hasPrefix("o3") || model.hasPrefix("gpt-5")
+
         var body: [String: Any] = [
             "model": model,
             "messages": apiMessages,
-            "temperature": 0.7
+            "temperature": isReasoningModel ? 1.0 : 0.7
         ]
         
         if enableStreaming {
