@@ -1,6 +1,10 @@
 import Foundation
 import AVFoundation
+import AVFoundation
+#if arch(arm64)
 import FluidAudio
+#endif
+import Combine
 import Combine
 
 /// Result of a transcription operation
@@ -92,6 +96,7 @@ final class MeetingTranscriptionService: ObservableObject {
                 try await initializeModels()
             }
             
+            #if arch(arm64)
             guard let asrManager = asrService.asrManager else {
                 throw TranscriptionError.modelLoadFailed("ASR Manager not initialized")
             }
@@ -140,6 +145,9 @@ final class MeetingTranscriptionService: ObservableObject {
             
             self.result = result
             return result
+            #else
+            throw TranscriptionError.transcriptionFailed("File transcription is only supported on Apple Silicon Macs at this time.")
+            #endif
             
         } catch let error as TranscriptionError {
             self.error = error.localizedDescription

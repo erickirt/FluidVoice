@@ -12,7 +12,8 @@ let package = Package(
         .package(url: "https://github.com/mxcl/AppUpdater.git", from: "1.0.0"),
         .package(url: "https://github.com/FluidInference/FluidAudio", from: "0.7.4"),
         .package(url: "https://github.com/mxcl/PromiseKit", from: "6.0.0"),
-        .package(url: "https://github.com/MrKai77/DynamicNotchKit", from: "1.0.0")
+        .package(url: "https://github.com/MrKai77/DynamicNotchKit", from: "1.0.0"),
+        .package(url: "https://github.com/exPHAT/SwiftWhisper.git", branch: "master")
     ],
     targets: [
         .executableTarget(
@@ -21,7 +22,8 @@ let package = Package(
                 "AppUpdater",
                 "FluidAudio",
                 "PromiseKit",
-                "DynamicNotchKit"
+                "DynamicNotchKit",
+                "SwiftWhisper"
             ]
         )
     ]

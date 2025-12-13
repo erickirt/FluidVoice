@@ -2,7 +2,9 @@ import Foundation
 import AVFoundation
 import Combine
 import Accelerate
+#if arch(arm64)
 import FluidAudio
+#endif
 import CoreAudio
 import AppKit
 
@@ -71,6 +73,11 @@ final class ASRService: ObservableObject
     @Published var modelsExistOnDisk: Bool = false
     @Published var selectedModel: ModelOption = .parakeetTdt06bV3
     
+    // MARK: - Error Handling
+    @Published var errorTitle: String = "Error"
+    @Published var errorMessage: String = ""
+    @Published var showError: Bool = false
+    
     /// Returns a user-friendly status message for model loading state
     var modelStatusMessage: String {
         if isAsrReady { return "Model ready" }
@@ -83,8 +90,77 @@ final class ASRService: ObservableObject
     enum ModelOption: String, CaseIterable, Identifiable, Hashable
     {
         case parakeetTdt06bV3 = "Parakeet TDT-0.6b v3"
+        case whisperBase = "Whisper Base (Intel)"
         var id: String { rawValue }
         var displayName: String { rawValue }
+    }
+    
+    // MARK: - Transcription Provider (Settable)
+    
+    /// Cached providers to avoid re-instantiation
+    private var fluidAudioProvider: FluidAudioProvider?
+    private var whisperProvider: WhisperProvider?
+    
+    /// Prevent concurrent provider.prepare() calls (download/load) from overlapping.
+    /// Subsequent callers await the in-flight task.
+    private var ensureReadyTask: Task<Void, Error>?
+    private var ensureReadyProviderKey: String?
+    
+    /// The transcription provider, selected based on user settings or architecture:
+    /// - Auto: Uses FluidAudio on Apple Silicon, Whisper on Intel
+    /// - FluidAudio: Forces FluidAudio (may not work well on Intel)
+    /// - Whisper: Forces Whisper (works on any Mac, useful for testing)
+    private var transcriptionProvider: TranscriptionProvider {
+        let setting = SettingsStore.shared.selectedTranscriptionProvider
+        
+        switch setting {
+        case .auto:
+            // Auto-select based on architecture
+            if CPUArchitecture.isAppleSilicon {
+                return getFluidAudioProvider()
+            } else {
+                return getWhisperProvider()
+            }
+        case .fluidAudio:
+            return getFluidAudioProvider()
+        case .whisper:
+            return getWhisperProvider()
+        }
+    }
+    
+    private func getFluidAudioProvider() -> FluidAudioProvider {
+        if let existing = fluidAudioProvider {
+            return existing
+        }
+        let provider = FluidAudioProvider()
+        fluidAudioProvider = provider
+        DebugLogger.shared.info("ASRService: Created FluidAudio provider", source: "ASRService")
+        return provider
+    }
+    
+    private func getWhisperProvider() -> WhisperProvider {
+        if let existing = whisperProvider {
+            return existing
+        }
+        let provider = WhisperProvider()
+        whisperProvider = provider
+        DebugLogger.shared.info("ASRService: Created Whisper provider", source: "ASRService")
+        return provider
+    }
+    
+    /// Returns the name of the active transcription provider
+    var activeProviderName: String {
+        transcriptionProvider.name
+    }
+    
+    /// Call this when the transcription provider setting changes to reset state
+    func resetTranscriptionProvider() {
+        isAsrReady = false
+        modelsExistOnDisk = false
+        ensureReadyTask?.cancel()
+        ensureReadyTask = nil
+        ensureReadyProviderKey = nil
+        DebugLogger.shared.info("ASRService: Provider reset, will re-initialize on next use", source: "ASRService")
     }
 
 
@@ -97,7 +173,14 @@ final class ASRService: ObservableObject
     private var micPermissionGranted = false
 
     // Internal access for MeetingTranscriptionService to share models
-    var asrManager: AsrManager?
+    // Note: Only available when using FluidAudioProvider (Apple Silicon)
+    #if arch(arm64)
+    var asrManager: AsrManager? {
+        (transcriptionProvider as? FluidAudioProvider)?.underlyingManager
+    }
+    #else
+    var asrManager: Any? { nil }
+    #endif
 
     private var isRecordingWholeSession: Bool = false
     // Thread-safe buffer to prevent "Array mutation while enumerating" and memory corruption crashes
@@ -162,9 +245,7 @@ final class ASRService: ObservableObject
     
     /// Check if models exist on disk without loading them
     func checkIfModelsExist() {
-        let baseCacheDir = AsrModels.defaultCacheDirectory().deletingLastPathComponent()
-        let v3CacheDir = baseCacheDir.appendingPathComponent("parakeet-tdt-0.6b-v3-coreml")
-        modelsExistOnDisk = FileManager.default.fileExists(atPath: v3CacheDir.path)
+        modelsExistOnDisk = transcriptionProvider.modelsExistOnDisk()
         DebugLogger.shared.debug("Models exist on disk: \(modelsExistOnDisk)", source: "ASRService")
     }
 
@@ -289,15 +370,15 @@ final class ASRService: ObservableObject
         do
         {
             try await self.ensureAsrReady()
-            guard let manager = self.asrManager else { 
-                DebugLogger.shared.error("ASR manager is nil", source: "ASRService")
+            guard transcriptionProvider.isReady else { 
+                DebugLogger.shared.error("Transcription provider is not ready", source: "ASRService")
                 return "" 
             }
             
             DebugLogger.shared.debug("Starting transcription with \(pcm.count) samples (\(Float(pcm.count)/16000.0) seconds)", source: "ASRService")
-            DebugLogger.shared.debug("stop(): starting full transcription (samples: \(pcm.count))", source: "ASRService")
-            let result = try await transcriptionExecutor.run {
-                try await manager.transcribe(pcm, source: AudioSource.microphone)
+            DebugLogger.shared.debug("stop(): starting full transcription (samples: \(pcm.count)) using \(transcriptionProvider.name)", source: "ASRService")
+            let result = try await transcriptionExecutor.run { [provider = self.transcriptionProvider] in
+                try await provider.transcribe(pcm)
             }
             DebugLogger.shared.debug("stop(): full transcription finished", source: "ASRService")
             DebugLogger.shared.debug("Transcription completed: '\(result.text)' (confidence: \(result.confidence))", source: "ASRService")
@@ -313,6 +394,12 @@ final class ASRService: ObservableObject
             let nsError = error as NSError
             DebugLogger.shared.error("Error domain: \(nsError.domain), code: \(nsError.code)", source: "ASRService")
             DebugLogger.shared.error("Error userInfo: \(nsError.userInfo)", source: "ASRService")
+            
+            // Expose error to UI (specifically for model download failures on Intel)
+            self.errorTitle = "Transcription Failed"
+            self.errorMessage = error.localizedDescription
+            self.showError = true
+            
             return ""
         }
     }
@@ -548,20 +635,13 @@ final class ASRService: ObservableObject
 
     /// Ensures that ASR models are downloaded and ready for transcription.
     ///
-    /// This method handles the complete model lifecycle:
-    /// 1. Checks if models are already available and loaded
-    /// 2. Downloads models from Hugging Face if needed
-    /// 3. Loads models into memory for inference
-    /// 4. Initializes the ASR manager with loaded models
-    ///
-    /// ## Model Management
-    /// - Models are downloaded from the configured Hugging Face repository
-    /// - Downloads are cached to avoid repeated network requests
-    /// - Download state is reported via `isDownloadingModel`
-    /// - Models include: melspectrogram, encoder, decoder, joint, and token prediction
+    /// This method handles the complete model lifecycle using the appropriate
+    /// TranscriptionProvider based on CPU architecture:
+    /// - Apple Silicon: FluidAudio (CoreML optimized)
+    /// - Intel: SwiftWhisper (whisper.cpp)
     ///
     /// ## Performance
-    /// - First run will download ~100-500MB of models
+    /// - First run will download models (~100-500MB depending on provider)
     /// - Subsequent runs use cached models (much faster)
     /// - Model loading happens asynchronously to avoid blocking UI
     ///
@@ -569,120 +649,120 @@ final class ASRService: ObservableObject
     /// Throws if model download or loading fails. Common causes:
     /// - Network connectivity issues
     /// - Insufficient disk space
-    /// - Invalid model repository configuration
-    ///
-    /// ## Note
-    /// This method is called automatically when starting transcription.
-    /// Manual calls are typically not needed unless you want to preload models.
     func ensureAsrReady() async throws
     {
-        // Check if we're already ready and models are loaded - avoid unnecessary flicker
-        if isAsrReady && asrManager != nil {
+        let provider = transcriptionProvider
+        let providerKey = "\(type(of: provider)):\(provider.name)"
+        
+        // Single-flight: if a prepare is already running for this provider, await it.
+        if let task = ensureReadyTask, ensureReadyProviderKey == providerKey {
+            try await task.value
+            return
+        }
+        
+        let task = Task { @MainActor in
+            try await self.performEnsureAsrReady(provider: provider)
+        }
+        ensureReadyTask = task
+        ensureReadyProviderKey = providerKey
+        
+        defer {
+            if ensureReadyProviderKey == providerKey {
+                ensureReadyTask = nil
+                ensureReadyProviderKey = nil
+            }
+        }
+        
+        try await task.value
+    }
+    
+    private func performEnsureAsrReady(provider: TranscriptionProvider) async throws
+    {
+        // Check if already ready
+        if isAsrReady && provider.isReady {
             DebugLogger.shared.debug("ASR already ready with loaded models, skipping initialization", source: "ASRService")
             return
         }
-
-        // CRITICAL FIX: Early return if already ready to prevent UI flicker and crashes
-        // This prevents unnecessary state resets that can cause SwiftUI object deallocation
-        if isAsrReady {
-            DebugLogger.shared.debug("ASR already marked as ready, skipping state reset", source: "ASRService")
-            return
-        }
-
-        // Force reinitialization for v3 models by resetting state
-        isAsrReady = false
-        asrManager = nil
         
-        if isAsrReady == false
+        // If the flag is set but provider isn't ready (e.g., provider switch without reset), re-init.
+        if isAsrReady && !provider.isReady {
+            DebugLogger.shared.debug("ASR marked ready but provider not ready; re-initializing", source: "ASRService")
+        }
+        
+        isAsrReady = false
+        
+        let totalStartTime = Date()
+        do
         {
-            let totalStartTime = Date()
-            do
-            {
-                DebugLogger.shared.info("=== ASR INITIALIZATION START ===", source: "ASRService")
-
-                // Use separate cache directory for v3 models
-                let baseCacheDir = AsrModels.defaultCacheDirectory().deletingLastPathComponent()
-                let cacheDir = baseCacheDir.appendingPathComponent("parakeet-tdt-0.6b-v3-coreml")
-                let modelsAlreadyCached = FileManager.default.fileExists(atPath: cacheDir.path)
-                
-                DebugLogger.shared.info("Model cache directory: \(cacheDir.path)", source: "ASRService")
-                DebugLogger.shared.info("Models already cached on disk: \(modelsAlreadyCached)", source: "ASRService")
-
-                let originalStderr = dup(STDERR_FILENO)
+            DebugLogger.shared.info("=== ASR INITIALIZATION START ===", source: "ASRService")
+            DebugLogger.shared.info("Using provider: \(provider.name)", source: "ASRService")
+            
+            let modelsAlreadyCached = provider.modelsExistOnDisk()
+            DebugLogger.shared.info("Models already cached on disk: \(modelsAlreadyCached)", source: "ASRService")
+            
+            // Suppress stderr noise during model loading (ALWAYS restore, even on failure).
+            let originalStderr = dup(STDERR_FILENO)
+            var didRedirectStderr = false
+            if originalStderr != -1 {
                 let devNull = open("/dev/null", O_WRONLY)
-                dup2(devNull, STDERR_FILENO)
-                close(devNull)
-
-                // Force v3: remove any v2 cache directory so no fallback occurs
-                let v2CacheDir = baseCacheDir.appendingPathComponent("parakeet-tdt-0.6b-v2-coreml")
-                if FileManager.default.fileExists(atPath: v2CacheDir.path) {
-                    try FileManager.default.removeItem(at: v2CacheDir)
-                    DebugLogger.shared.debug("Removed v2 cache directory to force v3", source: "ASRService")
+                if devNull != -1 {
+                    dup2(devNull, STDERR_FILENO)
+                    close(devNull)
+                    didRedirectStderr = true
                 }
-
-                // Set correct loading state based on whether models are cached
-                DispatchQueue.main.async {
-                    if modelsAlreadyCached {
-                        self.isLoadingModel = true
-                        self.isDownloadingModel = false
-                        DebugLogger.shared.info("📦 LOADING cached model into memory (this takes 30-60 sec)...", source: "ASRService")
-                    } else {
-                        self.isDownloadingModel = true
-                        self.isLoadingModel = false
-                        DebugLogger.shared.info("⬇️ DOWNLOADING model from Hugging Face...", source: "ASRService")
-                    }
-                }
-                
-                // This call either downloads (if needed) OR just loads from cache
-                let downloadStartTime = Date()
-                DebugLogger.shared.info("Calling AsrModels.downloadAndLoad()...", source: "ASRService")
-                let models = try await AsrModels.downloadAndLoad()
-                let downloadDuration = Date().timeIntervalSince(downloadStartTime)
-                DebugLogger.shared.info("✓ AsrModels.downloadAndLoad() completed in \(String(format: "%.1f", downloadDuration)) seconds", source: "ASRService")
-                
-                DispatchQueue.main.async {
-                    self.isDownloadingModel = false
-                    self.isLoadingModel = false
-                    self.modelsExistOnDisk = true
-                }
-                
-                // Initialize AsrManager
-                if self.asrManager == nil
-                {
-                    DebugLogger.shared.debug("Creating new AsrManager...", source: "ASRService")
-                    self.asrManager = AsrManager(config: ASRConfig.default)
-                }
-                if let manager = self.asrManager
-                {
-                    let initStartTime = Date()
-                    DebugLogger.shared.info("Initializing AsrManager with loaded models...", source: "ASRService")
-                    try await manager.initialize(models: models)
-                    let initDuration = Date().timeIntervalSince(initStartTime)
-                    DebugLogger.shared.info("✓ AsrManager.initialize() completed in \(String(format: "%.1f", initDuration)) seconds", source: "ASRService")
-                }
-
-                dup2(originalStderr, STDERR_FILENO)
-                close(originalStderr)
-
-                let totalDuration = Date().timeIntervalSince(totalStartTime)
-                DebugLogger.shared.info("=== ASR INITIALIZATION COMPLETE ===", source: "ASRService")
-                DebugLogger.shared.info("Total initialization time: \(String(format: "%.1f", totalDuration)) seconds", source: "ASRService")
             }
-            catch
-            {
-                DebugLogger.shared.error("ASR initialization failed with error: \(error)", source: "ASRService")
-                DebugLogger.shared.error("Error details: \(error.localizedDescription)", source: "ASRService")
-                DispatchQueue.main.async {
-                    self.isDownloadingModel = false
-                    self.isLoadingModel = false
+
+            defer {
+                // Only restore if we actually redirected stderr.
+                if didRedirectStderr, originalStderr != -1 {
+                    dup2(originalStderr, STDERR_FILENO)
                 }
-                throw error
+                if originalStderr != -1 {
+                    close(originalStderr)
+                }
             }
+            
+            // Set correct loading state based on whether models are cached
+            DispatchQueue.main.async {
+                if modelsAlreadyCached {
+                    self.isLoadingModel = true
+                    self.isDownloadingModel = false
+                    DebugLogger.shared.info("📦 LOADING cached model into memory...", source: "ASRService")
+                } else {
+                    self.isDownloadingModel = true
+                    self.isLoadingModel = false
+                    DebugLogger.shared.info("⬇️ DOWNLOADING model...", source: "ASRService")
+                }
+            }
+            
+            // Use the transcription provider to prepare models
+            let downloadStartTime = Date()
+            DebugLogger.shared.info("Calling transcriptionProvider.prepare()...", source: "ASRService")
+            try await provider.prepare(progressHandler: nil)
+            let downloadDuration = Date().timeIntervalSince(downloadStartTime)
+            DebugLogger.shared.info("✓ Provider preparation completed in \(String(format: "%.1f", downloadDuration)) seconds", source: "ASRService")
+            
+            DispatchQueue.main.async {
+                self.isDownloadingModel = false
+                self.isLoadingModel = false
+                self.modelsExistOnDisk = true
+            }
+            
+            let totalDuration = Date().timeIntervalSince(totalStartTime)
+            DebugLogger.shared.info("=== ASR INITIALIZATION COMPLETE ===", source: "ASRService")
+            DebugLogger.shared.info("Total initialization time: \(String(format: "%.1f", totalDuration)) seconds", source: "ASRService")
+            
             isAsrReady = true
         }
-        else
+        catch
         {
-            DebugLogger.shared.debug("ASR already ready, skipping initialization", source: "ASRService")
+            DebugLogger.shared.error("ASR initialization failed with error: \(error)", source: "ASRService")
+            DebugLogger.shared.error("Error details: \(error.localizedDescription)", source: "ASRService")
+            DispatchQueue.main.async {
+                self.isDownloadingModel = false
+                self.isLoadingModel = false
+            }
+            throw error
         }
     }
 
@@ -702,6 +782,9 @@ final class ASRService: ObservableObject
             catch
             {
                 DebugLogger.shared.error("Model predownload failed: \(error)", source: "ASRService")
+                self.errorTitle = "Download Failed"
+                self.errorMessage = error.localizedDescription
+                self.showError = true
             }
         }
     }
@@ -723,26 +806,9 @@ final class ASRService: ObservableObject
     // MARK: - Cache management
     func clearModelCache() async throws
     {
-        DebugLogger.shared.debug("Clearing all model caches to force fresh download", source: "ASRService")
-
-        // Clear v2 cache
-        let baseCacheDir = AsrModels.defaultCacheDirectory().deletingLastPathComponent()
-        let v2CacheDir = baseCacheDir.appendingPathComponent("parakeet-tdt-0.6b-v2-coreml")
-        if FileManager.default.fileExists(atPath: v2CacheDir.path) {
-            try FileManager.default.removeItem(at: v2CacheDir)
-            DebugLogger.shared.debug("Removed v2 cache directory", source: "ASRService")
-        }
-
-        // Clear v3 cache
-        let v3CacheDir = baseCacheDir.appendingPathComponent("parakeet-tdt-0.6b-v3-coreml")
-        if FileManager.default.fileExists(atPath: v3CacheDir.path) {
-            try FileManager.default.removeItem(at: v3CacheDir)
-            DebugLogger.shared.debug("Removed v3 cache directory", source: "ASRService")
-        }
-
-        // Force reinitialization
+        DebugLogger.shared.debug("Clearing model cache via transcription provider", source: "ASRService")
+        try await transcriptionProvider.clearCache()
         isAsrReady = false
-        asrManager = nil
         modelsExistOnDisk = false
     }
 
@@ -799,7 +865,7 @@ final class ASRService: ObservableObject
             return
         }
         
-        guard isAsrReady, let manager = asrManager else { return }
+        guard isAsrReady, transcriptionProvider.isReady else { return }
         
         // Thread-safe count check
         let currentSampleCount = audioBuffer.count
@@ -815,14 +881,14 @@ final class ASRService: ObservableObject
         let startTime = Date()
         
         do {
-            DebugLogger.shared.debug("Streaming chunk starting CoreML transcription (samples: \(chunk.count))", source: "ASRService")
-            let result = try await transcriptionExecutor.run {
-                try await manager.transcribe(chunk, source: AudioSource.microphone)
+            DebugLogger.shared.debug("Streaming chunk starting transcription (samples: \(chunk.count)) using \(transcriptionProvider.name)", source: "ASRService")
+            let result = try await transcriptionExecutor.run { [provider = self.transcriptionProvider] in
+                try await provider.transcribe(chunk)
             }
             
             let duration = Date().timeIntervalSince(startTime)
             DebugLogger.shared.debug(
-                "Streaming chunk CoreML transcription finished in \(String(format: "%.2f", duration))s",
+                "Streaming chunk transcription finished in \(String(format: "%.2f", duration))s",
                 source: "ASRService"
             )
             let rawText = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -900,4 +966,3 @@ final class ASRService: ObservableObject
         return filtered.joined(separator: " ")
     }
 }
-

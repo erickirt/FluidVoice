@@ -64,6 +64,9 @@ final class SettingsStore: ObservableObject
         // Filler Words
         static let fillerWords = "FillerWords"
         static let removeFillerWordsEnabled = "RemoveFillerWordsEnabled"
+        
+        // Transcription Provider (ASR)
+        static let selectedTranscriptionProvider = "SelectedTranscriptionProvider"
     }
     
     // MARK: - Model Reasoning Configuration
@@ -757,6 +760,48 @@ final class SettingsStore: ObservableObject
         set {
             objectWillChange.send()
             defaults.set(newValue, forKey: Keys.removeFillerWordsEnabled)
+        }
+    }
+    
+    // MARK: - Transcription Provider (ASR)
+    
+    /// Available transcription providers
+    enum TranscriptionProviderOption: String, CaseIterable, Identifiable {
+        case auto = "auto"
+        case fluidAudio = "fluidAudio"
+        case whisper = "whisper"
+        
+        var id: String { rawValue }
+        
+        var displayName: String {
+            switch self {
+            case .auto: return "Automatic (Recommended)"
+            case .fluidAudio: return "FluidAudio (Apple Silicon)"
+            case .whisper: return "Whisper (Intel/Universal)"
+            }
+        }
+        
+        var description: String {
+            switch self {
+            case .auto: return "Uses FluidAudio on Apple Silicon, Whisper on Intel"
+            case .fluidAudio: return "Fast CoreML-based transcription optimized for M-series chips"
+            case .whisper: return "whisper.cpp - works on any Mac, useful for testing"
+            }
+        }
+    }
+    
+    /// Selected transcription provider - defaults to "auto" which picks based on architecture
+    var selectedTranscriptionProvider: TranscriptionProviderOption {
+        get {
+            guard let rawValue = defaults.string(forKey: Keys.selectedTranscriptionProvider),
+                  let option = TranscriptionProviderOption(rawValue: rawValue) else {
+                return .auto
+            }
+            return option
+        }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue.rawValue, forKey: Keys.selectedTranscriptionProvider)
         }
     }
 }

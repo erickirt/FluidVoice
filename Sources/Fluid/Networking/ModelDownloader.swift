@@ -1,6 +1,9 @@
 import Foundation
 import CoreML
+import CoreML
+#if arch(arm64)
 import FluidAudio
+#endif
 
 /// A robust downloader for Hugging Face models with progress tracking and error handling.
 /// Supports downloading entire model repositories with proper file structure preservation.
@@ -296,6 +299,7 @@ final class HuggingFaceModelDownloader
     }
 }
 
+#if arch(arm64)
 extension HuggingFaceModelDownloader
 {
     /// Load ASR models directly from disk using unified v3 model names
@@ -379,3 +383,4 @@ extension HuggingFaceModelDownloader
         )
     }
 }
+#endif

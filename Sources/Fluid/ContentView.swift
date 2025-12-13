@@ -520,6 +520,11 @@ struct ContentView: View {
                  ? "FluidVoice stores provider API keys securely in your macOS Keychain. Please grant access by choosing \"Always Allow\" when prompted."
                  : keychainPermissionMessage)
         }
+        .alert(asr.errorTitle, isPresented: $asr.showError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(asr.errorMessage)
+        }
         .onReceive(audioObserver.changePublisher) { _ in
             // Hardware change detected → refresh lists and apply preferences if available
             refreshDevices()

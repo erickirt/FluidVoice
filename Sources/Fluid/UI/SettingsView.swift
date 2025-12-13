@@ -563,6 +563,89 @@ struct SettingsView: View {
                     }
                     .padding(16)
                 }
+                
+                // Transcription Engine Card
+                ThemedCard(style: .standard) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Label("Transcription Engine", systemImage: "waveform.badge.mic")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            // Current provider info
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(theme.palette.success)
+                                    .frame(width: 8, height: 8)
+                                Text("Active: \(asr.activeProviderName)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                
+                                Spacer()
+                                
+                                // Only show architecture badge when NOT in Auto mode
+                                if SettingsStore.shared.selectedTranscriptionProvider != .auto {
+                                    Text(CPUArchitecture.isAppleSilicon ? "Apple Silicon" : "Intel")
+                                        .font(.caption)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                                .fill(.quaternary)
+                                        )
+                                }
+                            }
+                            
+                            // Provider picker
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Engine")
+                                        .font(.body)
+                                    Text(SettingsStore.shared.selectedTranscriptionProvider.description)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                Picker("", selection: Binding(
+                                    get: { SettingsStore.shared.selectedTranscriptionProvider },
+                                    set: { newValue in
+                                        SettingsStore.shared.selectedTranscriptionProvider = newValue
+                                        // Reset ASR to use new provider
+                                        asr.resetTranscriptionProvider()
+                                    }
+                                )) {
+                                    ForEach(SettingsStore.TranscriptionProviderOption.allCases) { option in
+                                        Text(option.displayName).tag(option)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .frame(width: 240)
+                            }
+                            
+                            // Note for developers
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: "info.circle.fill")
+                                    .foregroundStyle(theme.palette.accent)
+                                    .font(.caption)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("For Development/Testing")
+                                        .font(.caption.weight(.medium))
+                                    Text("Use \"Whisper\" to test Intel Mac experience on Apple Silicon. FluidAudio provides best performance on M-series chips.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(theme.palette.accent.opacity(0.1))
+                            )
+                        }
+                    }
+                    .padding(16)
+                }
 
                 // Debug Settings Card
                 ThemedCard(style: .standard) {
