@@ -362,6 +362,7 @@ final class ASRService: ObservableObject
         stopStreamingTimer()
         removeEngineTap()
         engine.stop()
+        engine.reset()  // Reset engine state to fully release Bluetooth mic
         isRunning = false
         
         isProcessingChunk = false
@@ -421,6 +422,7 @@ final class ASRService: ObservableObject
         stopStreamingTimer()
         removeEngineTap()
         engine.stop()
+        engine.reset()  // Reset engine state to fully release Bluetooth mic
         isRunning = false
         audioBuffer.clear()
         isRecordingWholeSession = false
