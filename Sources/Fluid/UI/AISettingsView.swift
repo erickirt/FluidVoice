@@ -71,6 +71,9 @@ struct AISettingsView: View {
     @State private var showKeychainPermissionAlert: Bool = false
     @State private var keychainPermissionMessage: String = ""
     
+    // Filler Words State - local state to ensure UI reactivity
+    @State private var removeFillerWordsEnabled: Bool = SettingsStore.shared.removeFillerWordsEnabled
+    
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
@@ -317,15 +320,15 @@ struct AISettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Toggle("", isOn: Binding(
-                    get: { SettingsStore.shared.removeFillerWordsEnabled },
-                    set: { SettingsStore.shared.removeFillerWordsEnabled = $0 }
-                ))
-                .toggleStyle(.switch)
-                .labelsHidden()
+                Toggle("", isOn: $removeFillerWordsEnabled)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .onChange(of: removeFillerWordsEnabled) { _, newValue in
+                        SettingsStore.shared.removeFillerWordsEnabled = newValue
+                    }
             }
             
-            if SettingsStore.shared.removeFillerWordsEnabled {
+            if removeFillerWordsEnabled {
                 FillerWordsEditor()
             }
         }
