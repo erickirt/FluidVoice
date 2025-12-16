@@ -846,7 +846,6 @@ struct SettingsView: View {
                 } else {
                     Text(shortcut.displayString)
                         .font(.caption.monospaced().weight(.medium))
-                        .opacity(enabledValue ? 1 : 0.6)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(
