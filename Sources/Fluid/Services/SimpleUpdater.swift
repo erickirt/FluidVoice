@@ -3,6 +3,7 @@ import Foundation
 import PromiseKit
 
 enum SimpleUpdateError: Error, LocalizedError {
+    case invalidURL
     case invalidResponse
     case jsonDecoding
     case noSuitableRelease
@@ -14,6 +15,7 @@ enum SimpleUpdateError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .invalidURL: return "Invalid URL."
         case .invalidResponse: return "Invalid HTTP response from GitHub."
         case .jsonDecoding: return "The data couldn’t be read because it isn’t in the correct format."
         case .noSuitableRelease: return "No suitable release found."
@@ -53,7 +55,9 @@ final class SimpleUpdater {
 
     // Fetch latest release notes from GitHub
     func fetchLatestReleaseNotes(owner: String, repo: String) async throws -> (version: String, notes: String) {
-        let releasesURL = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases")!
+        guard let releasesURL = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases") else {
+            throw SimpleUpdateError.invalidURL
+        }
 
         let (data, response) = try await URLSession.shared.data(from: releasesURL)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -80,7 +84,9 @@ final class SimpleUpdater {
 
     // Silent check that returns update info without showing alerts or installing
     func checkForUpdate(owner: String, repo: String) async throws -> (hasUpdate: Bool, latestVersion: String) {
-        let releasesURL = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases")!
+        guard let releasesURL = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases") else {
+            throw SimpleUpdateError.invalidURL
+        }
 
         let (data, response) = try await URLSession.shared.data(from: releasesURL)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -109,7 +115,9 @@ final class SimpleUpdater {
     }
 
     func checkAndUpdate(owner: String, repo: String) async throws {
-        let releasesURL = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases")!
+        guard let releasesURL = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases") else {
+            throw SimpleUpdateError.invalidURL
+        }
 
         let (data, response) = try await URLSession.shared.data(from: releasesURL)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -210,7 +218,12 @@ final class SimpleUpdater {
         let curTeam = teamID(from: curID)
         let newTeam = teamID(from: newID)
         let sameTeam = (curTeam != nil && curTeam == newTeam)
-        let bothAllowed = (curTeam != nil && newTeam != nil && allowedTeamIDs.contains(curTeam!) && allowedTeamIDs.contains(newTeam!))
+        let bothAllowed: Bool
+        if let curTeam, let newTeam {
+            bothAllowed = allowedTeamIDs.contains(curTeam) && allowedTeamIDs.contains(newTeam)
+        } else {
+            bothAllowed = false
+        }
 
         guard sameIdentity || sameTeam || bothAllowed else {
             print("SimpleUpdater: Code-sign mismatch. Current=\(curID) New=\(newID)")

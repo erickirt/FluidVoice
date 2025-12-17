@@ -29,7 +29,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func checkForUpdatesManually() {
         // Confirm invocation
         print("🔎 Manual update check triggered")
-        NSLog("🔎 Manual update check triggered")
 
         // We use SimpleUpdater for manual checks; AppUpdater instance is optional
 

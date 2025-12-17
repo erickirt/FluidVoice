@@ -32,17 +32,23 @@ final class HuggingFaceModelDownloader {
         owner = "FluidInference"
         repo = "parakeet-tdt-0.6b-v3-coreml"
         revision = "main"
-        baseApiURL = URL(string: "https://huggingface.co/api/models/")!
-            .appendingPathComponent(owner)
-            .appendingPathComponent(repo)
-            .appendingPathComponent("tree")
-            .appendingPathComponent(revision)
+        guard var apiBase = URL(string: "https://huggingface.co/api/models/") else {
+            preconditionFailure("Invalid base Hugging Face API URL")
+        }
+        apiBase.appendPathComponent(owner)
+        apiBase.appendPathComponent(repo)
+        apiBase.appendPathComponent("tree")
+        apiBase.appendPathComponent(revision)
+        baseApiURL = apiBase
 
-        baseResolveURL = URL(string: "https://huggingface.co/")!
-            .appendingPathComponent(owner)
-            .appendingPathComponent(repo)
-            .appendingPathComponent("resolve")
-            .appendingPathComponent(revision)
+        guard var resolveBase = URL(string: "https://huggingface.co/") else {
+            preconditionFailure("Invalid base Hugging Face resolve URL")
+        }
+        resolveBase.appendPathComponent(owner)
+        resolveBase.appendPathComponent(repo)
+        resolveBase.appendPathComponent("resolve")
+        resolveBase.appendPathComponent(revision)
+        baseResolveURL = resolveBase
     }
 
     /// Initialize with custom model repository settings
@@ -54,17 +60,23 @@ final class HuggingFaceModelDownloader {
         self.owner = owner
         self.repo = repo
         self.revision = revision
-        baseApiURL = URL(string: "https://huggingface.co/api/models/")!
-            .appendingPathComponent(owner)
-            .appendingPathComponent(repo)
-            .appendingPathComponent("tree")
-            .appendingPathComponent(revision)
+        guard var apiBase = URL(string: "https://huggingface.co/api/models/") else {
+            preconditionFailure("Invalid base Hugging Face API URL")
+        }
+        apiBase.appendPathComponent(owner)
+        apiBase.appendPathComponent(repo)
+        apiBase.appendPathComponent("tree")
+        apiBase.appendPathComponent(revision)
+        baseApiURL = apiBase
 
-        baseResolveURL = URL(string: "https://huggingface.co/")!
-            .appendingPathComponent(owner)
-            .appendingPathComponent(repo)
-            .appendingPathComponent("resolve")
-            .appendingPathComponent(revision)
+        guard var resolveBase = URL(string: "https://huggingface.co/") else {
+            preconditionFailure("Invalid base Hugging Face resolve URL")
+        }
+        resolveBase.appendPathComponent(owner)
+        resolveBase.appendPathComponent(repo)
+        resolveBase.appendPathComponent("resolve")
+        resolveBase.appendPathComponent(revision)
+        baseResolveURL = resolveBase
     }
 
     func ensureModelsPresent(at targetRoot: URL, onProgress: ((Double, String) -> Void)? = nil) async throws {
@@ -254,10 +266,15 @@ final class HuggingFaceModelDownloader {
     private func listFilesRecursively(relativePath: String) async throws -> [String] {
         let listingURL = baseApiURL
             .appendingPathComponent(relativePath)
-        var comps = URLComponents(url: listingURL, resolvingAgainstBaseURL: false)!
+        guard var comps = URLComponents(url: listingURL, resolvingAgainstBaseURL: false) else {
+            throw NSError(domain: "HF", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid listing URL components"])
+        }
         comps.queryItems = [URLQueryItem(name: "recursive", value: "1")]
 
-        let (data, resp) = try await URLSession.shared.data(from: comps.url!)
+        guard let url = comps.url else {
+            throw NSError(domain: "HF", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid listing URL"])
+        }
+        let (data, resp) = try await URLSession.shared.data(from: url)
         if let http = resp as? HTTPURLResponse, http.statusCode >= 400 {
             throw NSError(domain: "HF", code: http.statusCode)
         }

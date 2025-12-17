@@ -156,8 +156,8 @@ final class TypingService {
             &focusedElement
         )
 
-        if result == .success, let element = focusedElement {
-            let axElement = element as! AXUIElement
+        if result == .success, let element = focusedElement as? AXUIElement {
+            let axElement = element
             if let role = getElementAttribute(axElement, kAXRoleAttribute as CFString) {
                 log("[TypingService] Found focused element with role: \(role)")
                 return axElement
@@ -218,8 +218,8 @@ final class TypingService {
             &focusedElement
         )
 
-        if result == .success, let element = focusedElement {
-            let axElement = element as! AXUIElement
+        if result == .success, let element = focusedElement as? AXUIElement {
+            let axElement = element
             if let role = getElementAttribute(axElement, kAXRoleAttribute as CFString) {
                 log("[TypingService] Found app-level focused element with role: \(role)")
                 return axElement

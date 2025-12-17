@@ -266,8 +266,11 @@ struct ContentView: View {
             for (key, models) in self.availableModelsByProvider {
                 let lower = key.lowercased()
                 let newKey: String
-                if lower == "openai" || lower == "groq" { newKey = lower }
-                else { newKey = key.hasPrefix("custom:") ? key : "custom:\\(key)" }
+                if lower == "openai" || lower == "groq" {
+                    newKey = lower
+                } else {
+                    newKey = key.hasPrefix("custom:") ? key : "custom:\\(key)"
+                }
                 // Keep only unique, trimmed models
                 let clean = Array(Set(models.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })).sorted()
                 if !clean.isEmpty { normalized[newKey] = clean }
@@ -1163,7 +1166,7 @@ struct ContentView: View {
 
         VOICE COMMANDS TO PROCESS:
         - "new line" → line break
-        - "new paragraph" → double line break  
+        - "new paragraph" → double line break
         - "period/comma/question mark" → actual punctuation
         - "bullet point X" → "- X"
 

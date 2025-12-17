@@ -1,4 +1,3 @@
-
 import Foundation
 
 /// A thread-safe wrapper around a float array to prevent data races between

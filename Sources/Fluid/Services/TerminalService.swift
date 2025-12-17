@@ -46,7 +46,13 @@ final class TerminalService {
                         ],
                         "purpose": [
                             "type": "string",
-                            "description": "Brief description of why this command is being run. Must be one of: 'checking' (verifying prerequisites), 'executing' (main action), 'verifying' (confirming result). Example: 'Checking if config.json exists'",
+                            "description": """
+                            Brief description of why this command is being run. Must be one of:
+                            - 'checking' (verifying prerequisites)
+                            - 'executing' (main action)
+                            - 'verifying' (confirming result)
+                            Example: 'Checking if config.json exists'
+                            """,
                         ],
                     ],
                     "required": ["command", "purpose"],

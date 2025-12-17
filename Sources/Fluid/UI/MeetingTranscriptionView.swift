@@ -168,14 +168,13 @@ struct MeetingTranscriptionView: View {
         }
         .fileImporter(
             isPresented: $showingFilePicker,
-            allowedContentTypes: [
-                .audio,
-                .movie,
-                .mpeg4Movie,
-                UTType(filenameExtension: "wav")!,
-                UTType(filenameExtension: "mp3")!,
-                UTType(filenameExtension: "m4a")!,
-            ],
+            allowedContentTypes: {
+                var types: [UTType] = [.audio, .movie, .mpeg4Movie]
+                ["wav", "mp3", "m4a"]
+                    .compactMap { UTType(filenameExtension: $0) }
+                    .forEach { types.append($0) }
+                return types
+            }(),
             allowsMultipleSelection: false
         ) { result in
             switch result {
@@ -372,7 +371,7 @@ struct TranscriptionDocument: FileDocument {
     }
 
     init(configuration: ReadConfiguration) throws {
-        fatalError("Reading not supported")
+        throw CocoaError(.fileReadUnsupported)
     }
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {

@@ -83,25 +83,27 @@ struct FeedbackView: View {
 
                             Spacer()
 
-                            Link(destination: URL(string: "https://github.com/altic-dev/Fluid-oss")!) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "star.fill")
-                                    Text("Star on GitHub")
-                                        .fontWeight(.semibold)
+                            if let url = URL(string: "https://github.com/altic-dev/Fluid-oss") {
+                                Link(destination: url) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "star.fill")
+                                        Text("Star on GitHub")
+                                            .fontWeight(.semibold)
+                                    }
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .background(LinearGradient(
+                                        colors: [.purple, .blue],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ))
+                                    .cornerRadius(8)
                                 }
-                                .font(.system(size: 14))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
-                                .background(LinearGradient(
-                                    colors: [.purple, .blue],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ))
-                                .cornerRadius(8)
+                                .buttonStyle(.plain)
+                                .buttonHoverEffect()
                             }
-                            .buttonStyle(.plain)
-                            .buttonHoverEffect()
                         }
                     }
                     .padding(20)

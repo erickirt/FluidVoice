@@ -345,16 +345,18 @@ final class MenuBarManager: ObservableObject {
         menu.removeAllItems()
 
         // Status indicator with hotkey info
-        statusMenuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        statusMenuItem?.isEnabled = false
-        menu.addItem(statusMenuItem!)
+        let statusItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        statusItem.isEnabled = false
+        statusMenuItem = statusItem
+        menu.addItem(statusItem)
 
         menu.addItem(.separator())
 
         // AI Processing Toggle
-        aiMenuItem = NSMenuItem(title: "", action: #selector(toggleAIProcessing), keyEquivalent: "")
-        aiMenuItem?.target = self
-        menu.addItem(aiMenuItem!)
+        let aiItem = NSMenuItem(title: "", action: #selector(toggleAIProcessing), keyEquivalent: "")
+        aiItem.target = self
+        aiMenuItem = aiItem
+        menu.addItem(aiItem)
 
         menu.addItem(.separator())
 
@@ -425,7 +427,6 @@ final class MenuBarManager: ObservableObject {
 
     @objc private func checkForUpdates(_ sender: Any?) {
         print("🔎 Menu action: Check for Updates…")
-        NSLog("🔎 Menu action: Check for Updates…")
 
         // Call the AppDelegate's manual update check method if available
         if let appDelegate = NSApp.delegate as? AppDelegate {

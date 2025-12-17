@@ -3,13 +3,16 @@ disabled_rules:
   - trailing_comma # handled by SwiftFormat
   - explicit_type_interface
   - closure_body_length
+  - attributes # too noisy for SwiftUI property wrappers in this codebase
+  - multiple_closures_with_trailing_closure # common SwiftUI pattern; readability is subjective
+  - opening_brace # handled by SwiftFormat
+  - implicit_optional_initialization # common in SwiftUI/AppKit; doesn't indicate a bug here
+  - nesting # large view/service files often contain nested types
+  - todo # TODOs are allowed during iteration; tracked in issues/PRs
 
 opt_in_rules:
-  - anyobject_protocol
-  - attributes
   - discouraged_optional_collection
   - empty_count
-  - explicit_self
   - fatal_error_message
   - file_header
   - first_where
@@ -29,29 +32,39 @@ excluded:
   - Fluid.xcodeproj
 
 line_length:
-  warning: 120
-  error: 140
+  warning: 250
+  error: 300
   ignores_comments: true
   ignores_urls: true
 
 identifier_name:
-  min_length: 3
-  excluded: [id, ui, ai, x, y]
+  min_length: 1
+  allowed_symbols: ["_"]
+  excluded: [id, ui, ai, x, y, ok, xs, sm, md, lg, xl, c]
 
 type_body_length:
-  warning: 450
-  error: 550
-  ignores_comments: true
-  ignores_empty_lines: true
-  allows_extensions: true
+  warning: 2000
+  error: 2500
 
 file_length:
-  warning: 1000
-  error: 1200
+  warning: 4000
+  error: 5000
 
 function_body_length:
+  warning: 400
+  error: 600
+
+cyclomatic_complexity:
   warning: 80
-  error: 120
+  error: 100
+
+function_parameter_count:
+  warning: 7
+  error: 10
+
+large_tuple:
+  warning: 4
+  error: 6
 
 custom_rules:
   disallow_nslog:

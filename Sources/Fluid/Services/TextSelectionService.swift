@@ -47,8 +47,8 @@ final class TextSelectionService {
             &focusedElement
         )
 
-        if result == .success {
-            return (focusedElement as! AXUIElement)
+        if result == .success, let element = focusedElement as? AXUIElement {
+            return element
         }
 
         return nil
@@ -62,8 +62,8 @@ final class TextSelectionService {
             &focusedElement
         )
 
-        if result == .success {
-            return (focusedElement as! AXUIElement)
+        if result == .success, let element = focusedElement as? AXUIElement {
+            return element
         }
 
         return nil

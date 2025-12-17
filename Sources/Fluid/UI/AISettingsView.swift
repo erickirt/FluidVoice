@@ -130,8 +130,11 @@ struct AISettingsView: View {
         for (key, models) in availableModelsByProvider {
             let lower = key.lowercased()
             let newKey: String
-            if lower == "openai" || lower == "groq" { newKey = lower }
-            else { newKey = key.hasPrefix("custom:") ? key : "custom:\(key)" }
+            if lower == "openai" || lower == "groq" {
+                newKey = lower
+            } else {
+                newKey = key.hasPrefix("custom:") ? key : "custom:\(key)"
+            }
             let clean = Array(Set(models.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })).sorted()
             if !clean.isEmpty { normalized[newKey] = clean }
         }

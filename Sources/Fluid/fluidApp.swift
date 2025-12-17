@@ -3,7 +3,7 @@ import ApplicationServices
 import SwiftUI
 
 @main
-struct fluidApp: App {
+struct FluidApp: App {
     @StateObject private var menuBarManager = MenuBarManager()
     @StateObject private var appServices = AppServices.shared
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate

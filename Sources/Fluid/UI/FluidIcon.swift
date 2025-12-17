@@ -25,9 +25,9 @@ struct FluidIcon: View {
 
                 // Define key points for geometric F construction
                 let leftEdge = workingRect.minX
-                let _ = workingRect.maxX
+                _ = workingRect.maxX
                 let topEdge = workingRect.minY
-                let _ = workingRect.maxY
+                _ = workingRect.maxY
                 let middleY = workingRect.minY + (height * 0.4) // Slightly above center for better proportions
 
                 // Top horizontal bar - full width, bold
@@ -142,7 +142,7 @@ struct FluidIconAdvanced: View {
 
                 // Main geometric construction points
                 let leftX = workingRect.minX
-                let _ = workingRect.maxX
+                _ = workingRect.maxX
                 let topY = workingRect.minY
                 let bottomY = workingRect.maxY
                 let middleY = workingRect.minY + (height * 0.38)

@@ -295,7 +295,9 @@ extension TranscriptionHistoryStore {
         guard !days.isEmpty else { return 0 }
 
         let today = calendar.startOfDay(for: Date())
-        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else {
+            return 0
+        }
 
         // Must have activity today or yesterday to have an active streak
         guard let firstActiveDay = days.first,
@@ -308,7 +310,9 @@ extension TranscriptionHistoryStore {
         var previousDay = firstActiveDay
 
         for day in days.dropFirst() {
-            let expectedPrevious = calendar.date(byAdding: .day, value: -1, to: previousDay)!
+            guard let expectedPrevious = calendar.date(byAdding: .day, value: -1, to: previousDay) else {
+                break
+            }
 
             if day == expectedPrevious {
                 streak += 1
@@ -333,7 +337,9 @@ extension TranscriptionHistoryStore {
         var previousDay = days[0]
 
         for day in days.dropFirst() {
-            let expectedNext = calendar.date(byAdding: .day, value: 1, to: previousDay)!
+            guard let expectedNext = calendar.date(byAdding: .day, value: 1, to: previousDay) else {
+                break
+            }
 
             if day == expectedNext {
                 currentStreakCount += 1

@@ -16,14 +16,14 @@ final class FunctionCallingProvider {
     struct ChatMessage: Codable {
         let role: String
         let content: String?
-        let tool_calls: [ToolCall]?
+        let tool_calls: [ToolCall]
         let tool_call_id: String?
         let name: String?
 
         init(
             role: String,
             content: String?,
-            tool_calls: [ToolCall]? = nil,
+            tool_calls: [ToolCall] = [],
             tool_call_id: String? = nil,
             name: String? = nil
         ) {
@@ -33,13 +33,33 @@ final class FunctionCallingProvider {
             self.tool_call_id = tool_call_id
             self.name = name
         }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            role = try container.decode(String.self, forKey: .role)
+            content = try container.decodeIfPresent(String.self, forKey: .content)
+            tool_calls = try container.decodeIfPresent([ToolCall].self, forKey: .tool_calls) ?? []
+            tool_call_id = try container.decodeIfPresent(String.self, forKey: .tool_call_id)
+            name = try container.decodeIfPresent(String.self, forKey: .name)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(role, forKey: .role)
+            try container.encodeIfPresent(content, forKey: .content)
+            if tool_calls.isEmpty == false {
+                try container.encode(tool_calls, forKey: .tool_calls)
+            }
+            try container.encodeIfPresent(tool_call_id, forKey: .tool_call_id)
+            try container.encodeIfPresent(name, forKey: .name)
+        }
     }
 
     struct ChatRequest: Encodable {
         let model: String
         let messages: [ChatMessage]
         let temperature: Double?
-        let tools: [[String: Any]]?
+        let tools: [[String: Any]]
         let tool_choice: String?
 
         enum CodingKeys: String, CodingKey {
@@ -53,7 +73,7 @@ final class FunctionCallingProvider {
             try container.encodeIfPresent(temperature, forKey: .temperature)
             try container.encodeIfPresent(tool_choice, forKey: .tool_choice)
 
-            if let tools = tools {
+            if tools.isEmpty == false {
                 let toolsData = try JSONSerialization.data(withJSONObject: tools)
                 let toolsArray = try JSONDecoder().decode([AnyCodable].self, from: toolsData)
                 try container.encode(toolsArray, forKey: .tools)
@@ -199,7 +219,8 @@ final class FunctionCallingProvider {
             model: model,
             messages: messages,
             temperature: isReasoningModel ? nil : 0.2, // Don't send temperature for reasoning models
-            tools: tools.isEmpty ? nil : tools,
+            tools: tools,
+            tools: tools,
             tool_choice: tools.isEmpty ? nil : "auto"
         )
 

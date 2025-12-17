@@ -686,14 +686,14 @@ final class CommandModeService: ObservableObject {
         ### 2. EXECUTE WITH CONTEXT
         When calling execute_terminal_command, ALWAYS include a `purpose` parameter explaining:
         - "checking" - Verifying something exists/state
-        - "executing" - Performing the main action  
+        - "executing" - Performing the main action
         - "verifying" - Confirming the result
         Example purposes: "Checking if image1.png exists", "Creating the backup directory", "Verifying file was deleted"
 
         ### 3. POST-ACTION VERIFICATION
         After modifying anything, verify it worked:
         - Created file? `ls` to confirm it exists
-        - Deleted file? `ls` to confirm it's gone  
+        - Deleted file? `ls` to confirm it's gone
         - Modified content? `cat` or `head` to verify changes
         - Installed app? Check version/existence
 
@@ -748,7 +748,7 @@ final class CommandModeService: ObservableObject {
         ### General Pattern:
         Always use `osascript -e 'tell application "<AppName>" to ...'` for native app automation.
 
-        The user is on macOS with zsh shell. Be thorough but efficient. 
+        The user is on macOS with zsh shell. Be thorough but efficient.
         When task is complete, provide a clear summary starting with ✓ or ✗.
         """
 
@@ -766,6 +766,17 @@ final class CommandModeService: ObservableObject {
             case .assistant:
                 if let tc = msg.toolCall {
                     lastToolCallId = tc.id
+                    let argsJSON: String
+                    do {
+                        let data = try JSONSerialization.data(withJSONObject: [
+                            "command": tc.command,
+                            "workingDirectory": tc.workingDirectory ?? "",
+                        ])
+                        argsJSON = String(data: data, encoding: .utf8) ?? "{}"
+                    } catch {
+                        DebugLogger.shared.error("Failed to encode tool call args: \(error)", source: "CommandModeService")
+                        argsJSON = "{}"
+                    }
                     messages.append([
                         "role": "assistant",
                         "content": msg.content,
@@ -774,10 +785,7 @@ final class CommandModeService: ObservableObject {
                             "type": "function",
                             "function": [
                                 "name": "execute_terminal_command",
-                                "arguments": try! String(data: JSONSerialization.data(withJSONObject: [
-                                    "command": tc.command,
-                                    "workingDirectory": tc.workingDirectory ?? "",
-                                ]), encoding: .utf8)!,
+                                "arguments": argsJSON,
                             ],
                         ]],
                     ])
