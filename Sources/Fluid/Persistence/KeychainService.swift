@@ -9,7 +9,7 @@ enum KeychainServiceError: Error, LocalizedError {
         switch self {
         case .invalidData:
             return "Failed to convert key data."
-        case .unhandled(let status):
+        case let .unhandled(status):
             if let message = SecCopyErrorMessageString(status, nil) as String? {
                 return message
             }
@@ -72,7 +72,7 @@ final class KeychainService {
             kSecAttrService as String: service,
             kSecReturnAttributes as String: true,
             kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitAll
+            kSecMatchLimit as String: kSecMatchLimitAll,
         ]
 
         var items: CFTypeRef?
@@ -85,7 +85,8 @@ final class KeychainService {
                 guard let providerID = attributes[kSecAttrAccount as String] as? String,
                       providerID != account,
                       let data = attributes[kSecValueData as String] as? Data,
-                      let key = String(data: data, encoding: .utf8) else {
+                      let key = String(data: data, encoding: .utf8)
+                else {
                     continue
                 }
                 result[providerID] = key
@@ -103,7 +104,7 @@ final class KeychainService {
         if let providerIDs {
             targets = providerIDs
         } else {
-            targets = Array((try legacyProviderEntries()).keys)
+            targets = try Array(legacyProviderEntries().keys)
         }
 
         for providerID in targets {
@@ -158,8 +159,10 @@ final class KeychainService {
             try removeLegacyEntries()
             return
         case errSecDuplicateItem:
-            let updateStatus = SecItemUpdate(aggregatedQuery() as CFDictionary,
-                                             [kSecValueData as String: data] as CFDictionary)
+            let updateStatus = SecItemUpdate(
+                aggregatedQuery() as CFDictionary,
+                [kSecValueData as String: data] as CFDictionary
+            )
             guard updateStatus == errSecSuccess else {
                 throw KeychainServiceError.unhandled(updateStatus)
             }
@@ -173,7 +176,7 @@ final class KeychainService {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: account
+            kSecAttrAccount as String: account,
         ]
     }
 
@@ -181,8 +184,7 @@ final class KeychainService {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: providerID
+            kSecAttrAccount as String: providerID,
         ]
     }
 }
-

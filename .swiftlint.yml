@@ -1,0 +1,63 @@
+disabled_rules:
+  - colon # handled by SwiftFormat
+  - trailing_comma # handled by SwiftFormat
+  - explicit_type_interface
+  - closure_body_length
+
+opt_in_rules:
+  - anyobject_protocol
+  - attributes
+  - discouraged_optional_collection
+  - empty_count
+  - explicit_self
+  - fatal_error_message
+  - file_header
+  - first_where
+  - force_unwrapping
+  - literal_expression_end_indentation
+  - multiline_arguments
+  - pattern_matching_keywords
+  - redundant_type_annotation
+  - sorted_imports
+  - strict_fileprivate
+  - toggle_bool
+  - unavailable_function
+
+excluded:
+  - .build
+  - DerivedData
+  - Fluid.xcodeproj
+
+line_length:
+  warning: 120
+  error: 140
+  ignores_comments: true
+  ignores_urls: true
+
+identifier_name:
+  min_length: 3
+  excluded: [id, ui, ai, x, y]
+
+type_body_length:
+  warning: 450
+  error: 550
+  ignores_comments: true
+  ignores_empty_lines: true
+  allows_extensions: true
+
+file_length:
+  warning: 1000
+  error: 1200
+
+function_body_length:
+  warning: 80
+  error: 120
+
+custom_rules:
+  disallow_nslog:
+    regex: 'NSLog'
+    message: "Use DebugLogger.shared.* for consistency."
+  enforce_mark_spacing:
+    regex: '\/\/ MARK:(?! - )'
+    message: "Format section markers as `// MARK: - Section`."
+

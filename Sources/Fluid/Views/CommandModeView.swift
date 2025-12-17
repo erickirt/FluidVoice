@@ -8,108 +8,108 @@ struct CommandModeView: View {
     @EnvironmentObject var menuBarManager: MenuBarManager
     var onClose: (() -> Void)?
     @State private var inputText: String = ""
-    
+
     // Local state for available models (derived from shared AI Settings pool)
     @State private var availableModels: [String] = []
-    
+
     // UI State
     @State private var showingClearConfirmation = false
     @State private var showHowTo = false
     @State private var isHoveringHowTo = false
-    
+
     @Environment(\.theme) private var theme
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            headerView
-            
+            self.headerView
+
             // How To (collapsible)
-            howToSection
-            
+            self.howToSection
+
             Divider()
-            
+
             // Chat Area
-            chatArea
-            
+            self.chatArea
+
             // Pending Command Confirmation (if any)
             if let pending = service.pendingCommand {
-                pendingCommandView(pending)
+                self.pendingCommandView(pending)
             }
-            
+
             Divider()
-            
+
             // Input Area
-            inputArea
+            self.inputArea
         }
         .onAppear {
-            updateAvailableModels()
+            self.updateAvailableModels()
             // Disable notch output when using in-app UI (conversation is shared but notch shouldn't show)
-            service.enableNotchOutput = false
+            self.service.enableNotchOutput = false
         }
         .onDisappear {
             // Re-enable notch output when leaving in-app UI
-            service.enableNotchOutput = true
+            self.service.enableNotchOutput = true
         }
         .onChange(of: asr.finalText) { _, newText in
             if !newText.isEmpty {
-                inputText = newText
+                self.inputText = newText
             }
         }
-        .onChange(of: settings.commandModeSelectedProviderID) { _, _ in 
-            updateAvailableModels() 
+        .onChange(of: settings.commandModeSelectedProviderID) { _, _ in
+            self.updateAvailableModels()
         }
         .onExitCommand {
-            onClose?()
+            self.onClose?()
         }
     }
-    
+
     // MARK: - Header
-    
+
     private var headerView: some View {
         HStack {
             HStack(spacing: 8) {
                 Text("Command Mode")
                     .font(.title2)
                     .fontWeight(.bold)
-                
+
                 Text("Alpha")
                     .font(.caption2)
                     .fontWeight(.semibold)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color(red: 1.0, green: 0.35, blue: 0.35))  // Command mode red
+                    .background(Color(red: 1.0, green: 0.35, blue: 0.35)) // Command mode red
                     .cornerRadius(4)
             }
-            
+
             Spacer()
-            
+
             // Chat management buttons
             HStack(spacing: 4) {
                 // New Chat Button
-                Button(action: { service.createNewChat() }) {
+                Button(action: { self.service.createNewChat() }) {
                     Image(systemName: "plus")
                 }
                 .buttonStyle(.bordered)
                 .help("New chat")
-                .disabled(service.isProcessing)
-                
+                .disabled(self.service.isProcessing)
+
                 // Recent Chats Menu
                 Menu {
-                    let recentChats = service.getRecentChats()
+                    let recentChats = self.service.getRecentChats()
                     if recentChats.isEmpty {
                         Text("No recent chats")
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(recentChats) { chat in
-                            Button(action: { 
-                                if chat.id != service.currentChatID {
-                                    service.switchToChat(id: chat.id)
+                            Button(action: {
+                                if chat.id != self.service.currentChatID {
+                                    self.service.switchToChat(id: chat.id)
                                 }
                             }) {
                                 HStack {
-                                    if chat.id == service.currentChatID {
+                                    if chat.id == self.service.currentChatID {
                                         Image(systemName: "checkmark")
                                             .font(.caption)
                                     }
@@ -121,7 +121,7 @@ struct CommandModeView: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            .disabled(service.isProcessing)
+                            .disabled(self.service.isProcessing)
                         }
                     }
                 } label: {
@@ -130,22 +130,22 @@ struct CommandModeView: View {
                 .menuStyle(.borderlessButton)
                 .frame(width: 32, height: 24)
                 .help("Recent chats")
-                
+
                 // Delete Chat Button - deletes the current chat entirely
-                Button(action: { showingClearConfirmation = true }) {
+                Button(action: { self.showingClearConfirmation = true }) {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(.bordered)
                 .help("Delete chat")
-                .disabled(service.isProcessing)
+                .disabled(self.service.isProcessing)
             }
-            
+
             Divider()
                 .frame(height: 20)
                 .padding(.horizontal, 8)
-            
+
             // Confirm Before Execute Toggle
-            Toggle(isOn: $settings.commandModeConfirmBeforeExecute) {
+            Toggle(isOn: self.$settings.commandModeConfirmBeforeExecute) {
                 Label("Confirm", systemImage: "checkmark.shield")
                     .font(.caption)
             }
@@ -160,43 +160,43 @@ struct CommandModeView: View {
             titleVisibility: .visible
         ) {
             Button("Delete", role: .destructive) {
-                service.deleteCurrentChat()
+                self.service.deleteCurrentChat()
             }
             Button("Cancel", role: .cancel) {}
         }
     }
-    
+
     // MARK: - How To Section
-    
+
     private var shortcutDisplay: String {
         settings.commandModeHotkeyShortcut.displayString
     }
-    
+
     private var howToSection: some View {
         VStack(spacing: 0) {
             // Toggle button with hover effect
-            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showHowTo.toggle() } }) {
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { self.showHowTo.toggle() } }) {
                 HStack {
                     Image(systemName: "questionmark.circle")
                         .font(.caption)
                     Text("How to use")
                         .font(.caption)
                     Spacer()
-                    Image(systemName: showHowTo ? "chevron.up" : "chevron.down")
+                    Image(systemName: self.showHowTo ? "chevron.up" : "chevron.down")
                         .font(.caption2)
                 }
-                .foregroundStyle(isHoveringHowTo ? .primary : .secondary)
+                .foregroundStyle(self.isHoveringHowTo ? .primary : .secondary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(isHoveringHowTo ? Color.primary.opacity(0.05) : Color.clear)
+                .background(self.isHoveringHowTo ? Color.primary.opacity(0.05) : Color.clear)
                 .cornerRadius(4)
             }
             .buttonStyle(.plain)
             .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.15)) { isHoveringHowTo = hovering }
+                withAnimation(.easeInOut(duration: 0.15)) { self.isHoveringHowTo = hovering }
             }
-            
-            if showHowTo {
+
+            if self.showHowTo {
                 VStack(alignment: .leading, spacing: 12) {
                     // Start section
                     VStack(alignment: .leading, spacing: 4) {
@@ -204,11 +204,11 @@ struct CommandModeView: View {
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundStyle(.secondary)
-                        
+
                         HStack(spacing: 4) {
                             Text("Press")
                                 .font(.caption)
-                            Text(shortcutDisplay)
+                            Text(self.shortcutDisplay)
                                 .font(.caption)
                                 .fontWeight(.medium)
                                 .padding(.horizontal, 6)
@@ -220,22 +220,22 @@ struct CommandModeView: View {
                         }
                         .foregroundStyle(.primary.opacity(0.8))
                     }
-                    
+
                     // Examples
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Examples")
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundStyle(.secondary)
-                        
+
                         VStack(alignment: .leading, spacing: 4) {
-                            howToItem("\"List files in my Downloads folder\"")
-                            howToItem("\"Create a folder called Projects on Desktop\"")
-                            howToItem("\"What's my IP address?\"")
-                            howToItem("\"Open Safari\"")
+                            self.howToItem("\"List files in my Downloads folder\"")
+                            self.howToItem("\"Create a folder called Projects on Desktop\"")
+                            self.howToItem("\"What's my IP address?\"")
+                            self.howToItem("\"Open Safari\"")
                         }
                     }
-                    
+
                     // Caution note
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 4) {
@@ -245,7 +245,7 @@ struct CommandModeView: View {
                                 .fontWeight(.semibold)
                         }
                         .font(.caption)
-                        
+
                         Text("AI can make mistakes. Avoid dangerous commands like deleting important files. Destructive actions will ask for confirmation.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -258,7 +258,7 @@ struct CommandModeView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
     }
-    
+
     private func howToItem(_ text: String) -> some View {
         HStack(spacing: 6) {
             Text("•")
@@ -268,52 +268,52 @@ struct CommandModeView: View {
                 .foregroundStyle(.primary.opacity(0.8))
         }
     }
-    
+
     // MARK: - Chat Area
-    
+
     private var chatArea: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(service.conversationHistory) { message in
+                    ForEach(self.service.conversationHistory) { message in
                         MessageBubble(message: message)
                             .id(message.id)
                     }
-                    
-                    if service.isProcessing {
+
+                    if self.service.isProcessing {
                         VStack(alignment: .leading, spacing: 8) {
-                            processingIndicator
-                            
+                            self.processingIndicator
+
                             // Show streaming text in real-time
-                            if !service.streamingText.isEmpty {
-                                streamingTextView
+                            if !self.service.streamingText.isEmpty {
+                                self.streamingTextView
                             }
                         }
                         .id("processing")
                     }
-                    
+
                     Color.clear.frame(height: 1).id("bottom")
                 }
                 .padding()
             }
-            .onChange(of: service.conversationHistory.count) { _, _ in
-                scrollToBottom(proxy)
+            .onChange(of: self.service.conversationHistory.count) { _, _ in
+                self.scrollToBottom(proxy)
             }
-            .onChange(of: service.isProcessing) { _, isProcessing in
+            .onChange(of: self.service.isProcessing) { _, isProcessing in
                 // Scroll when processing starts, not on every streaming update
                 if isProcessing {
-                    scrollToBottom(proxy)
+                    self.scrollToBottom(proxy)
                 }
             }
-            .onChange(of: service.currentStep) { _, _ in
-                scrollToBottom(proxy)
+            .onChange(of: self.service.currentStep) { _, _ in
+                self.scrollToBottom(proxy)
             }
             // Removed: .onChange(of: service.streamingText) - causes scroll on every token, too expensive
         }
     }
-    
+
     // MARK: - Processing Indicator (Minimal with Shimmer)
-    
+
     private var processingIndicator: some View {
         CommandShimmerText(text: currentStepLabel)
             .padding(.horizontal, 12)
@@ -321,9 +321,9 @@ struct CommandModeView: View {
             .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
             .cornerRadius(6)
     }
-    
+
     // MARK: - Streaming Text View (Real-time AI response)
-    
+
     private var streamingTextView: some View {
         // Use fixedSize to prevent expensive re-layout on every update
         Text(service.streamingText)
@@ -334,28 +334,28 @@ struct CommandModeView: View {
             .frame(maxWidth: 520, alignment: .leading)
             .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
             .cornerRadius(8)
-            .drawingGroup()  // Flatten to bitmap for faster updates
-            // textSelection disabled during streaming - re-enabled in final message
+            .drawingGroup() // Flatten to bitmap for faster updates
+        // textSelection disabled during streaming - re-enabled in final message
     }
-    
+
     private var currentStepLabel: String {
         guard let step = service.currentStep else { return "Working..." }
         switch step {
         case .thinking: return "Thinking..."
-        case .checking(let cmd): return "Checking \(truncateCommand(cmd, to: 30))"
-        case .executing(let cmd): return "Running \(truncateCommand(cmd, to: 30))"
+        case let .checking(cmd): return "Checking \(truncateCommand(cmd, to: 30))"
+        case let .executing(cmd): return "Running \(truncateCommand(cmd, to: 30))"
         case .verifying: return "Verifying..."
-        case .completed(let success): return success ? "Done" : "Stopped"
+        case let .completed(success): return success ? "Done" : "Stopped"
         }
     }
-    
+
     private func truncateCommand(_ cmd: String, to limit: Int) -> String {
         if cmd.count > limit {
             return String(cmd.prefix(limit - 3)) + "..."
         }
         return cmd
     }
-    
+
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             withAnimation(.easeOut(duration: 0.2)) {
@@ -363,13 +363,13 @@ struct CommandModeView: View {
             }
         }
     }
-    
+
     // MARK: - Pending Command
-    
+
     private func pendingCommandView(_ pending: CommandModeService.PendingCommand) -> some View {
         VStack(spacing: 10) {
             Divider()
-            
+
             HStack {
                 Image(systemName: "exclamationmark.shield.fill")
                     .foregroundStyle(.orange)
@@ -385,7 +385,7 @@ struct CommandModeView: View {
                 }
                 Spacer()
             }
-            
+
             // Command preview
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
@@ -399,9 +399,9 @@ struct CommandModeView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(Color(nsColor: .windowBackgroundColor))
-                
+
                 Divider()
-                
+
                 Text(pending.command)
                     .font(.system(.callout, design: .monospaced))
                     .textSelection(.enabled)
@@ -409,20 +409,18 @@ struct CommandModeView: View {
             }
             .background(Color(nsColor: .textBackgroundColor))
             .cornerRadius(8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.orange.opacity(0.5), lineWidth: 1)
-            )
-            
+            .overlay(RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.orange.opacity(0.5), lineWidth: 1))
+
             HStack(spacing: 12) {
-                Button(action: { service.cancelPendingCommand() }) {
+                Button(action: { self.service.cancelPendingCommand() }) {
                     Label("Cancel", systemImage: "xmark")
                 }
                 .buttonStyle(.bordered)
                 .keyboardShortcut(.escape, modifiers: [])
-                
+
                 Button(action: {
-                    Task { await service.confirmAndExecute() }
+                    Task { await self.service.confirmAndExecute() }
                 }) {
                     Label("Run Command", systemImage: "play.fill")
                 }
@@ -434,124 +432,129 @@ struct CommandModeView: View {
         .padding()
         .background(Color.orange.opacity(0.08))
     }
-    
+
     // MARK: - Input Area
-    
+
     private var inputArea: some View {
         HStack(spacing: 8) {
             // Provider Selector (compact)
-            Picker("", selection: $settings.commandModeSelectedProviderID) {
+            Picker("", selection: self.$settings.commandModeSelectedProviderID) {
                 Text("OpenAI").tag("openai")
                 Text("Groq").tag("groq")
-                
+
                 // Apple Intelligence - disabled for Command Mode (no tool support)
                 Text("Apple Intelligence (No tools)")
                     .foregroundColor(.secondary)
                     .tag("apple-intelligence-disabled")
-                
-                ForEach(settings.savedProviders) { provider in
+
+                ForEach(self.settings.savedProviders) { provider in
                     Text(provider.name).tag(provider.id)
                 }
             }
             .frame(width: 110)
-            .onChange(of: settings.commandModeSelectedProviderID) { _, newValue in
+            .onChange(of: self.settings.commandModeSelectedProviderID) { _, newValue in
                 // Prevent selecting disabled Apple Intelligence
                 if newValue == "apple-intelligence-disabled" || newValue == "apple-intelligence" {
-                    settings.commandModeSelectedProviderID = "openai"
+                    self.settings.commandModeSelectedProviderID = "openai"
                 }
             }
-            
+
             // Model Selector (compact)
-            Picker("", selection: Binding(
-                get: { settings.commandModeSelectedModel ?? availableModels.first ?? "gpt-4o" },
-                set: { settings.commandModeSelectedModel = $0 }
-            )) {
-                ForEach(availableModels, id: \.self) { model in
+            Picker(
+                "",
+                selection: Binding(
+                    get: {
+                        self.settings.commandModeSelectedModel ?? self.availableModels.first ?? "gpt-4o"
+                    },
+                    set: { self.settings.commandModeSelectedModel = $0 }
+                )
+            ) {
+                ForEach(self.availableModels, id: \.self) { model in
                     Text(model).tag(model)
                 }
             }
             .frame(width: 130)
-            
+
             // Input field (flexible)
-            TextField("Type a command or ask a question...", text: $inputText)
+            TextField("Type a command or ask a question...", text: self.$inputText)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit {
-                    submitCommand()
+                    self.submitCommand()
                 }
-            
-            Button(action: submitCommand) {
+
+            Button(action: self.submitCommand) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.title2)
             }
             .buttonStyle(.plain)
-            .disabled(inputText.isEmpty || service.isProcessing)
-            
+            .disabled(self.inputText.isEmpty || self.service.isProcessing)
+
             // Voice Input
-            Button(action: toggleRecording) {
-                Image(systemName: asr.isRunning ? "stop.circle.fill" : "mic.circle.fill")
+            Button(action: self.toggleRecording) {
+                Image(systemName: self.asr.isRunning ? "stop.circle.fill" : "mic.circle.fill")
                     .font(.title2)
-                    .foregroundStyle(asr.isRunning ? Color.red : Color.accentColor)
+                    .foregroundStyle(self.asr.isRunning ? Color.red : Color.accentColor)
             }
             .buttonStyle(.plain)
         }
         .padding()
         .background(Color(nsColor: .windowBackgroundColor))
     }
-    
+
     // MARK: - Actions
-    
+
     private func toggleRecording() {
         if asr.isRunning {
-            Task { await asr.stop() }
+            Task { await self.asr.stop() }
         } else {
             asr.start()
         }
     }
-    
+
     private func submitCommand() {
         guard !inputText.isEmpty else { return }
         let text = inputText
         inputText = ""
         Task {
-            await service.processUserCommand(text)
+            await self.service.processUserCommand(text)
         }
     }
-    
+
     private func updateAvailableModels() {
         let currentProviderID = settings.commandModeSelectedProviderID
         let currentModel = settings.commandModeSelectedModel ?? "gpt-4o"
-        
+
         // Pull models from the shared pool configured in AI Settings
         let possibleKeys = providerKeys(for: currentProviderID)
         let storedList = possibleKeys.lazy
             .compactMap { SettingsStore.shared.availableModelsByProvider[$0] }
             .first { !$0.isEmpty }
-        
+
         if let stored = storedList {
             availableModels = stored
         } else {
             availableModels = defaultModels(for: currentProviderID)
         }
-        
+
         // If current model not in list, select first available
         if !availableModels.contains(currentModel) {
             settings.commandModeSelectedModel = availableModels.first ?? "gpt-4o"
         }
     }
-    
+
     /// Returns possible keys used to store models for a provider.
     private func providerKeys(for providerID: String) -> [String] {
         var keys: [String] = []
         let trimmed = providerID.trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
         if trimmed.isEmpty {
             return [providerID]
         }
-        
+
         if trimmed == "openai" || trimmed == "groq" {
             return [trimmed]
         }
-        
+
         if trimmed.hasPrefix("custom:") {
             keys.append(trimmed)
             keys.append(String(trimmed.dropFirst("custom:".count)))
@@ -559,13 +562,13 @@ struct CommandModeView: View {
             keys.append("custom:\(trimmed)")
             keys.append(trimmed)
         }
-        
+
         // Add legacy key used in ContentView before the fix
         keys.append("custom:\\(trimmed)")
-        
+
         return Array(Set(keys))
     }
-    
+
     private func defaultModels(for provider: String) -> [String] {
         switch provider {
         case "openai": return ["gpt-4.1"]
@@ -579,28 +582,26 @@ struct CommandModeView: View {
 
 struct CommandShimmerText: View {
     let text: String
-    
+
     @State private var shimmerPhase: CGFloat = 0
-    
+
     var body: some View {
         Text(text)
             .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [
-                        Color.primary.opacity(0.4),
-                        Color.primary.opacity(0.4),
-                        Color.primary.opacity(0.8),
-                        Color.primary.opacity(0.4),
-                        Color.primary.opacity(0.4)
-                    ],
-                    startPoint: UnitPoint(x: shimmerPhase - 0.3, y: 0.5),
-                    endPoint: UnitPoint(x: shimmerPhase + 0.3, y: 0.5)
-                )
-            )
+            .foregroundStyle(LinearGradient(
+                colors: [
+                    Color.primary.opacity(0.4),
+                    Color.primary.opacity(0.4),
+                    Color.primary.opacity(0.8),
+                    Color.primary.opacity(0.4),
+                    Color.primary.opacity(0.4),
+                ],
+                startPoint: UnitPoint(x: shimmerPhase - 0.3, y: 0.5),
+                endPoint: UnitPoint(x: shimmerPhase + 0.3, y: 0.5)
+            ))
             .onAppear {
                 withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
-                    shimmerPhase = 1.3
+                    self.shimmerPhase = 1.3
                 }
             }
     }
@@ -610,21 +611,21 @@ struct CommandShimmerText: View {
 
 struct MessageBubble: View {
     let message: CommandModeService.Message
-    
+
     var body: some View {
         HStack(alignment: .top) {
-            if message.role == .user {
+            if self.message.role == .user {
                 Spacer()
-                userMessageView
+                self.userMessageView
             } else {
-                agentMessageView
+                self.agentMessageView
                 Spacer()
             }
         }
     }
-    
+
     // MARK: - User Message
-    
+
     private var userMessageView: some View {
         Text(message.content)
             .font(.system(size: 13))
@@ -634,9 +635,9 @@ struct MessageBubble: View {
             .cornerRadius(10)
             .frame(maxWidth: 380, alignment: .trailing)
     }
-    
+
     // MARK: - Agent Message
-    
+
     private var agentMessageView: some View {
         VStack(alignment: .leading, spacing: 6) {
             // Purpose label (minimal, gray)
@@ -645,33 +646,34 @@ struct MessageBubble: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
-            
+
             // Main content
-            if message.role == .tool {
-                toolOutputView
+            if self.message.role == .tool {
+                self.toolOutputView
             } else if let tc = message.toolCall {
-                commandCallView(tc)
-            } else if !message.content.isEmpty {
-                textContentView
+                self.commandCallView(tc)
+            } else if !self.message.content.isEmpty {
+                self.textContentView
             }
         }
         .frame(maxWidth: 520, alignment: .leading)
     }
-    
+
     // MARK: - Command Call View (Minimal)
-    
+
     private func commandCallView(_ tc: CommandModeService.Message.ToolCall) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             // Reasoning text (if meaningful)
-            if !message.content.isEmpty && 
-               !message.content.lowercased().starts(with: "checking") && 
-               !message.content.lowercased().starts(with: "executing") &&
-               !message.content.lowercased().starts(with: "i'll") {
-                Text(message.content)
+            if !self.message.content.isEmpty &&
+                !self.message.content.lowercased().starts(with: "checking") &&
+                !self.message.content.lowercased().starts(with: "executing") &&
+                !self.message.content.lowercased().starts(with: "i'll")
+            {
+                Text(self.message.content)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
-            
+
             // Command block - clean and simple
             Text(tc.command)
                 .font(.system(size: 12, design: .monospaced))
@@ -683,21 +685,21 @@ struct MessageBubble: View {
                 .cornerRadius(6)
         }
     }
-    
+
     // MARK: - Tool Output View (Minimal)
-    
+
     private var toolOutputView: some View {
         let parsed = parseToolOutput(message.content)
-        
+
         return VStack(alignment: .leading, spacing: 0) {
             // Minimal header - just status and time
             HStack(spacing: 6) {
                 Text(parsed.success ? "Success" : "Error")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(parsed.success ? .primary : .secondary)
-                
+
                 Spacer()
-                
+
                 if parsed.executionTime > 0 {
                     Text("\(parsed.executionTime)ms")
                         .font(.system(size: 10))
@@ -706,21 +708,21 @@ struct MessageBubble: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            
+
             // Output content (if any)
             if !parsed.output.isEmpty || parsed.error != nil {
                 Divider()
                     .padding(.horizontal, 10)
-                
+
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 2) {
                         if !parsed.output.isEmpty {
-                            Text(markdownAttributedString(from: parsed.output))
+                            Text(self.markdownAttributedString(from: parsed.output))
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(.secondary)
                                 .textSelection(.enabled)
                         }
-                        
+
                         if let error = parsed.error, !error.isEmpty {
                             Text(error)
                                 .font(.system(size: 11, design: .monospaced))
@@ -738,30 +740,32 @@ struct MessageBubble: View {
         .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
         .cornerRadius(6)
     }
-    
+
     // MARK: - Text Content View (Minimal)
-    
+
     private var textContentView: some View {
         Text(markdownAttributedString(from: message.content))
             .font(.system(size: 13))
             .textSelection(.enabled)
     }
-    
+
     // MARK: - Markdown Rendering
-    
+
     private func markdownAttributedString(from text: String) -> AttributedString {
         do {
-            let attributed = try AttributedString(markdown: text, options: AttributedString.MarkdownParsingOptions(
-                interpretedSyntax: .inlineOnlyPreservingWhitespace
-            ))
+            let attributed = try AttributedString(
+                markdown: text,
+                options: AttributedString
+                    .MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+            )
             return attributed
         } catch {
             return AttributedString(text)
         }
     }
-    
+
     // MARK: - Helpers
-    
+
     private struct ParsedOutput {
         let success: Bool
         let output: String
@@ -769,13 +773,14 @@ struct MessageBubble: View {
         let exitCode: Int
         let executionTime: Int
     }
-    
+
     private func parseToolOutput(_ json: String) -> ParsedOutput {
         guard let data = json.data(using: .utf8),
-              let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+              let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
             return ParsedOutput(success: false, output: json, error: nil, exitCode: -1, executionTime: 0)
         }
-        
+
         return ParsedOutput(
             success: parsed["success"] as? Bool ?? false,
             output: parsed["output"] as? String ?? "",

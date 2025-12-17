@@ -19,6 +19,18 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Install SwiftLint
+      run: brew install swiftlint
+
+    - name: Run SwiftLint (strict)
+      run: swiftlint --strict --config .swiftlint.yml
+
+    - name: Install SwiftFormat
+      run: brew install swiftformat
+
+    - name: Run SwiftFormat (lint)
+      run: swiftformat --lint --config .swiftformat Sources
       
     - name: Setup Xcode
       uses: maxim-lobanov/setup-xcode@v1

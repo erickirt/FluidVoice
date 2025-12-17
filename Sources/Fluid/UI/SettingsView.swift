@@ -1,13 +1,6 @@
-//
-//  SettingsView.swift
-//  fluid
-//
-//  App preferences and audio device settings
-//
-
-import SwiftUI
 import AVFoundation
 import PromiseKit
+import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var appServices: AppServices
@@ -32,13 +25,13 @@ struct SettingsView: View {
     @Binding var pressAndHoldModeEnabled: Bool
     @Binding var enableStreamingPreview: Bool
     @Binding var copyToClipboard: Bool
-    
+
     // CRITICAL FIX: Cache default device names to avoid CoreAudio calls during view body evaluation.
     // Querying AudioDevice.getDefaultInputDevice() in the view body triggers HALSystem::InitializeShell()
     // which races with SwiftUI's AttributeGraph metadata processing and causes EXC_BAD_ACCESS crashes.
     @State private var cachedDefaultInputName: String = ""
     @State private var cachedDefaultOutputName: String = ""
-    
+
     let hotkeyManager: GlobalHotkeyManager?
     let menuBarManager: MenuBarManager
     let startRecording: () -> Void
@@ -47,7 +40,7 @@ struct SettingsView: View {
     let restartApp: () -> Void
     let revealAppInFinder: () -> Void
     let openApplicationsFolder: () -> Void
-    
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 16) {
@@ -61,7 +54,7 @@ struct SettingsView: View {
 
                         VStack(spacing: 0) {
                             // Launch at startup
-                            settingsToggleRow(
+                            self.settingsToggleRow(
                                 title: "Launch at startup",
                                 description: "Automatically start FluidVoice when you log in",
                                 footnote: "Note: Requires app to be signed for this to work.",
@@ -74,7 +67,7 @@ struct SettingsView: View {
                             Divider().padding(.vertical, 10)
 
                             // Show in Dock
-                            settingsToggleRow(
+                            self.settingsToggleRow(
                                 title: "Show in Dock",
                                 description: "Display FluidVoice icon in the Dock",
                                 footnote: "Note: May require app restart to take effect.",
@@ -96,31 +89,34 @@ struct SettingsView: View {
                                             .font(.subheadline)
                                             .foregroundStyle(.secondary)
                                     }
-                                    
+
                                     Spacer()
-                                    
+
                                     Toggle("", isOn: Binding(
                                         get: { SettingsStore.shared.autoUpdateCheckEnabled },
                                         set: { SettingsStore.shared.autoUpdateCheckEnabled = $0 }
                                     ))
                                     .toggleStyle(.switch)
-                                    .tint(theme.palette.accent)
+                                    .tint(self.theme.palette.accent)
                                     .labelsHidden()
                                 }
-                                
+
                                 if let lastCheck = SettingsStore.shared.lastUpdateCheckDate {
                                     Text("Last checked: \(lastCheck.formatted(date: .abbreviated, time: .shortened))")
                                         .font(.caption)
                                         .foregroundStyle(.tertiary)
                                 }
                             }
-                            
+
                             // Update Buttons
                             HStack(spacing: 10) {
                                 Button("Check for Updates") {
                                     Task { @MainActor in
                                         do {
-                                            try await SimpleUpdater.shared.checkAndUpdate(owner: "altic-dev", repo: "Fluid-oss")
+                                            try await SimpleUpdater.shared.checkAndUpdate(
+                                                owner: "altic-dev",
+                                                repo: "Fluid-oss"
+                                            )
                                             let ok = NSAlert()
                                             ok.messageText = "Update Found!"
                                             ok.informativeText = "A new version is available and will be installed now."
@@ -142,9 +138,9 @@ struct SettingsView: View {
                                     }
                                 }
                                 .buttonStyle(.borderedProminent)
-                                .tint(theme.palette.accent)
+                                .tint(self.theme.palette.accent)
                                 .controlSize(.regular)
-                                
+
                                 Button("Release Notes") {
                                     if let url = URL(string: "https://github.com/altic-dev/Fluid-oss/releases") {
                                         NSWorkspace.shared.open(url)
@@ -158,47 +154,49 @@ struct SettingsView: View {
                     }
                     .padding(16)
                 }
-                
+
                 // Microphone Permission Card
                 ThemedCard(style: .standard) {
                     VStack(alignment: .leading, spacing: 14) {
                         Label("Microphone Permission", systemImage: "mic.fill")
                             .font(.headline)
                             .foregroundStyle(.primary)
-                        
+
                         VStack(alignment: .leading, spacing: 12) {
                             HStack(spacing: 10) {
                                 Circle()
-                                    .fill(asr.micStatus == .authorized ? theme.palette.success : theme.palette.warning)
+                                    .fill(self.asr.micStatus == .authorized ? self.theme.palette.success : self.theme
+                                        .palette.warning)
                                     .frame(width: 8, height: 8)
-                                
+
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(asr.micStatus == .authorized ? "Microphone access granted" : 
-                                         asr.micStatus == .denied ? "Microphone access denied" :
-                                         "Microphone access not determined")
+                                    Text(self.asr.micStatus == .authorized ? "Microphone access granted" :
+                                        self.asr.micStatus == .denied ? "Microphone access denied" :
+                                        "Microphone access not determined")
                                         .font(.body)
-                                        .foregroundStyle(asr.micStatus == .authorized ? .primary : theme.palette.warning)
-                                    
-                                    if asr.micStatus != .authorized {
+                                        .foregroundStyle(self.asr.micStatus == .authorized ? .primary : self.theme
+                                            .palette.warning)
+
+                                    if self.asr.micStatus != .authorized {
                                         Text("Microphone access is required for voice recording")
                                             .font(.subheadline)
                                             .foregroundStyle(.secondary)
                                     }
                                 }
                                 Spacer()
-                                
-                                if asr.micStatus == .notDetermined {
+
+                                if self.asr.micStatus == .notDetermined {
                                     Button {
-                                        asr.requestMicAccess()
+                                        self.asr.requestMicAccess()
                                     } label: {
                                         Label("Grant Access", systemImage: "mic.fill")
                                     }
                                     .buttonStyle(.borderedProminent)
-                                    .tint(theme.palette.accent)
+                                    .tint(self.theme.palette.accent)
                                     .controlSize(.regular)
-                                } else if asr.micStatus == .denied {
+                                } else if self.asr.micStatus == .denied {
                                     Button {
-                                        asr.openSystemSettingsForMic()
+                                        self.asr.openSystemSettingsForMic()
                                     } label: {
                                         Label("Open Settings", systemImage: "gear")
                                     }
@@ -206,43 +204,52 @@ struct SettingsView: View {
                                     .controlSize(.regular)
                                 }
                             }
-                            
-                            if asr.micStatus != .authorized {
-                                instructionsBox(
+
+                            if self.asr.micStatus != .authorized {
+                                self.instructionsBox(
                                     title: "How to enable microphone access:",
-                                    steps: asr.micStatus == .notDetermined 
-                                        ? ["Click **Grant Access** above", "Choose **Allow** in the system dialog"]
-                                        : ["Click **Open Settings** above", "Find **FluidVoice** in the microphone list", "Toggle **FluidVoice ON** to allow access"]
+                                    steps: self.asr.micStatus == .notDetermined
+                                        ? [
+                                            "Click **Grant Access** above",
+                                            "Choose **Allow** in the system dialog",
+                                        ]
+                                        : [
+                                            "Click **Open Settings** above",
+                                            "Find **FluidVoice** in the microphone list",
+                                            "Toggle **FluidVoice ON** to allow access",
+                                        ]
                                 )
                             }
                         }
                     }
                     .padding(16)
                 }
-                
+
                 // Global Hotkey Card
                 ThemedCard(style: .standard) {
                     VStack(alignment: .leading, spacing: 14) {
                         Label("Global Hotkey", systemImage: "keyboard")
                             .font(.headline)
                             .foregroundStyle(.primary)
-                        
-                        if accessibilityEnabled {
+
+                        if self.accessibilityEnabled {
                             VStack(alignment: .leading, spacing: 12) {
                                 // Status indicator
                                 HStack(spacing: 8) {
-                                    if isRecordingShortcut || isRecordingCommandModeShortcut || isRecordingRewriteShortcut {
+                                    if self.isRecordingShortcut || self.isRecordingCommandModeShortcut || self
+                                        .isRecordingRewriteShortcut
+                                    {
                                         Image(systemName: "hand.point.up.left.fill")
                                             .foregroundStyle(.orange)
                                         Text("Press your new hotkey combination now...")
                                             .font(.subheadline)
                                             .foregroundStyle(.orange)
-                                    } else if hotkeyManagerInitialized {
+                                    } else if self.hotkeyManagerInitialized {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundStyle(.green)
                                         Text("Global Shortcuts Active")
                                             .font(.subheadline.weight(.medium))
-                                        
+
                                         Spacer()
                                     } else {
                                         ProgressView()
@@ -259,170 +266,172 @@ struct SettingsView: View {
                                 }
                                 .padding(10)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(.ultraThinMaterial.opacity(0.5))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                                .stroke(.white.opacity(0.1), lineWidth: 1)
-                                        )
-                                )
-                                
+                                .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(.ultraThinMaterial.opacity(0.5))
+                                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .stroke(.white.opacity(0.1), lineWidth: 1)))
+
                                 // MARK: - Shortcuts Section
+
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Keyboard Shortcuts")
                                         .font(.subheadline.weight(.medium))
                                         .foregroundStyle(.secondary)
-                                    
-                                    shortcutRow(
+
+                                    self.shortcutRow(
                                         icon: "mic.fill",
                                         iconColor: .secondary,
                                         title: "Transcribe Mode",
                                         description: "Dictate text anywhere",
-                                        shortcut: hotkeyShortcut,
-                                        isRecording: isRecordingShortcut,
+                                        shortcut: self.hotkeyShortcut,
+                                        isRecording: self.isRecordingShortcut,
                                         onChangePressed: {
-                                            DebugLogger.shared.debug("Starting to record new transcribe shortcut", source: "SettingsView")
-                                            isRecordingShortcut = true
+                                            DebugLogger.shared
+                                                .debug(
+                                                    "Starting to record new transcribe shortcut",
+                                                    source: "SettingsView"
+                                                )
+                                            self.isRecordingShortcut = true
                                         }
                                     )
-                                    
+
                                     Divider()
-                                    
-                                    shortcutRow(
+
+                                    self.shortcutRow(
                                         icon: "terminal.fill",
                                         iconColor: .secondary,
                                         title: "Command Mode",
                                         description: "Execute voice commands",
-                                        shortcut: commandModeShortcut,
-                                        isRecording: isRecordingCommandModeShortcut,
-                                        isEnabled: $commandModeShortcutEnabled,
+                                        shortcut: self.commandModeShortcut,
+                                        isRecording: self.isRecordingCommandModeShortcut,
+                                        isEnabled: self.$commandModeShortcutEnabled,
                                         onChangePressed: {
-                                            DebugLogger.shared.debug("Starting to record new command mode shortcut", source: "SettingsView")
-                                            isRecordingCommandModeShortcut = true
+                                            DebugLogger.shared
+                                                .debug(
+                                                    "Starting to record new command mode shortcut",
+                                                    source: "SettingsView"
+                                                )
+                                            self.isRecordingCommandModeShortcut = true
                                         }
                                     )
-                                    
+
                                     Divider()
-                                    
-                                    shortcutRow(
+
+                                    self.shortcutRow(
                                         icon: "pencil.and.outline",
                                         iconColor: .secondary,
                                         title: "Write Mode",
                                         description: "Select text and speak how to rewrite, or write new content",
-                                        shortcut: rewriteShortcut,
-                                        isRecording: isRecordingRewriteShortcut,
-                                        isEnabled: $rewriteShortcutEnabled,
+                                        shortcut: self.rewriteShortcut,
+                                        isRecording: self.isRecordingRewriteShortcut,
+                                        isEnabled: self.$rewriteShortcutEnabled,
                                         onChangePressed: {
-                                            DebugLogger.shared.debug("Starting to record new write mode shortcut", source: "SettingsView")
-                                            isRecordingRewriteShortcut = true
+                                            DebugLogger.shared
+                                                .debug(
+                                                    "Starting to record new write mode shortcut",
+                                                    source: "SettingsView"
+                                                )
+                                            self.isRecordingRewriteShortcut = true
                                         }
                                     )
                                 }
                                 .padding(12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(.ultraThinMaterial.opacity(0.5))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                                .stroke(.white.opacity(0.08), lineWidth: 1)
-                                        )
-                                )
-                                
+                                .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(.ultraThinMaterial.opacity(0.5))
+                                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .stroke(.white.opacity(0.08), lineWidth: 1)))
+
                                 // MARK: - Options Section
+
                                 VStack(spacing: 0) {
-                                    optionToggleRow(
+                                    self.optionToggleRow(
                                         title: "Press and Hold Mode",
                                         description: "The shortcut only records while you hold it down, giving you quick push-to-talk style control.",
-                                        isOn: $pressAndHoldModeEnabled
+                                        isOn: self.$pressAndHoldModeEnabled
                                     )
-                                    .onChange(of: pressAndHoldModeEnabled) { _, newValue in
+                                    .onChange(of: self.pressAndHoldModeEnabled) { _, newValue in
                                         SettingsStore.shared.pressAndHoldMode = newValue
-                                        hotkeyManager?.enablePressAndHoldMode(newValue)
+                                        self.hotkeyManager?.enablePressAndHoldMode(newValue)
                                     }
-                                    
+
                                     Divider().padding(.vertical, 8)
-                                    
-                                    optionToggleRow(
+
+                                    self.optionToggleRow(
                                         title: "Show Live Preview",
                                         description: "Display transcription text in real-time in the overlay as you speak.",
-                                        isOn: $enableStreamingPreview
+                                        isOn: self.$enableStreamingPreview
                                     )
-                                    .onChange(of: enableStreamingPreview) { _, newValue in
+                                    .onChange(of: self.enableStreamingPreview) { _, newValue in
                                         SettingsStore.shared.enableStreamingPreview = newValue
                                     }
-                                    
+
                                     Divider().padding(.vertical, 8)
-                                    
-                                    optionToggleRow(
+
+                                    self.optionToggleRow(
                                         title: "Copy to Clipboard",
                                         description: "Automatically copy transcribed text to clipboard as a backup.",
-                                        isOn: $copyToClipboard
+                                        isOn: self.$copyToClipboard
                                     )
-                                    .onChange(of: copyToClipboard) { _, newValue in
+                                    .onChange(of: self.copyToClipboard) { _, newValue in
                                         SettingsStore.shared.copyTranscriptionToClipboard = newValue
                                     }
                                 }
                                 .padding(12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(.ultraThinMaterial.opacity(0.5))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                                .stroke(.white.opacity(0.08), lineWidth: 1)
-                                        )
-                                )
+                                .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(.ultraThinMaterial.opacity(0.5))
+                                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .stroke(.white.opacity(0.08), lineWidth: 1)))
                             }
                         } else {
                             // Hotkey disabled - accessibility not enabled
                             VStack(alignment: .leading, spacing: 12) {
                                 HStack(spacing: 10) {
                                     Circle()
-                                        .fill(theme.palette.warning)
+                                        .fill(self.theme.palette.warning)
                                         .frame(width: 8, height: 8)
-                                    
+
                                     VStack(alignment: .leading, spacing: 2) {
                                         HStack(spacing: 6) {
                                             Image(systemName: "exclamationmark.triangle.fill")
-                                                .foregroundStyle(theme.palette.warning)
+                                                .foregroundStyle(self.theme.palette.warning)
                                             Text("Accessibility permissions required")
                                                 .font(.body)
-                                                .foregroundStyle(theme.palette.warning)
+                                                .foregroundStyle(self.theme.palette.warning)
                                         }
                                         Text("Required for global hotkey functionality")
                                             .font(.subheadline)
                                             .foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    
+
                                     Button("Open Accessibility Settings") {
-                                        openAccessibilitySettings()
+                                        self.openAccessibilitySettings()
                                     }
                                     .buttonStyle(.borderedProminent)
-                                    .tint(theme.palette.accent)
+                                    .tint(self.theme.palette.accent)
                                     .controlSize(.regular)
                                 }
-                                
-                                instructionsBox(
+
+                                self.instructionsBox(
                                     title: "Follow these steps to enable Accessibility:",
                                     steps: [
                                         "Click **Open Accessibility Settings** above",
                                         "In the Accessibility window, click the **+ button**",
                                         "Navigate to Applications and select **FluidVoice**",
-                                        "Click **Open**, then toggle **FluidVoice ON** in the list"
+                                        "Click **Open**, then toggle **FluidVoice ON** in the list",
                                     ],
                                     warningStyle: true
                                 )
-                                
+
                                 HStack(spacing: 10) {
                                     Button("Reveal in Finder") {
-                                        revealAppInFinder()
+                                        self.revealAppInFinder()
                                     }
                                     .buttonStyle(.bordered)
                                     .controlSize(.small)
-                                    
+
                                     Button("Open Applications") {
-                                        openApplicationsFolder()
+                                        self.openApplicationsFolder()
                                     }
                                     .buttonStyle(.bordered)
                                     .controlSize(.small)
@@ -432,32 +441,32 @@ struct SettingsView: View {
                     }
                     .padding(16)
                 }
-                
+
                 // Audio Devices Card
                 ThemedCard(style: .standard) {
                     VStack(alignment: .leading, spacing: 14) {
                         Label("Audio Devices", systemImage: "speaker.wave.2.fill")
                             .font(.headline)
                             .foregroundStyle(.primary)
-                        
+
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Text("Input Device")
                                     .font(.body)
                                 Spacer()
-                                Picker("Input Device", selection: $selectedInputUID) {
-                                    ForEach(inputDevices, id: \.uid) { dev in
+                                Picker("Input Device", selection: self.$selectedInputUID) {
+                                    ForEach(self.inputDevices, id: \.uid) { dev in
                                         Text(dev.name).tag(dev.uid)
                                     }
                                 }
                                 .pickerStyle(.menu)
                                 .frame(width: 240)
-                                .onChange(of: selectedInputUID) { _, newUID in
+                                .onChange(of: self.selectedInputUID) { _, newUID in
                                     SettingsStore.shared.preferredInputDeviceUID = newUID
                                     _ = AudioDevice.setDefaultInputDevice(uid: newUID)
-                                    if asr.isRunning {
-                                        asr.stopWithoutTranscription()
-                                        startRecording()
+                                    if self.asr.isRunning {
+                                        self.asr.stopWithoutTranscription()
+                                        self.startRecording()
                                     }
                                 }
                             }
@@ -466,14 +475,14 @@ struct SettingsView: View {
                                 Text("Output Device")
                                     .font(.body)
                                 Spacer()
-                                Picker("Output Device", selection: $selectedOutputUID) {
-                                    ForEach(outputDevices, id: \.uid) { dev in
+                                Picker("Output Device", selection: self.$selectedOutputUID) {
+                                    ForEach(self.outputDevices, id: \.uid) { dev in
                                         Text(dev.name).tag(dev.uid)
                                     }
                                 }
                                 .pickerStyle(.menu)
                                 .frame(width: 240)
-                                .onChange(of: selectedOutputUID) { _, newUID in
+                                .onChange(of: self.selectedOutputUID) { _, newUID in
                                     SettingsStore.shared.preferredOutputDeviceUID = newUID
                                     _ = AudioDevice.setDefaultOutputDevice(uid: newUID)
                                 }
@@ -481,10 +490,10 @@ struct SettingsView: View {
 
                             HStack(spacing: 10) {
                                 Button {
-                                    refreshDevices()
+                                    self.refreshDevices()
                                     // Update cached default device names on refresh
-                                    cachedDefaultInputName = AudioDevice.getDefaultInputDevice()?.name ?? ""
-                                    cachedDefaultOutputName = AudioDevice.getDefaultOutputDevice()?.name ?? ""
+                                    self.cachedDefaultInputName = AudioDevice.getDefaultInputDevice()?.name ?? ""
+                                    self.cachedDefaultOutputName = AudioDevice.getDefaultOutputDevice()?.name ?? ""
                                 } label: {
                                     Label("Refresh", systemImage: "arrow.clockwise")
                                 }
@@ -492,11 +501,11 @@ struct SettingsView: View {
                                 .controlSize(.regular)
 
                                 Spacer()
-                                
+
                                 // CRITICAL FIX: Use cached values instead of querying CoreAudio in view body.
                                 // Querying AudioDevice here triggers HALSystem::InitializeShell() race condition.
-                                if !cachedDefaultInputName.isEmpty && !cachedDefaultOutputName.isEmpty {
-                                    Text("Default: \(cachedDefaultInputName) / \(cachedDefaultOutputName)")
+                                if !self.cachedDefaultInputName.isEmpty && !self.cachedDefaultOutputName.isEmpty {
+                                    Text("Default: \(self.cachedDefaultInputName) / \(self.cachedDefaultOutputName)")
                                         .font(.caption)
                                         .foregroundStyle(.tertiary)
                                         .lineLimit(1)
@@ -506,14 +515,14 @@ struct SettingsView: View {
                     }
                     .padding(16)
                 }
-                
+
                 // Visualization Sensitivity Card
                 ThemedCard(style: .standard) {
                     VStack(alignment: .leading, spacing: 14) {
                         Label("Visualization", systemImage: "waveform")
                             .font(.headline)
                             .foregroundStyle(.primary)
-                        
+
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
@@ -523,32 +532,32 @@ struct SettingsView: View {
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
                                 }
-                                
+
                                 Spacer()
-                                
+
                                 Button("Reset") {
-                                    visualizerNoiseThreshold = 0.4
-                                    SettingsStore.shared.visualizerNoiseThreshold = visualizerNoiseThreshold
+                                    self.visualizerNoiseThreshold = 0.4
+                                    SettingsStore.shared.visualizerNoiseThreshold = self.visualizerNoiseThreshold
                                 }
                                 .buttonStyle(.bordered)
                                 .controlSize(.small)
                             }
-                            
+
                             HStack(spacing: 10) {
                                 Text("More")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .frame(width: 36, alignment: .trailing)
-                                
-                                Slider(value: $visualizerNoiseThreshold, in: 0.01...0.8, step: 0.01)
+
+                                Slider(value: self.$visualizerNoiseThreshold, in: 0.01...0.8, step: 0.01)
                                     .controlSize(.regular)
-                                
+
                                 Text("Less")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .frame(width: 36, alignment: .leading)
-                                
-                                Text(String(format: "%.2f", visualizerNoiseThreshold))
+
+                                Text(String(format: "%.2f", self.visualizerNoiseThreshold))
                                     .font(.caption.monospaced())
                                     .foregroundStyle(.tertiary)
                                     .frame(width: 36)
@@ -595,20 +604,20 @@ struct SettingsView: View {
                 await AudioStartupGate.shared.scheduleOpenAfterInitialUISettled()
                 await AudioStartupGate.shared.waitUntilOpen()
 
-                refreshDevices()
+                self.refreshDevices()
                 // CRITICAL FIX: Populate cached default device names after onAppear, not during view body evaluation.
                 // This avoids the CoreAudio/SwiftUI AttributeGraph race condition that causes EXC_BAD_ACCESS.
-                cachedDefaultInputName = AudioDevice.getDefaultInputDevice()?.name ?? ""
-                cachedDefaultOutputName = AudioDevice.getDefaultOutputDevice()?.name ?? ""
+                self.cachedDefaultInputName = AudioDevice.getDefaultInputDevice()?.name ?? ""
+                self.cachedDefaultOutputName = AudioDevice.getDefaultOutputDevice()?.name ?? ""
             }
         }
         .onChange(of: visualizerNoiseThreshold) { _, newValue in
             SettingsStore.shared.visualizerNoiseThreshold = newValue
         }
     }
-    
+
     // MARK: - Helper Views
-    
+
     @ViewBuilder
     private func settingsToggleRow(
         title: String,
@@ -625,15 +634,15 @@ struct SettingsView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Spacer()
-                
+
                 Toggle("", isOn: isOn)
                     .toggleStyle(.switch)
-                    .tint(theme.palette.accent)
+                    .tint(self.theme.palette.accent)
                     .labelsHidden()
             }
-            
+
             if let footnote = footnote {
                 Text(footnote)
                     .font(.caption)
@@ -641,7 +650,7 @@ struct SettingsView: View {
             }
         }
     }
-    
+
     @ViewBuilder
     private func optionToggleRow(
         title: String,
@@ -656,16 +665,16 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            
+
             Spacer()
-            
+
             Toggle("", isOn: isOn)
                 .toggleStyle(.switch)
-                .tint(theme.palette.accent)
+                .tint(self.theme.palette.accent)
                 .labelsHidden()
         }
     }
-    
+
     @ViewBuilder
     private func instructionsBox(
         title: String,
@@ -675,19 +684,19 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "info.circle.fill")
-                    .foregroundStyle(warningStyle ? theme.palette.warning : theme.palette.accent)
+                    .foregroundStyle(warningStyle ? self.theme.palette.warning : self.theme.palette.accent)
                     .font(.caption)
                 Text(title)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                     HStack(alignment: .top, spacing: 8) {
                         Text("\(index + 1).")
                             .font(.caption)
-                            .foregroundStyle(warningStyle ? theme.palette.warning : theme.palette.accent)
+                            .foregroundStyle(warningStyle ? self.theme.palette.warning : self.theme.palette.accent)
                             .fontWeight(.semibold)
                             .frame(width: 16, alignment: .trailing)
                         Text(.init(step))
@@ -698,12 +707,10 @@ struct SettingsView: View {
             }
         }
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill((warningStyle ? theme.palette.warning : theme.palette.accent).opacity(0.12))
-        )
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill((warningStyle ? theme.palette.warning : theme.palette.accent).opacity(0.12)))
     }
-    
+
     @ViewBuilder
     private func shortcutRow(
         icon: String,
@@ -733,11 +740,11 @@ struct SettingsView: View {
                 }
 
                 Spacer()
-                
+
                 if let isEnabled {
                     Toggle("", isOn: isEnabled)
                         .toggleStyle(.switch)
-                        .tint(theme.palette.accent)
+                        .tint(self.theme.palette.accent)
                         .labelsHidden()
                 }
             }
@@ -752,23 +759,17 @@ struct SettingsView: View {
                         .foregroundStyle(.orange)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(.orange.opacity(0.2))
-                        )
+                        .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(.orange.opacity(0.2)))
                 } else {
                     Text(shortcut.displayString)
                         .font(.caption.monospaced().weight(.medium))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(.quaternary.opacity(0.5))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                        .stroke(.primary.opacity(0.15), lineWidth: 1)
-                                )
-                        )
+                        .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(.quaternary.opacity(0.5))
+                            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .stroke(.primary.opacity(0.15), lineWidth: 1)))
                 }
 
                 Button("Change") {
@@ -798,12 +799,12 @@ struct FillerWordsEditor: View {
 
             // Word chips
             FlowLayout(spacing: 6) {
-                ForEach(fillerWords, id: \.self) { word in
+                ForEach(self.fillerWords, id: \.self) { word in
                     HStack(spacing: 4) {
                         Text(word)
                             .font(.caption)
                         Button {
-                            removeWord(word)
+                            self.removeWord(word)
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.caption2)
@@ -812,30 +813,28 @@ struct FillerWordsEditor: View {
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(.quaternary)
-                    )
+                    .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(.quaternary))
                 }
             }
 
             // Add new word
             HStack(spacing: 8) {
-                TextField("Add word", text: $newWord)
+                TextField("Add word", text: self.$newWord)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 100)
-                    .onSubmit { addWord() }
+                    .onSubmit { self.addWord() }
 
-                Button("Add") { addWord() }
+                Button("Add") { self.addWord() }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .disabled(newWord.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(self.newWord.trimmingCharacters(in: .whitespaces).isEmpty)
 
                 Spacer()
 
                 Button("Reset") {
-                    fillerWords = SettingsStore.defaultFillerWords
-                    SettingsStore.shared.fillerWords = fillerWords
+                    self.fillerWords = SettingsStore.defaultFillerWords
+                    SettingsStore.shared.fillerWords = self.fillerWords
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -870,11 +869,17 @@ struct FlowLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let result = arrangeSubviews(proposal: proposal, subviews: subviews)
         for (index, position) in result.positions.enumerated() {
-            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
+            subviews[index].place(
+                at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y),
+                proposal: .unspecified
+            )
         }
     }
 
-    private func arrangeSubviews(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
+    private func arrangeSubviews(
+        proposal: ProposedViewSize,
+        subviews: Subviews
+    ) -> (size: CGSize, positions: [CGPoint]) {
         let maxWidth = proposal.width ?? .infinity
         var positions: [CGPoint] = []
         var x: CGFloat = 0
@@ -883,7 +888,7 @@ struct FlowLayout: Layout {
 
         for subview in subviews {
             let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > maxWidth && x > 0 {
+            if x + size.width > maxWidth, x > 0 {
                 x = 0
                 y += rowHeight + spacing
                 rowHeight = 0

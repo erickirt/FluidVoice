@@ -1,11 +1,3 @@
-//
-//  AudioStartupGate.swift
-//  Fluid
-//
-//  A centralized gate to prevent CoreAudio/AVFoundation initialization during SwiftUI's
-//  early AttributeGraph metadata processing (a known crash-prone window).
-//
-
 import Foundation
 
 /// Centralized startup gate for any code paths that can trigger CoreAudio initialization.
@@ -45,7 +37,7 @@ actor AudioStartupGate {
         if isOpen { return }
 
         await withCheckedContinuation { cont in
-            waiters.append(cont)
+            self.waiters.append(cont)
         }
     }
 
@@ -58,5 +50,3 @@ actor AudioStartupGate {
         pending.forEach { $0.resume() }
     }
 }
-
-

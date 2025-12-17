@@ -7,7 +7,7 @@ import Foundation
 struct ASRTranscriptionResult {
     let text: String
     let confidence: Float
-    
+
     init(text: String, confidence: Float = 1.0) {
         self.text = text
         self.confidence = confidence
@@ -21,25 +21,25 @@ struct ASRTranscriptionResult {
 protocol TranscriptionProvider {
     /// Display name of the provider
     var name: String { get }
-    
+
     /// Whether this provider is available on the current system
     var isAvailable: Bool { get }
-    
+
     /// Whether models are downloaded and ready
     var isReady: Bool { get }
-    
+
     /// Download/prepare models for transcription
     /// - Parameter progressHandler: Optional callback for download progress (0.0 to 1.0)
     func prepare(progressHandler: ((Double) -> Void)?) async throws
-    
+
     /// Transcribe audio samples
     /// - Parameter samples: 16kHz mono PCM float samples
     /// - Returns: Transcription result with text and confidence
     func transcribe(_ samples: [Float]) async throws -> ASRTranscriptionResult
-    
+
     /// Check if models exist on disk (without loading them)
     func modelsExistOnDisk() -> Bool
-    
+
     /// Clear cached models
     func clearCache() async throws
 }
@@ -47,7 +47,7 @@ protocol TranscriptionProvider {
 // Default implementation for optional methods
 extension TranscriptionProvider {
     func modelsExistOnDisk() -> Bool { return false }
-    func clearCache() async throws { }
+    func clearCache() async throws {}
 }
 
 // MARK: - Architecture Detection
@@ -56,7 +56,7 @@ extension TranscriptionProvider {
 enum CPUArchitecture {
     case applesilicon
     case intel
-    
+
     static var current: CPUArchitecture {
         #if arch(arm64)
         return .applesilicon
@@ -64,11 +64,11 @@ enum CPUArchitecture {
         return .intel
         #endif
     }
-    
+
     static var isAppleSilicon: Bool {
         current == .applesilicon
     }
-    
+
     static var isIntel: Bool {
         current == .intel
     }

@@ -118,4 +118,3 @@ struct AppTheme {
 }
 
 // MARK: - Helpers
-

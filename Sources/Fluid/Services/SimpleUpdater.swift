@@ -1,5 +1,5 @@
-import Foundation
 import AppKit
+import Foundation
 import PromiseKit
 
 enum SimpleUpdateError: Error, LocalizedError {
@@ -32,6 +32,7 @@ struct GHRelease: Decodable {
         let browser_download_url: URL
         let content_type: String
     }
+
     let tag_name: String
     let prerelease: Bool
     let assets: [Asset]
@@ -47,33 +48,33 @@ final class SimpleUpdater {
     // Allowed Apple Developer Team IDs for code-sign validation
     // Configured per your request; restrict to your actual Team ID only.
     private let allowedTeamIDs: Set<String> = [
-        "V4J43B279J"
+        "V4J43B279J",
     ]
 
     // Fetch latest release notes from GitHub
     func fetchLatestReleaseNotes(owner: String, repo: String) async throws -> (version: String, notes: String) {
         let releasesURL = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases")!
-        
+
         let (data, response) = try await URLSession.shared.data(from: releasesURL)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw SimpleUpdateError.invalidResponse
         }
-        
+
         let releases: [GHRelease]
         do {
             releases = try JSONDecoder().decode([GHRelease].self, from: data)
         } catch {
             throw SimpleUpdateError.jsonDecoding
         }
-        
+
         // Get latest non-prerelease release
         guard let latest = releases.first(where: { !$0.prerelease }) else {
             throw SimpleUpdateError.noSuitableRelease
         }
-        
+
         let version = latest.tag_name
         let notes = latest.body ?? "No release notes available."
-        
+
         return (version, notes)
     }
 
@@ -142,15 +143,21 @@ final class SimpleUpdater {
         let prefix = "\(repo.lowercased())-\(verString)"
         let asset = latest.assets.first { asset in
             let base = (asset.name as NSString).deletingPathExtension.lowercased()
-            return (base == prefix) && (asset.content_type == "application/zip" || asset.content_type == "application/x-zip-compressed")
+            return (base == prefix) &&
+                (asset.content_type == "application/zip" || asset.content_type == "application/x-zip-compressed")
         } ?? latest.assets.first { asset in
             let base = (asset.name as NSString).deletingPathExtension.lowercased()
-            return (base == prefix)
+            return base == prefix
         }
 
         guard let asset = asset else { throw SimpleUpdateError.noAsset }
 
-        let tempDir = try FileManager.default.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: Bundle.main.bundleURL, create: true)
+        let tempDir = try FileManager.default.url(
+            for: .itemReplacementDirectory,
+            in: .userDomainMask,
+            appropriateFor: Bundle.main.bundleURL,
+            create: true
+        )
         let downloadURL = tempDir.appendingPathComponent(asset.browser_download_url.lastPathComponent)
 
         do {
@@ -187,7 +194,7 @@ final class SimpleUpdater {
             if identity.hasPrefix("TeamIdentifier=") {
                 return String(identity.dropFirst("TeamIdentifier=".count))
             }
-            
+
             // Handle Authority= format (extract team ID from parentheses)
             guard let l = identity.lastIndex(of: "("), let r = identity.lastIndex(of: ")"), l < r else { return nil }
             let inside = identity[identity.index(after: l)..<r]
@@ -204,7 +211,7 @@ final class SimpleUpdater {
         let newTeam = teamID(from: newID)
         let sameTeam = (curTeam != nil && curTeam == newTeam)
         let bothAllowed = (curTeam != nil && newTeam != nil && allowedTeamIDs.contains(curTeam!) && allowedTeamIDs.contains(newTeam!))
-        
+
         guard sameIdentity || sameTeam || bothAllowed else {
             print("SimpleUpdater: Code-sign mismatch. Current=\(curID) New=\(newID)")
             print("SimpleUpdater: Current Team=\(curTeam ?? "none") New Team=\(newTeam ?? "none")")
@@ -217,10 +224,11 @@ final class SimpleUpdater {
     }
 
     // MARK: - Helpers
+
     private func parseVersion(_ s: String) -> [Int] {
         let t = s.hasPrefix("v") ? String(s.dropFirst()) : s
         let comps = t.split(separator: ".").map { Int($0) ?? 0 }
-        return [comps[safe:0] ?? 0, comps[safe:1] ?? 0, comps[safe:2] ?? 0]
+        return [comps[safe: 0] ?? 0, comps[safe: 1] ?? 0, comps[safe: 2] ?? 0]
     }
 
     private func versionString(_ v: [Int]) -> String {
@@ -245,7 +253,15 @@ final class SimpleUpdater {
         return try await withCheckedThrowingContinuation { cont in
             proc.terminationHandler = { _ in
                 // Find first .app in workDir
-                if let appURL = try? FileManager.default.contentsOfDirectory(at: workDir, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsSubdirectoryDescendants]).first(where: { $0.pathExtension == "app" }) {
+                if let appURL = try? FileManager.default.contentsOfDirectory(
+                    at: workDir,
+                    includingPropertiesForKeys: [
+                        .isDirectoryKey,
+                    ],
+                    options: [.skipsSubdirectoryDescendants]
+                )
+                .first(where: { $0.pathExtension == "app"
+                }) {
                     cont.resume(returning: appURL)
                 } else {
                     cont.resume(throwing: SimpleUpdateError.unzipFailed)
@@ -266,7 +282,7 @@ final class SimpleUpdater {
             proc.terminationHandler = { _ in
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 let s = String(data: data, encoding: .utf8) ?? ""
-                
+
                 // First try to get TeamIdentifier (most reliable)
                 if let teamLine = s.split(separator: "\n").first(where: { $0.hasPrefix("TeamIdentifier=") }) {
                     cont.resume(returning: String(teamLine))
@@ -285,27 +301,27 @@ final class SimpleUpdater {
         // we need to replace the old app and use the new name
         let installedAppName = installedAppURL.lastPathComponent
         let downloadedAppName = downloadedAppURL.lastPathComponent
-        
+
         print("SimpleUpdater: Installing app - Current: \(installedAppName), New: \(downloadedAppName)")
-        
+
         let finalAppURL: URL
         if installedAppName != downloadedAppName {
             // App name changed - use the new name
             finalAppURL = installedAppURL.deletingLastPathComponent().appendingPathComponent(downloadedAppName)
             print("SimpleUpdater: App name changed, installing to: \(finalAppURL.path)")
-            
+
             // Safety check: ensure we don't overwrite an existing app with the new name
             if FileManager.default.fileExists(atPath: finalAppURL.path) {
                 print("SimpleUpdater: Removing existing app at new location: \(finalAppURL.path)")
                 try FileManager.default.removeItem(at: finalAppURL)
             }
-            
+
             // Remove old app if it exists
             if FileManager.default.fileExists(atPath: installedAppURL.path) {
                 print("SimpleUpdater: Removing old app: \(installedAppURL.path)")
                 try FileManager.default.removeItem(at: installedAppURL)
             }
-            
+
             // Move new app to Applications with new name
             try FileManager.default.moveItem(at: downloadedAppURL, to: finalAppURL)
             print("SimpleUpdater: Successfully installed new app at: \(finalAppURL.path)")
@@ -322,25 +338,25 @@ final class SimpleUpdater {
         // Use modern NSWorkspace API for more reliable app launching
         DispatchQueue.main.async {
             print("SimpleUpdater: Attempting to relaunch app at: \(finalAppURL.path)")
-            
+
             // Verify the app exists before trying to launch
             guard FileManager.default.fileExists(atPath: finalAppURL.path) else {
                 print("SimpleUpdater: ERROR - App not found at expected location: \(finalAppURL.path)")
                 // Don't terminate if we can't find the new app
                 return
             }
-            
+
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.createsNewApplicationInstance = true
-            
-            NSWorkspace.shared.openApplication(at: finalAppURL, configuration: configuration) { app, error in
+
+            NSWorkspace.shared.openApplication(at: finalAppURL, configuration: configuration) { _, error in
                 if let error = error {
                     print("SimpleUpdater: Failed to relaunch app: \(error)")
                     print("SimpleUpdater: App location: \(finalAppURL.path)")
                     // Don't terminate if relaunch failed - let user manually restart
                     return
                 }
-                
+
                 print("SimpleUpdater: Successfully relaunched app, terminating old instance")
                 // Give the new instance time to fully start before terminating
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {

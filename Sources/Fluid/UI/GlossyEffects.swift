@@ -1,7 +1,7 @@
 import SwiftUI
 
-
 // MARK: - Hoverable Glossy Card Component
+
 struct HoverableGlossyCard<Content: View>: View {
     @Environment(\.theme) private var theme
     @State private var isHovered = false
@@ -22,40 +22,40 @@ struct HoverableGlossyCard<Content: View>: View {
             .background(theme.materials.card, in: shape)
             .background {
                 shape
-                    .fill(theme.palette.cardBackground)
-                    .overlay(
-                        shape
-                            .stroke(
-                                theme.palette.cardBorder.opacity(isHovered ? 0.5 : 0.25),
-                                lineWidth: isHovered ? 1.2 : 1
-                            )
-                    )
+                    .fill(self.theme.palette.cardBackground)
+                    .overlay(shape
+                        .stroke(
+                            self.theme.palette.cardBorder.opacity(self.isHovered ? 0.5 : 0.25),
+                            lineWidth: self.isHovered ? 1.2 : 1
+                        ))
                     .shadow(
-                        color: cardShadow.color.opacity(isHovered ? min(cardShadow.opacity + 0.1, 1.0) : cardShadow.opacity),
-                        radius: isHovered ? cardShadow.radius + 2 : cardShadow.radius,
+                        color: cardShadow.color
+                            .opacity(self.isHovered ? min(cardShadow.opacity + 0.1, 1.0) : cardShadow.opacity),
+                        radius: self.isHovered ? cardShadow.radius + 2 : cardShadow.radius,
                         x: cardShadow.x,
-                        y: isHovered ? cardShadow.y + 1 : cardShadow.y
+                        y: self.isHovered ? cardShadow.y + 1 : cardShadow.y
                     )
             }
             .scaleEffect(isHovered && !excludeInteractiveElements ? 1.02 : 1.0)
             .onHover { hovering in
-                isHovered = hovering
+                self.isHovered = hovering
             }
             .animation(.easeOut(duration: 0.18), value: isHovered)
     }
 }
 
 // MARK: - Button Hover Extension
+
 extension View {
     func buttonHoverEffect() -> some View {
-        self.modifier(ButtonHoverModifier())
+        modifier(ButtonHoverModifier())
     }
 }
 
 struct ButtonHoverModifier: ViewModifier {
     @Environment(\.theme) private var theme
     @State private var isHovered = false
-    
+
     func body(content: Content) -> some View {
         content
             .scaleEffect(isHovered ? 1.05 : 1.0)
@@ -65,8 +65,8 @@ struct ButtonHoverModifier: ViewModifier {
                 x: 0,
                 y: isHovered ? 3 : 0
             )
-            .onHover { hovering in 
-                isHovered = hovering
+            .onHover { hovering in
+                self.isHovered = hovering
             }
             .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isHovered)
     }
@@ -105,6 +105,3 @@ struct ButtonHoverModifier: ViewModifier {
 //         }
 //     }
 // }
-
-
-

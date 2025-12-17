@@ -34,36 +34,35 @@ struct ThemedCard<Content: View>: View {
         content
             .padding(padding ?? 14)
             .background(configuration.material, in: shape)
-            .background(
-                shape
-                    .fill(configuration.background)
-                    .overlay(
-                        shape.stroke(
-                            configuration.border.opacity(
-                                isHovered && hoverEffect ? configuration.hoverBorderOpacity : configuration.borderOpacity
-                            ),
-                            lineWidth: configuration.borderWidth
-                        )
-                    )
-                    .shadow(
-                        color: configuration.shadow.color.opacity(
-                            isHovered && hoverEffect ? min(configuration.shadow.opacity + configuration.hoverShadowBoost, 1.0) : configuration.shadow.opacity
-                        ),
-                        radius: configuration.shadow.radius,
-                        x: configuration.shadow.x,
-                        y: isHovered && hoverEffect ? configuration.shadow.y + 1 : configuration.shadow.y
-                    )
-            )
+            .background(shape
+                .fill(configuration.background)
+                .overlay(shape
+                    .stroke(
+                        configuration.border
+                            .opacity(isHovered && hoverEffect ? configuration.hoverBorderOpacity : configuration
+                                .borderOpacity),
+                        lineWidth: configuration.borderWidth
+                    ))
+                .shadow(
+                    color: configuration.shadow.color.opacity(isHovered && hoverEffect ? min(
+                        configuration.shadow.opacity + configuration.hoverShadowBoost,
+                        1.0
+                    ) : configuration.shadow.opacity),
+                    radius: configuration.shadow.radius,
+                    x: configuration.shadow.x,
+                    y: isHovered && hoverEffect ? configuration.shadow.y + 1 : configuration.shadow.y
+                ))
             .scaleEffect(isHovered && hoverEffect ? 1.01 : 1.0)
             .onHover { hovering in
-                guard hoverEffect else { return }
-                isHovered = hovering
+                guard self.hoverEffect else { return }
+                self.isHovered = hovering
             }
             .animation(.easeOut(duration: 0.18), value: isHovered)
     }
 }
 
 // MARK: - Configuration
+
 private extension ThemedCard {
     struct CardConfiguration {
         let background: Color
@@ -112,4 +111,3 @@ private extension ThemedCard {
         }
     }
 }
-

@@ -1,22 +1,15 @@
-//
-//  RecordingView.swift
-//  fluid
-//
-//  Recording controls and configuration view
-//
-
-import SwiftUI
 import AVFoundation
+import SwiftUI
 
 struct RecordingView: View {
     @EnvironmentObject var appServices: AppServices
     private var asr: ASRService { appServices.asr }
     @Environment(\.theme) private var theme
     @Binding var appear: Bool
-    
+
     let stopAndProcessTranscription: () async -> Void
     let startRecording: () -> Void
-    
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 14) {
@@ -45,44 +38,45 @@ struct RecordingView: View {
                             // Status indicator
                             HStack {
                                 Circle()
-                                    .fill(asr.isRunning ? .red : asr.isAsrReady ? .green : .secondary)
+                                    .fill(self.asr.isRunning ? .red : self.asr.isAsrReady ? .green : .secondary)
                                     .frame(width: 8, height: 8)
 
-                                Text(asr.isRunning ? "Recording..." : asr.isAsrReady ? "Ready to record" : "Model not ready")
+                                Text(self.asr.isRunning ? "Recording..." : self.asr
+                                    .isAsrReady ? "Ready to record" : "Model not ready")
                                     .font(.subheadline)
-                                    .foregroundStyle(asr.isRunning ? .red : asr.isAsrReady ? .green : .secondary)
+                                    .foregroundStyle(self.asr.isRunning ? .red : self.asr
+                                        .isAsrReady ? .green : .secondary)
                             }
 
                             // Recording Control (Single Toggle Button)
                             Button(action: {
-                                if asr.isRunning {
+                                if self.asr.isRunning {
                                     Task {
-                                        await stopAndProcessTranscription()
+                                        await self.stopAndProcessTranscription()
                                     }
                                 } else {
-                                    startRecording()
+                                    self.startRecording()
                                 }
                             }) {
                                 HStack {
-                                    Image(systemName: asr.isRunning ? "stop.fill" : "mic.fill")
+                                    Image(systemName: self.asr.isRunning ? "stop.fill" : "mic.fill")
                                         .font(.system(size: 16, weight: .semibold))
-                                    Text(asr.isRunning ? "Stop Recording" : "Start Recording")
+                                    Text(self.asr.isRunning ? "Stop Recording" : "Start Recording")
                                 }
                                 .frame(maxWidth: .infinity)
                             }
-                            .buttonStyle(PremiumButtonStyle(isRecording: asr.isRunning))
+                            .buttonStyle(PremiumButtonStyle(isRecording: self.asr.isRunning))
                             .buttonHoverEffect()
-                            .scaleEffect(asr.isRunning ? 1.05 : 1.0)
-                            .animation(.spring(response: 0.3), value: asr.isRunning)
-                            .disabled(!asr.isAsrReady && !asr.isRunning)
+                            .scaleEffect(self.asr.isRunning ? 1.05 : 1.0)
+                            .animation(.spring(response: 0.3), value: self.asr.isRunning)
+                            .disabled(!self.asr.isAsrReady && !self.asr.isRunning)
                         }
                     }
                     .padding(14)
                 }
-                .modifier(CardAppearAnimation(delay: 0.1, appear: $appear))
+                .modifier(CardAppearAnimation(delay: 0.1, appear: self.$appear))
             }
             .padding(14)
         }
     }
 }
-

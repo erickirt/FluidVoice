@@ -22,33 +22,23 @@ struct ThemedGroupBox<Label: View, Content: View>: View {
 
     var body: some View {
         ThemedCard(style: style, padding: 0, hoverEffect: hoverEffect) {
-            VStack(alignment: .leading, spacing: theme.metrics.spacing.md) {
-                label
+            VStack(alignment: .leading, spacing: self.theme.metrics.spacing.md) {
+                self.label
                     .font(.headline)
-                    .foregroundStyle(theme.palette.secondaryText)
-                    .padding(.top, theme.metrics.spacing.md)
-                    .padding(.horizontal, theme.metrics.spacing.md)
+                    .foregroundStyle(self.theme.palette.secondaryText)
+                    .padding(.top, self.theme.metrics.spacing.md)
+                    .padding(.horizontal, self.theme.metrics.spacing.md)
 
                 Divider()
-                    .background(theme.palette.separator)
+                    .background(self.theme.palette.separator)
                     .opacity(0.6)
-                    .padding(.horizontal, theme.metrics.spacing.md)
+                    .padding(.horizontal, self.theme.metrics.spacing.md)
 
-                content
-                    .padding(.bottom, theme.metrics.spacing.md)
-                    .padding(.horizontal, theme.metrics.spacing.md)
+                self.content
+                    .padding(.bottom, self.theme.metrics.spacing.md)
+                    .padding(.horizontal, self.theme.metrics.spacing.md)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
-
-
-
-
-
-
-
-
-
-

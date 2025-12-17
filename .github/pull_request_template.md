@@ -14,6 +14,8 @@ Closes #(issue number)
 - [ ] Tested on Intel/Apple Silicon Mac
 - [ ] Tested on Apple Silicon Mac
 - [ ] Tested on macOS [version]
+- [ ] Ran linter locally: `brew install swiftlint && swiftlint --strict --config .swiftlint.yml`
+- [ ] Ran formatter locally: `brew install swiftformat && swiftformat --lint --config .swiftformat Sources`
 
 ## Screenshots / Video 
 Add screenshots or Video recording of the app after you have made your changes 

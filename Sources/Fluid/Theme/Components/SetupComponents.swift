@@ -1,12 +1,5 @@
-//
-//  SetupComponents.swift
-//  fluid
-//
-//  Helper components for setup and onboarding UI
-//
-
-import SwiftUI
 import AppKit
+import SwiftUI
 
 // MARK: - Setup Step View
 
@@ -26,42 +19,40 @@ struct SetupStepView: View {
 
     var body: some View {
         Button(action: {
-            if status != .completed && showActionButton {
-                action()
+            if self.status != .completed, self.showActionButton {
+                self.action()
             }
         }) {
             HStack(alignment: .center, spacing: 10) {
                 // Status indicator
                 ZStack {
                     Circle()
-                        .fill(statusColor.opacity(0.12))
+                        .fill(self.statusColor.opacity(0.12))
                         .frame(width: 28, height: 28)
-                        .overlay(
-                            Circle()
-                                .stroke(statusColor.opacity(0.25), lineWidth: 1)
-                        )
+                        .overlay(Circle()
+                            .stroke(self.statusColor.opacity(0.25), lineWidth: 1))
 
-                    if status == .completed {
+                    if self.status == .completed {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(statusColor)
+                            .foregroundStyle(self.statusColor)
                             .font(.body.weight(.semibold))
-                    } else if status == .inProgress {
+                    } else if self.status == .inProgress {
                         ProgressView()
                             .controlSize(.small)
-                            .tint(statusColor)
+                            .tint(self.statusColor)
                     } else {
-                        Text("\(step)")
+                        Text("\(self.step)")
                             .font(.caption.weight(.bold))
-                            .foregroundStyle(statusColor)
+                            .foregroundStyle(self.statusColor)
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
+                    Text(self.title)
                         .font(.body.weight(.medium))
                         .foregroundStyle(.primary)
 
-                    Text(description)
+                    Text(self.description)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -70,42 +61,38 @@ struct SetupStepView: View {
                 Spacer()
 
                 // Action button or status badge
-                if status == .completed {
+                if self.status == .completed {
                     Label("Done", systemImage: "checkmark")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.green, in: Capsule())
-                } else if showActionButton {
+                } else if self.showActionButton {
                     HStack(spacing: 3) {
-                        Text(actionButtonTitle)
+                        Text(self.actionButtonTitle)
                             .font(.caption.weight(.medium))
                         Image(systemName: "arrow.right")
                             .font(.caption2.weight(.bold))
                     }
-                    .foregroundStyle(theme.palette.accent)
+                    .foregroundStyle(self.theme.palette.accent)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(theme.palette.accent.opacity(0.12), in: Capsule())
+                    .background(self.theme.palette.accent.opacity(0.12), in: Capsule())
                 }
             }
             .padding(10)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(status == .completed 
-                        ? Color.green.opacity(0.06) 
-                        : theme.palette.cardBackground.opacity(0.5))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(
-                                status == .completed 
-                                    ? Color.green.opacity(0.25)
-                                    : theme.palette.cardBorder.opacity(0.2),
-                                lineWidth: 1
-                            )
-                    )
-            )
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(self.status == .completed
+                    ? Color.green.opacity(0.06)
+                    : self.theme.palette.cardBackground.opacity(0.5))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(
+                        self.status == .completed
+                            ? Color.green.opacity(0.25)
+                            : self.theme.palette.cardBorder.opacity(0.2),
+                        lineWidth: 1
+                    )))
         }
         .buttonStyle(.plain)
         .disabled(status == .completed || !showActionButton)
@@ -133,19 +120,19 @@ struct InstructionStep: View {
         HStack(alignment: .top, spacing: 8) {
             ZStack {
                 Circle()
-                    .fill(theme.palette.accent.opacity(0.15))
+                    .fill(self.theme.palette.accent.opacity(0.15))
                     .frame(width: 22, height: 22)
 
-                Text("\(number)")
+                Text("\(self.number)")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(theme.palette.accent)
+                    .foregroundStyle(self.theme.palette.accent)
             }
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(title)
+                Text(self.title)
                     .font(.subheadline.weight(.medium))
 
-                Text(description)
+                Text(self.description)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -163,7 +150,7 @@ struct ProviderGuide: View {
     let description: String?
     let baseURL: String
     let keyPrefix: String
-    
+
     init(name: String, url: String, description: String? = nil, baseURL: String, keyPrefix: String) {
         self.name = name
         self.url = url
@@ -176,12 +163,12 @@ struct ProviderGuide: View {
         ThemedCard(hoverEffect: false) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(name)
+                    Text(self.name)
                         .font(.subheadline.weight(.semibold))
 
                     Spacer()
 
-                    if !url.isEmpty {
+                    if !self.url.isEmpty {
                         Button("Get API Key") {
                             if let url = URL(string: url) {
                                 NSWorkspace.shared.open(url)
@@ -203,7 +190,7 @@ struct ProviderGuide: View {
                         Text("Base URL:")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(baseURL)
+                        Text(self.baseURL)
                             .font(.caption.weight(.medium))
                             .textSelection(.enabled)
                     }
@@ -212,7 +199,7 @@ struct ProviderGuide: View {
                         Text("Key Format:")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(keyPrefix == "not-needed" ? "Not required" : "Starts with: \(keyPrefix)")
+                        Text(self.keyPrefix == "not-needed" ? "Not required" : "Starts with: \(self.keyPrefix)")
                             .font(.caption.weight(.medium))
                     }
                 }
@@ -221,8 +208,3 @@ struct ProviderGuide: View {
         }
     }
 }
-
-
-
-
-

@@ -1,41 +1,33 @@
-import Foundation
 import AppKit
+import Foundation
 
-struct HotkeyShortcut: Codable, Equatable
-{
+struct HotkeyShortcut: Codable, Equatable {
     var keyCode: UInt16
     var modifierFlags: NSEvent.ModifierFlags
     enum CodingKeys: String, CodingKey { case keyCode, modifierFlagsRawValue }
 
-    var displayString: String
-    {
+    var displayString: String {
         var parts: [String] = []
         if modifierFlags.contains(.function) { parts.append("🌐") }
         if modifierFlags.contains(.command) { parts.append("⌘") }
         if modifierFlags.contains(.option) { parts.append("⌥") }
         if modifierFlags.contains(.control) { parts.append("⌃") }
         if modifierFlags.contains(.shift) { parts.append("⇧") }
-        if let key = Self.keyCodeToString(keyCode)
-        {
+        if let key = Self.keyCodeToString(keyCode) {
             parts.append(key)
-        }
-        else
-        {
+        } else {
             parts.append(String(Character(UnicodeScalar(keyCode) ?? "?")))
         }
 
-        if modifierFlags.isEmpty
-        {
+        if modifierFlags.isEmpty {
             return parts.last ?? "Unknown"
         }
 
         return parts.joined(separator: " + ")
     }
 
-    static func keyCodeToString(_ keyCode: UInt16) -> String?
-    {
-        switch keyCode
-        {
+    static func keyCodeToString(_ keyCode: UInt16) -> String? {
+        switch keyCode {
         case 36: return "Return"
         case 48: return "Tab"
         case 49: return "Space"
@@ -106,22 +98,17 @@ struct HotkeyShortcut: Codable, Equatable
     }
 }
 
-extension HotkeyShortcut
-{
-    init(from decoder: Decoder) throws
-    {
+extension HotkeyShortcut {
+    init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.keyCode = try c.decode(UInt16.self, forKey: .keyCode)
+        keyCode = try c.decode(UInt16.self, forKey: .keyCode)
         let raw = try c.decode(UInt.self, forKey: .modifierFlagsRawValue)
-        self.modifierFlags = NSEvent.ModifierFlags(rawValue: raw)
+        modifierFlags = NSEvent.ModifierFlags(rawValue: raw)
     }
 
-    func encode(to encoder: Encoder) throws
-    {
+    func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(keyCode, forKey: .keyCode)
         try c.encode(modifierFlags.rawValue, forKey: .modifierFlagsRawValue)
     }
 }
-
-
