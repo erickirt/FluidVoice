@@ -142,10 +142,7 @@ final class HuggingFaceModelDownloader {
                 downloadedBytes += (sizeByPath[rel] ?? 0)
                 let pct = min(1.0, Double(downloadedBytes) / Double(totalBytes))
                 onProgress?(pct, rel)
-                print(String(
-                    format: "[ModelDL] Overall progress: %.1f%% (\(Self.formatBytes(downloadedBytes))/\(Self.formatBytes(totalBytes)))",
-                    pct * 100.0
-                ))
+                print(String(format: "[ModelDL] Overall progress: %.1f%% (\(Self.formatBytes(downloadedBytes))/\(Self.formatBytes(totalBytes)))", pct * 100.0))
             } else if fallbackTotal > 0 {
                 fallbackCompleted += 1
                 onProgress?(Double(fallbackCompleted) / Double(fallbackTotal), rel)
@@ -171,19 +168,12 @@ final class HuggingFaceModelDownloader {
         let files = try await listFilesRecursively(relativePath: relativePath)
         for rel in files {
             let dest = destination.deletingLastPathComponent().appendingPathComponent(rel)
-            try FileManager.default.createDirectory(
-                at: dest.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
+            try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
             try await self.downloadFile(relativePath: rel, to: dest)
         }
     }
 
-    private func downloadFile(
-        relativePath: String,
-        to destination: URL,
-        perFileProgress: ((Double) -> Void)? = nil
-    ) async throws {
+    private func downloadFile(relativePath: String, to destination: URL, perFileProgress: ((Double) -> Void)? = nil) async throws {
         let fileURL = self.baseResolveURL.appendingPathComponent(relativePath)
 
         let delegate = DownloadProgressDelegate(onProgress: perFileProgress)
@@ -197,10 +187,7 @@ final class HuggingFaceModelDownloader {
                         continuation.resume(throwing: NSError(domain: "HF", code: http.statusCode))
                         return
                     }
-                    try FileManager.default.createDirectory(
-                        at: destination.deletingLastPathComponent(),
-                        withIntermediateDirectories: true
-                    )
+                    try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
                     if FileManager.default.fileExists(atPath: destination.path) {
                         try FileManager.default.removeItem(at: destination)
                     }
@@ -226,11 +213,7 @@ final class HuggingFaceModelDownloader {
             self.onProgress = onProgress
         }
 
-        func urlSession(
-            _ session: URLSession,
-            downloadTask: URLSessionDownloadTask,
-            didFinishDownloadingTo location: URL
-        ) {
+        func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
             guard let response = downloadTask.response else { return }
             self.onFinish?(location, response)
         }
@@ -239,13 +222,7 @@ final class HuggingFaceModelDownloader {
             if let error = error { self.onError?(error) }
         }
 
-        func urlSession(
-            _ session: URLSession,
-            downloadTask: URLSessionDownloadTask,
-            didWriteData bytesWritten: Int64,
-            totalBytesWritten: Int64,
-            totalBytesExpectedToWrite: Int64
-        ) {
+        func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
             guard totalBytesExpectedToWrite > 0 else { return }
             let pct = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
             self.onProgress?(pct)

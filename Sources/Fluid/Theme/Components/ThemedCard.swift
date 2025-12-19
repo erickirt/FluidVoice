@@ -34,24 +34,26 @@ struct ThemedCard<Content: View>: View {
         self.content
             .padding(self.padding ?? 14)
             .background(configuration.material, in: shape)
-            .background(shape
-                .fill(configuration.background)
-                .overlay(shape
-                    .stroke(
-                        configuration.border
-                            .opacity(self.isHovered && self.hoverEffect ? configuration.hoverBorderOpacity : configuration
-                                .borderOpacity),
-                        lineWidth: configuration.borderWidth
-                    ))
-                .shadow(
-                    color: configuration.shadow.color.opacity(self.isHovered && self.hoverEffect ? min(
-                        configuration.shadow.opacity + configuration.hoverShadowBoost,
-                        1.0
-                    ) : configuration.shadow.opacity),
-                    radius: configuration.shadow.radius,
-                    x: configuration.shadow.x,
-                    y: self.isHovered && self.hoverEffect ? configuration.shadow.y + 1 : configuration.shadow.y
-                ))
+            .background(
+                shape
+                    .fill(configuration.background)
+                    .overlay(
+                        shape.stroke(
+                            configuration.border.opacity(
+                                self.isHovered && self.hoverEffect ? configuration.hoverBorderOpacity : configuration.borderOpacity
+                            ),
+                            lineWidth: configuration.borderWidth
+                        )
+                    )
+                    .shadow(
+                        color: configuration.shadow.color.opacity(
+                            self.isHovered && self.hoverEffect ? min(configuration.shadow.opacity + configuration.hoverShadowBoost, 1.0) : configuration.shadow.opacity
+                        ),
+                        radius: configuration.shadow.radius,
+                        x: configuration.shadow.x,
+                        y: self.isHovered && self.hoverEffect ? configuration.shadow.y + 1 : configuration.shadow.y
+                    )
+            )
             .scaleEffect(self.isHovered && self.hoverEffect ? 1.01 : 1.0)
             .onHover { hovering in
                 guard self.hoverEffect else { return }

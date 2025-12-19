@@ -12,6 +12,7 @@ struct RewriteModeView: View {
     @State private var showOriginal: Bool = true
     @State private var showHowTo: Bool = false
     @State private var isHoveringHowTo: Bool = false
+    @State private var isThinkingExpanded: Bool = false
 
     // Local state for available models (derived from shared AI Settings pool)
     @State private var availableModels: [String] = []
@@ -176,16 +177,10 @@ struct RewriteModeView: View {
 
                 // Model Selector (hidden for Apple Intelligence)
                 if self.settings.rewriteModeSelectedProviderID != "apple-intelligence" {
-                    Picker(
-                        "",
-                        selection: Binding(
-                            get: {
-                                self.settings.rewriteModeSelectedModel ?? self.availableModels
-                                    .first ?? "gpt-4o"
-                            },
-                            set: { self.settings.rewriteModeSelectedModel = $0 }
-                        )
-                    ) {
+                    Picker("", selection: Binding(
+                        get: { self.settings.rewriteModeSelectedModel ?? self.availableModels.first ?? "gpt-4o" },
+                        set: { self.settings.rewriteModeSelectedModel = $0 }
+                    )) {
                         ForEach(self.availableModels, id: \.self) { model in
                             Text(model).tag(model)
                         }
@@ -225,6 +220,13 @@ struct RewriteModeView: View {
             }
             .padding()
             .background(Color(nsColor: .windowBackgroundColor))
+
+            // Thinking view (real-time, during processing)
+            if self.service.isProcessing && self.settings.showThinkingTokens && !self.service.streamingThinkingText.isEmpty {
+                self.thinkingView
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
+            }
         }
         .onChange(of: self.asr.finalText) { _, newText in
             if !newText.isEmpty {
@@ -421,5 +423,53 @@ struct RewriteModeView: View {
                 .font(.caption)
                 .foregroundStyle(.primary.opacity(0.8))
         }
+    }
+
+    // MARK: - Thinking View (Cursor-style shimmer)
+
+    private var thinkingView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header with shimmer effect - tap to expand/collapse
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { self.isThinkingExpanded.toggle() } }) {
+                HStack(spacing: 8) {
+                    ThinkingShimmerLabel()
+
+                    Spacer()
+
+                    Image(systemName: self.isThinkingExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary.opacity(0.6))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+
+            // Expanded content
+            if self.isThinkingExpanded {
+                ScrollView(.vertical, showsIndicators: true) {
+                    Text(self.service.streamingThinkingText)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 10)
+                }
+                .frame(maxHeight: 150)
+            } else {
+                // Preview - first 100 chars
+                if !self.service.streamingThinkingText.isEmpty {
+                    Text(String(self.service.streamingThinkingText.prefix(100)) + (self.service.streamingThinkingText.count > 100 ? "..." : ""))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary.opacity(0.7))
+                        .lineLimit(2)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
+                }
+            }
+        }
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
     }
 }

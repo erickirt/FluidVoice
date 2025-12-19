@@ -137,8 +137,10 @@ struct TranscriptionHistoryView: View {
                             .foregroundStyle(isSelected ? .white.opacity(0.8) : self.theme.palette.accent)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
-                            .background(RoundedRectangle(cornerRadius: 3)
-                                .fill(isSelected ? .white.opacity(0.2) : self.theme.palette.accent.opacity(0.15)))
+                            .background(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(isSelected ? .white.opacity(0.2) : self.theme.palette.accent.opacity(0.15))
+                            )
                     }
 
                     Spacer()
@@ -158,8 +160,10 @@ struct TranscriptionHistoryView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? self.theme.palette.accent : Color.clear))
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? self.theme.palette.accent : Color.clear)
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -358,8 +362,10 @@ struct TranscriptionHistoryView: View {
                         .foregroundStyle(self.theme.palette.accent)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(RoundedRectangle(cornerRadius: 4)
-                            .fill(self.theme.palette.accent.opacity(0.15)))
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(self.theme.palette.accent.opacity(0.15))
+                        )
                 }
             }
 
@@ -388,16 +394,8 @@ struct TranscriptionHistoryView: View {
                 GridItem(.flexible(), spacing: 16),
                 GridItem(.flexible(), spacing: 16),
             ], spacing: 12) {
-                self.metadataItem(
-                    icon: "app.fill",
-                    label: "Application",
-                    value: entry.appName.isEmpty ? "Unknown" : entry.appName
-                )
-                self.metadataItem(
-                    icon: "macwindow",
-                    label: "Window",
-                    value: entry.windowTitle.isEmpty ? "Unknown" : entry.windowTitle
-                )
+                self.metadataItem(icon: "app.fill", label: "Application", value: entry.appName.isEmpty ? "Unknown" : entry.appName)
+                self.metadataItem(icon: "macwindow", label: "Window", value: entry.windowTitle.isEmpty ? "Unknown" : entry.windowTitle)
                 self.metadataItem(icon: "character.cursor.ibeam", label: "Characters", value: "\(entry.characterCount)")
                 self.metadataItem(icon: "sparkles", label: "AI Processed", value: entry.wasAIProcessed ? "Yes" : "No")
             }

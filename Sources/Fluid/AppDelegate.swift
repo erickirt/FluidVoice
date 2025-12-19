@@ -1,3 +1,10 @@
+//
+//  AppDelegate.swift
+//  Fluid
+//
+//  Created by Barathwaj Anandan on 9/22/25.
+//
+
 import AppKit
 import AppUpdater
 import PromiseKit
@@ -108,10 +115,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             } catch {
                 // Silently log the error, don't bother the user with failed automatic checks
-                DebugLogger.shared.debug(
-                    "Automatic update check failed: \(error.localizedDescription)",
-                    source: "AppDelegate"
-                )
+                DebugLogger.shared.debug("Automatic update check failed: \(error.localizedDescription)", source: "AppDelegate")
 
                 // Still update last check date to avoid hammering the API on failure
                 await MainActor.run {

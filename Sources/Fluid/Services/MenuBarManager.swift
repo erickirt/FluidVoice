@@ -269,11 +269,7 @@ final class MenuBarManager: ObservableObject {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         guard let statusItem = statusItem else {
-            throw NSError(
-                domain: "MenuBarManager",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Failed to create status item"]
-            )
+            throw NSError(domain: "MenuBarManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create status item"])
         }
 
         // Set initial icon
@@ -345,18 +341,20 @@ final class MenuBarManager: ObservableObject {
         menu.removeAllItems()
 
         // Status indicator with hotkey info
-        let statusItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        statusItem.isEnabled = false
-        self.statusMenuItem = statusItem
-        menu.addItem(statusItem)
+        self.statusMenuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        self.statusMenuItem?.isEnabled = false
+        if let statusItem = statusMenuItem {
+            menu.addItem(statusItem)
+        }
 
         menu.addItem(.separator())
 
         // AI Processing Toggle
-        let aiItem = NSMenuItem(title: "", action: #selector(toggleAIProcessing), keyEquivalent: "")
-        aiItem.target = self
-        self.aiMenuItem = aiItem
-        menu.addItem(aiItem)
+        self.aiMenuItem = NSMenuItem(title: "", action: #selector(self.toggleAIProcessing), keyEquivalent: "")
+        self.aiMenuItem?.target = self
+        if let aiItem = aiMenuItem {
+            menu.addItem(aiItem)
+        }
 
         menu.addItem(.separator())
 

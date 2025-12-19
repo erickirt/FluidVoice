@@ -68,19 +68,21 @@ struct MouseTrackingModifier: ViewModifier {
                     break
                 }
             }
-            .background(GeometryReader { geometry in
-                Color.clear
-                    .onAppear {
-                        let globalFrame = geometry.frame(in: .global)
-                        self.tracker.updateWindowFrame(globalFrame)
-                    }
-                    .onChange(of: geometry.frame(in: .global)) { _, newFrame in
-                        // Skip updates when view is scrolled off-screen (prevents invalid geometry)
-                        guard newFrame.minY < NSScreen.main?.frame.height ?? 1000 else { return }
-                        guard newFrame.maxY > 0 else { return }
-                        self.tracker.updateWindowFrame(newFrame)
-                    }
-            })
+            .background(
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear {
+                            let globalFrame = geometry.frame(in: .global)
+                            self.tracker.updateWindowFrame(globalFrame)
+                        }
+                        .onChange(of: geometry.frame(in: .global)) { _, newFrame in
+                            // Skip updates when view is scrolled off-screen (prevents invalid geometry)
+                            guard newFrame.minY < NSScreen.main?.frame.height ?? 1000 else { return }
+                            guard newFrame.maxY > 0 else { return }
+                            self.tracker.updateWindowFrame(newFrame)
+                        }
+                }
+            )
     }
 }
 

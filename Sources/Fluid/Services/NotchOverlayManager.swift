@@ -1,3 +1,10 @@
+//
+//  NotchOverlayManager.swift
+//  Fluid
+//
+//  Created by Assistant
+//
+
 import AppKit
 import Combine
 import DynamicNotchKit
@@ -293,8 +300,7 @@ final class NotchOverlayManager {
         let publisher = self.lastAudioPublisher ?? Empty<CGFloat, Never>().eraseToAnyPublisher()
 
         let newNotch = DynamicNotch(
-            hoverBehavior: [], // No keepVisible - allows closing with X/Escape even when cursor
-            // is on notch
+            hoverBehavior: [], // No keepVisible - allows closing with X/Escape even when cursor is on notch
             style: .notch(topCornerRadius: 12, bottomCornerRadius: 16)
         ) {
             NotchCommandOutputExpandedView(

@@ -8,6 +8,7 @@ final class CommandModeService: ObservableObject {
     @Published var pendingCommand: PendingCommand? = nil
     @Published var currentStep: AgentStep? = nil
     @Published var streamingText: String = "" // Real-time streaming text for UI
+    @Published var streamingThinkingText: String = "" // Real-time thinking tokens for UI
     @Published private(set) var currentChatID: String?
 
     private let terminalService = TerminalService()
@@ -20,7 +21,9 @@ final class CommandModeService: ObservableObject {
 
     // Streaming UI update throttling - adaptive rate based on content length
     private var lastUIUpdate: CFAbsoluteTime = 0
+    private var lastThinkingUIUpdate: CFAbsoluteTime = 0
     private var streamingBuffer: [String] = [] // Buffer tokens instead of string concat
+    private var thinkingBuffer: [String] = [] // Buffer thinking tokens
 
     // MARK: - Initialization
 
@@ -58,6 +61,7 @@ final class CommandModeService: ObservableObject {
         let id = UUID()
         let role: Role
         let content: String
+        let thinking: String? // Display-only: AI reasoning tokens (NOT sent to API)
         let toolCall: ToolCall?
         let stepType: StepType
         let timestamp: Date
@@ -85,9 +89,10 @@ final class CommandModeService: ObservableObject {
             let purpose: String? // Why this command is being run
         }
 
-        init(role: Role, content: String, toolCall: ToolCall? = nil, stepType: StepType = .normal) {
+        init(role: Role, content: String, thinking: String? = nil, toolCall: ToolCall? = nil, stepType: StepType = .normal) {
             self.role = role
             self.content = content
+            self.thinking = thinking
             self.toolCall = toolCall
             self.stepType = stepType
             self.timestamp = Date()
@@ -388,10 +393,11 @@ final class CommandModeService: ObservableObject {
                 let stepType = self.determineStepType(for: tc.command, purpose: tc.purpose)
                 self.currentStep = stepType == .checking ? .checking(tc.command) : .executing(tc.command)
 
-                // AI wants to run a command
+                // AI wants to run a command - include thinking for display
                 self.conversationHistory.append(Message(
                     role: .assistant,
                     content: response.content.isEmpty ? self.stepDescription(for: stepType) : response.content,
+                    thinking: response.thinking, // Display-only
                     toolCall: Message.ToolCall(
                         id: tc.id,
                         command: tc.command,
@@ -421,22 +427,14 @@ final class CommandModeService: ObservableObject {
 
                     // Push confirmation needed to notch
                     if self.enableNotchOutput {
-                        NotchContentState.shared.addCommandMessage(
-                            role: .status,
-                            content: "⚠️ Confirmation needed in Command Mode window"
-                        )
+                        NotchContentState.shared.addCommandMessage(role: .status, content: "⚠️ Confirmation needed in Command Mode window")
                         NotchContentState.shared.setCommandProcessing(false)
                     }
                     return
                 }
 
                 // Auto-execute
-                await self.executeCommand(
-                    tc.command,
-                    workingDirectory: tc.workingDirectory,
-                    callId: tc.id,
-                    purpose: tc.purpose
-                )
+                await self.executeCommand(tc.command, workingDirectory: tc.workingDirectory, callId: tc.id, purpose: tc.purpose)
 
             } else {
                 // Just a text response - check if it's a final summary
@@ -448,6 +446,7 @@ final class CommandModeService: ObservableObject {
                 self.conversationHistory.append(Message(
                     role: .assistant,
                     content: response.content,
+                    thinking: response.thinking, // Display-only
                     stepType: isFinal ? .success : .normal
                 ))
                 self.isProcessing = false
@@ -570,12 +569,7 @@ final class CommandModeService: ObservableObject {
         return false
     }
 
-    private func executeCommand(
-        _ command: String,
-        workingDirectory: String?,
-        callId: String,
-        purpose: String? = nil
-    ) async {
+    private func executeCommand(_ command: String, workingDirectory: String?, callId: String, purpose: String? = nil) async {
         self.currentStep = .executing(command)
 
         let result = await terminalService.execute(
@@ -644,6 +638,7 @@ final class CommandModeService: ObservableObject {
 
     private struct LLMResponse {
         let content: String
+        let thinking: String? // Display-only, NOT sent back to API
         let toolCall: ToolCallData?
 
         struct ToolCallData {
@@ -801,189 +796,92 @@ final class CommandModeService: ObservableObject {
             }
         }
 
-        // We assume conversationHistory contains the user's latest message already
-
         // Check streaming setting
         let enableStreaming = SettingsStore.shared.enableAIStreaming
 
-        // Build request
         // Reasoning models (o1, o3, gpt-5) don't support temperature parameter at all
-        let isReasoningModel = model.hasPrefix("o1") || model.hasPrefix("o3") || model.hasPrefix("gpt-5")
+        let isReasoningModel = settings.isReasoningModel(model)
 
-        var body: [String: Any] = [
-            "model": model,
-            "messages": messages,
-            "tools": [TerminalService.toolDefinition],
-            "tool_choice": "auto",
-        ]
-
-        // Only add temperature for non-reasoning models
-        if !isReasoningModel {
-            body["temperature"] = 0.1
-        }
-
-        if enableStreaming {
-            body["stream"] = true
-        }
-
-        let endpoint = baseURL.hasSuffix("/chat/completions") ? baseURL : "\(baseURL)/chat/completions"
-        guard let url = URL(string: endpoint) else {
-            throw NSError(domain: "CommandMode", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        // Retry logic for transient network errors (DNS resolution, connection cold start)
-        var lastError: Error?
-        for attempt in 1...3 {
-            do {
-                if enableStreaming {
-                    return try await self.processStreamingLLMResponse(request: request)
-                } else {
-                    return try await self.processNonStreamingLLMResponse(request: request)
-                }
-            } catch let error as URLError where error.code == .notConnectedToInternet ||
-                error.code == .timedOut ||
-                error.code == .networkConnectionLost ||
-                error.code == .cannotFindHost ||
-                error.code == .cannotConnectToHost
-            {
-                lastError = error
-                if attempt < 3 {
-                    // Wait before retry (exponential backoff: 200ms, 400ms)
-                    try? await Task.sleep(nanoseconds: UInt64(200_000_000 * attempt))
-                    continue
-                }
-            } catch {
-                throw error // Non-retryable error
+        // Get reasoning config for this model (e.g., reasoning_effort, enable_thinking)
+        let reasoningConfig = SettingsStore.shared.getReasoningConfig(forModel: model, provider: providerID)
+        var extraParams: [String: Any] = [:]
+        if let rConfig = reasoningConfig, rConfig.isEnabled {
+            if rConfig.parameterName == "enable_thinking" {
+                extraParams = [rConfig.parameterName: rConfig.parameterValue == "true"]
+            } else {
+                extraParams = [rConfig.parameterName: rConfig.parameterValue]
             }
-        }
-        throw lastError ?? NSError(
-            domain: "CommandMode",
-            code: -1,
-            userInfo: [NSLocalizedDescriptionKey: "Network request failed after retries"]
-        )
-    }
-
-    // MARK: - Non-Streaming Response
-
-    private func processNonStreamingLLMResponse(request: URLRequest) async throws -> LLMResponse {
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
-            let err = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw NSError(domain: "CommandMode", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: err])
+            DebugLogger.shared.debug("Added reasoning param: \(rConfig.parameterName)=\(rConfig.parameterValue)", source: "CommandModeService")
         }
 
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let choice = choices.first,
-              let message = choice["message"] as? [String: Any]
-        else {
-            throw NSError(domain: "CommandMode", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
-        }
-
-        return self.parseMessageResponse(message)
-    }
-
-    // MARK: - Streaming Response with Real-time UI Updates
-
-    private func processStreamingLLMResponse(request: URLRequest) async throws -> LLMResponse {
+        // Reset streaming state
         self.streamingText = ""
+        self.streamingThinkingText = ""
         self.streamingBuffer = []
+        self.thinkingBuffer = []
         self.lastUIUpdate = CFAbsoluteTimeGetCurrent()
+        self.lastThinkingUIUpdate = CFAbsoluteTimeGetCurrent()
 
-        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        // Build LLMClient configuration
+        var config = LLMClient.Config(
+            messages: messages,
+            model: model,
+            baseURL: baseURL,
+            apiKey: apiKey,
+            streaming: enableStreaming,
+            tools: [TerminalService.toolDefinition],
+            temperature: isReasoningModel ? nil : 0.1,
+            extraParameters: extraParams
+        )
 
-        if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
-            var errorData = Data()
-            for try await byte in bytes {
-                errorData.append(byte)
-            }
-            let errText = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-            throw NSError(domain: "CommandMode", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: errText])
-        }
+        // Keep retry logic (exponential backoff)
+        config.maxRetries = 3
+        config.retryDelayMs = 200
 
-        var toolCallId: String?
-        var toolCallName: String?
-        var toolCallArguments = ""
+        // Add real-time streaming callbacks for UI updates (60fps throttled)
+        if enableStreaming {
+            // Thinking tokens callback
+            config.onThinkingChunk = { [weak self] (chunk: String) in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    self.thinkingBuffer.append(chunk)
 
-        // Use efficient line-based iteration instead of byte-by-byte
-        for try await rawLine in bytes.lines {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-
-            guard line.hasPrefix("data:") else { continue }
-
-            var jsonString = String(line.dropFirst(5))
-            if jsonString.hasPrefix(" ") {
-                jsonString = String(jsonString.dropFirst(1))
-            }
-
-            if jsonString.trimmingCharacters(in: .whitespaces) == "[DONE]" {
-                continue
-            }
-
-            guard let jsonData = jsonString.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-                  let choices = json["choices"] as? [[String: Any]],
-                  let firstChoice = choices.first,
-                  let delta = firstChoice["delta"] as? [String: Any]
-            else {
-                continue
-            }
-
-            // Handle text content - use buffer to avoid O(n²) string concat
-            if let content = delta["content"] as? String {
-                self.streamingBuffer.append(content)
-
-                // Adaptive throttle: slower updates as content grows (reduces SwiftUI layout overhead)
-                let bufferLength = self.streamingBuffer.count
-                let updateInterval: CFAbsoluteTime
-                if bufferLength < 50 {
-                    updateInterval = 0.016 // 60fps for first ~50 tokens
-                } else if bufferLength < 200 {
-                    updateInterval = 0.033 // 30fps for medium content
-                } else {
-                    updateInterval = 0.066 // 15fps for long content
-                }
-
-                let now = CFAbsoluteTimeGetCurrent()
-                if now - self.lastUIUpdate >= updateInterval {
-                    self.lastUIUpdate = now
-                    let fullContent = self.streamingBuffer.joined()
-                    self.streamingText = fullContent
-
-                    // Push to notch for real-time display
-                    if self.enableNotchOutput {
-                        NotchContentState.shared.updateCommandStreamingText(fullContent)
+                    // 60fps UI update throttle for thinking
+                    let now = CFAbsoluteTimeGetCurrent()
+                    if now - self.lastThinkingUIUpdate >= 0.016 {
+                        self.lastThinkingUIUpdate = now
+                        self.streamingThinkingText = self.thinkingBuffer.joined()
                     }
                 }
             }
 
-            // Handle tool calls (streamed in parts)
-            if let toolCalls = delta["tool_calls"] as? [[String: Any]],
-               let toolCall = toolCalls.first
-            {
-                if let id = toolCall["id"] as? String {
-                    toolCallId = id
-                }
+            // Content callback
+            config.onContentChunk = { [weak self] (chunk: String) in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    self.streamingBuffer.append(chunk)
 
-                if let function = toolCall["function"] as? [String: Any] {
-                    if let name = function["name"] as? String {
-                        toolCallName = name
-                    }
-                    if let args = function["arguments"] as? String {
-                        toolCallArguments += args
+                    // 60fps UI update throttle
+                    let now = CFAbsoluteTimeGetCurrent()
+                    if now - self.lastUIUpdate >= 0.016 {
+                        self.lastUIUpdate = now
+                        let fullContent = self.streamingBuffer.joined()
+                        self.streamingText = fullContent
+
+                        // Push to notch for real-time display
+                        if self.enableNotchOutput {
+                            NotchContentState.shared.updateCommandStreamingText(fullContent)
+                        }
                     }
                 }
             }
         }
 
-        // Final update - join buffer once at the end
+        DebugLogger.shared.info("Using LLMClient for Command Mode (streaming=\(enableStreaming), messages=\(messages.count), history=\(self.conversationHistory.count))", source: "CommandModeService")
+
+        let response = try await LLMClient.shared.call(config)
+
+        // Final UI update - ensure all content is displayed
         let fullContent = self.streamingBuffer.joined()
         if !fullContent.isEmpty {
             self.streamingText = fullContent
@@ -995,68 +893,40 @@ final class CommandModeService: ObservableObject {
         // Small delay to let the final content render, then clear
         try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
 
+        // Capture final thinking before clearing (for message storage)
+        let finalThinking = response.thinking ?? (self.thinkingBuffer.isEmpty ? nil : self.thinkingBuffer.joined())
+
         self.streamingText = "" // Clear streaming text when done
+        self.streamingThinkingText = "" // Clear thinking text when done
         self.streamingBuffer = [] // Clear buffer
+        self.thinkingBuffer = [] // Clear thinking buffer
 
         // Clear notch streaming text as well
         if self.enableNotchOutput {
             NotchContentState.shared.updateCommandStreamingText("")
         }
 
-        // If we got a tool call, parse it
-        if let name = toolCallName, name == "execute_terminal_command",
-           let argsData = toolCallArguments.data(using: .utf8),
-           let args = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any]
-        {
-            let command = args["command"] as? String ?? ""
-            let workDir = args["workingDirectory"] as? String
-            let purpose = args["purpose"] as? String
-            let callId = toolCallId ?? "call_\(UUID().uuidString.prefix(8))"
-
-            return LLMResponse(
-                content: fullContent,
-                toolCall: LLMResponse.ToolCallData(
-                    id: callId,
-                    command: command,
-                    workingDirectory: workDir?
-                        .isEmpty == true ? nil : workDir,
-                    purpose: purpose
-                )
-            )
+        // Log thinking if present (for debugging)
+        if let thinking = finalThinking {
+            DebugLogger.shared.debug("LLM thinking tokens extracted (\(thinking.count) chars)", source: "CommandModeService")
         }
 
-        // Text response only
-        return LLMResponse(
-            content: fullContent.isEmpty ? "I couldn't understand that." : fullContent,
-            toolCall: nil
-        )
-    }
-
-    // MARK: - Parse Message Helper
-
-    private func parseMessageResponse(_ message: [String: Any]) -> LLMResponse {
+        // Convert LLMClient.Response to our internal LLMResponse
         // Check for tool calls
-        if let toolCalls = message["tool_calls"] as? [[String: Any]],
-           let toolCall = toolCalls.first,
-           let function = toolCall["function"] as? [String: Any],
-           let name = function["name"] as? String,
-           name == "execute_terminal_command",
-           let argsString = function["arguments"] as? String,
-           let argsData = argsString.data(using: .utf8),
-           let args = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any]
+        if let tc = response.toolCalls.first,
+           tc.name == "execute_terminal_command"
         {
-            let command = args["command"] as? String ?? ""
-            let workDir = args["workingDirectory"] as? String
-            let purpose = args["purpose"] as? String
-            let callId = toolCall["id"] as? String ?? "call_\(UUID().uuidString.prefix(8))"
+            let command = tc.getString("command") ?? ""
+            let workDir = tc.getOptionalString("workingDirectory")
+            let purpose = tc.getString("purpose")
 
             return LLMResponse(
-                content: message["content"] as? String ?? "",
+                content: response.content,
+                thinking: finalThinking, // Display-only
                 toolCall: LLMResponse.ToolCallData(
-                    id: callId,
+                    id: tc.id,
                     command: command,
-                    workingDirectory: workDir?
-                        .isEmpty == true ? nil : workDir,
+                    workingDirectory: workDir,
                     purpose: purpose
                 )
             )
@@ -1064,7 +934,8 @@ final class CommandModeService: ObservableObject {
 
         // Text response only
         return LLMResponse(
-            content: message["content"] as? String ?? "I couldn't understand that.",
+            content: response.content.isEmpty ? "I couldn't understand that." : response.content,
+            thinking: finalThinking, // Display-only
             toolCall: nil
         )
     }

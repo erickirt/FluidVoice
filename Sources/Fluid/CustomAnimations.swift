@@ -40,12 +40,13 @@ struct PulseAudioVisualizationView: View {
                     .frame(width: 40 + CGFloat(index) * 20, height: 40 + CGFloat(index) * 20)
                     .scaleEffect(
                         self.data.audioLevel > self.config.noiseThreshold ?
-                            1.0 + (self.data.audioLevel - self.config.noiseThreshold) * self.config
-                            .maxAnimationScale : 1.0,
+                            1.0 + (self.data.audioLevel - self.config.noiseThreshold) * self.config.maxAnimationScale : 1.0,
                         anchor: .center
                     )
-                    .opacity(self.data.audioLevel > self.config.noiseThreshold ?
-                        1.0 - (self.data.audioLevel - self.config.noiseThreshold) : 0.3)
+                    .opacity(
+                        self.data.audioLevel > self.config.noiseThreshold ?
+                            1.0 - (self.data.audioLevel - self.config.noiseThreshold) : 0.3
+                    )
                     .animation(self.config.animationSpring.delay(Double(index) * 0.1), value: self.animationId)
             }
 
@@ -82,8 +83,7 @@ struct WaveAudioVisualizationView: View {
                     .frame(width: 4, height: 20)
                     .scaleEffect(
                         y: self.data.audioLevel > self.config.noiseThreshold ?
-                            1.0 + (self.data.audioLevel - self.config.noiseThreshold) * self.config
-                            .maxAnimationScale * (1.0 - Double(index) * 0.1) : 0.2,
+                            1.0 + (self.data.audioLevel - self.config.noiseThreshold) * self.config.maxAnimationScale * (1.0 - Double(index) * 0.1) : 0.2,
                         anchor: .bottom
                     )
                     .animation(self.config.animationSpring.delay(Double(index) * 0.05), value: self.animationId)

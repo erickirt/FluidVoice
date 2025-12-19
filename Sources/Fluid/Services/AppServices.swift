@@ -1,3 +1,13 @@
+//
+//  AppServices.swift
+//  Fluid
+//
+//  Centralized service container to reduce SwiftUI view type complexity.
+//  By holding heavy services here (outside ContentView's @StateObject declarations),
+//  we reduce the generic type signature of ContentView, which helps avoid
+//  Swift runtime type metadata crashes at app launch.
+//
+
 import Combine
 import Foundation
 

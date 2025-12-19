@@ -1,3 +1,10 @@
+//
+//  NotchContentViews.swift
+//  Fluid
+//
+//  Created by Assistant
+//
+
 import Combine
 import SwiftUI
 
@@ -189,17 +196,19 @@ struct ShimmerText: View {
     var body: some View {
         Text(self.text)
             .font(.system(size: 9, weight: .medium))
-            .foregroundStyle(LinearGradient(
-                colors: [
-                    self.color.opacity(0.4),
-                    self.color.opacity(0.4),
-                    self.color.opacity(1.0),
-                    self.color.opacity(0.4),
-                    self.color.opacity(0.4),
-                ],
-                startPoint: UnitPoint(x: self.shimmerPhase - 0.3, y: 0.5),
-                endPoint: UnitPoint(x: self.shimmerPhase + 0.3, y: 0.5)
-            ))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [
+                        self.color.opacity(0.4),
+                        self.color.opacity(0.4),
+                        self.color.opacity(1.0),
+                        self.color.opacity(0.4),
+                        self.color.opacity(0.4),
+                    ],
+                    startPoint: UnitPoint(x: self.shimmerPhase - 0.3, y: 0.5),
+                    endPoint: UnitPoint(x: self.shimmerPhase + 0.3, y: 0.5)
+                )
+            )
             .onAppear {
                 withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
                     self.shimmerPhase = 1.3
@@ -337,18 +346,8 @@ struct NotchWaveformView: View {
                 RoundedRectangle(cornerRadius: self.barWidth / 2)
                     .fill(self.color)
                     .frame(width: self.barWidth, height: self.barHeights[index])
-                    .shadow(
-                        color: self.color.opacity(self.currentGlowIntensity),
-                        radius: self.currentGlowRadius,
-                        x: 0,
-                        y: 0
-                    )
-                    .shadow(
-                        color: self.color.opacity(self.currentGlowIntensity * 0.5),
-                        radius: self.currentOuterGlowRadius,
-                        x: 0,
-                        y: 0
-                    )
+                    .shadow(color: self.color.opacity(self.currentGlowIntensity), radius: self.currentGlowRadius, x: 0, y: 0)
+                    .shadow(color: self.color.opacity(self.currentGlowIntensity * 0.5), radius: self.currentOuterGlowRadius, x: 0, y: 0)
             }
         }
         .onChange(of: self.data.audioLevel) { _, level in
@@ -429,8 +428,7 @@ struct NotchWaveformView: View {
                     // Scale audio level relative to threshold for smoother response
                     let adjustedLevel = (normalizedLevel - self.noiseThreshold) / (1.0 - self.noiseThreshold)
                     let randomVariation = CGFloat.random(in: 0.7...1.0)
-                    self.barHeights[i] = self
-                        .minHeight + (self.maxHeight - self.minHeight) * adjustedLevel * centerFactor * randomVariation
+                    self.barHeights[i] = self.minHeight + (self.maxHeight - self.minHeight) * adjustedLevel * centerFactor * randomVariation
                 } else {
                     // Complete stillness when below threshold
                     self.barHeights[i] = self.minHeight
@@ -540,10 +538,7 @@ struct NotchCommandOutputExpandedView: View {
         .frame(width: 380, height: self.dynamicHeight)
         .background(Color.black)
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .animation(
-            .spring(response: 0.3, dampingFraction: 0.8),
-            value: self.contentState.commandConversationHistory.count
-        )
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: self.contentState.commandConversationHistory.count)
         // No animation on streamingText - it updates too frequently, animations add overhead
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: self.contentState.isRecordingInExpandedMode)
     }
@@ -592,13 +587,11 @@ struct NotchCommandOutputExpandedView: View {
                 Button(action: self.onNewChat) {
                     ZStack {
                         Circle()
-                            .fill(self.isHoveringNewChat ? self.commandRed.opacity(0.25) : self.commandRed
-                                .opacity(0.12))
+                            .fill(self.isHoveringNewChat ? self.commandRed.opacity(0.25) : self.commandRed.opacity(0.12))
                             .frame(width: 22, height: 22)
                         Image(systemName: "plus")
                             .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(self.contentState.isCommandProcessing ? .white.opacity(0.3) : self
-                                .commandRed.opacity(0.85))
+                            .foregroundStyle(self.contentState.isCommandProcessing ? .white.opacity(0.3) : self.commandRed.opacity(0.85))
                     }
                 }
                 .buttonStyle(.plain)
@@ -662,8 +655,7 @@ struct NotchCommandOutputExpandedView: View {
                             .frame(width: 22, height: 22)
                         Image(systemName: "trash")
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(self.contentState.isCommandProcessing ? .white.opacity(0.3) : self
-                                .commandRed.opacity(0.85))
+                            .foregroundStyle(self.contentState.isCommandProcessing ? .white.opacity(0.3) : self.commandRed.opacity(0.85))
                     }
                 }
                 .buttonStyle(.plain)
@@ -682,8 +674,7 @@ struct NotchCommandOutputExpandedView: View {
                 Button(action: self.onDismiss) {
                     ZStack {
                         Circle()
-                            .fill(self.isHoveringDismiss ? self.commandRed.opacity(0.25) : self.commandRed
-                                .opacity(0.12))
+                            .fill(self.isHoveringDismiss ? self.commandRed.opacity(0.25) : self.commandRed.opacity(0.12))
                             .frame(width: 22, height: 22)
                         Image(systemName: "xmark")
                             .font(.system(size: 9, weight: .bold))
@@ -954,8 +945,7 @@ struct ExpandedModeWaveformView: View {
                 if isActive {
                     let adjustedLevel = (normalizedLevel - self.noiseThreshold) / (1.0 - self.noiseThreshold)
                     let randomVariation = CGFloat.random(in: 0.75...1.0)
-                    self.barHeights[i] = self
-                        .minHeight + (self.maxHeight - self.minHeight) * adjustedLevel * centerFactor * randomVariation
+                    self.barHeights[i] = self.minHeight + (self.maxHeight - self.minHeight) * adjustedLevel * centerFactor * randomVariation
                 } else {
                     self.barHeights[i] = self.minHeight
                 }

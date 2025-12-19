@@ -23,8 +23,9 @@ final class WhisperProvider: TranscriptionProvider {
     }
 
     private var modelURL: URL {
-        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
+        guard let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            preconditionFailure("Could not find caches directory")
+        }
         return cacheDir.appendingPathComponent("WhisperModels").appendingPathComponent(self.modelName)
     }
 
@@ -36,11 +37,7 @@ final class WhisperProvider: TranscriptionProvider {
         // Detect model change: if a different model is now selected, force reload
         let currentModelName = self.modelName
         if self.isReady, self.loadedModelName != currentModelName {
-            DebugLogger.shared
-                .info(
-                    "WhisperProvider: Model changed from \(self.loadedModelName ?? "nil") to \(currentModelName), forcing reload",
-                    source: "WhisperProvider"
-                )
+            DebugLogger.shared.info("WhisperProvider: Model changed from \(self.loadedModelName ?? "nil") to \(currentModelName), forcing reload", source: "WhisperProvider")
             self.isReady = false
             self.whisper = nil
             self.loadedModelName = nil
@@ -81,8 +78,7 @@ final class WhisperProvider: TranscriptionProvider {
         let segments = try await whisper.transcribe(audioFrames: samples)
 
         // Combine all segments into one string
-        let fullText = segments.map { $0.text }.joined(separator: " ")
-            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        let fullText = segments.map { $0.text }.joined(separator: " ").trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
 
         // SwiftWhisper doesn't provide confidence, so we use 1.0
         return ASRTranscriptionResult(text: fullText, confidence: 1.0)
@@ -132,9 +128,7 @@ final class WhisperProvider: TranscriptionProvider {
                 throw NSError(
                     domain: "WhisperProvider",
                     code: httpResponse.statusCode,
-                    userInfo: [
-                        NSLocalizedDescriptionKey: "Failed to download model (HTTP \(httpResponse.statusCode))",
-                    ]
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to download model (HTTP \(httpResponse.statusCode))"]
                 )
             }
 

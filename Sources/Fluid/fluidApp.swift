@@ -1,3 +1,10 @@
+//
+//  fluidApp.swift
+//  fluid
+//
+//  Created by Barathwaj Anandan on 7/30/25.
+//
+
 import AppKit
 import ApplicationServices
 import SwiftUI

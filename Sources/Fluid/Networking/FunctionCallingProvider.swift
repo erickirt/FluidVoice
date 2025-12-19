@@ -21,20 +21,10 @@ final class FunctionCallingProvider {
         let name: String?
 
         enum CodingKeys: String, CodingKey {
-            case role
-            case content
-            case tool_calls
-            case tool_call_id
-            case name
+            case role, content, tool_calls, tool_call_id, name
         }
 
-        init(
-            role: String,
-            content: String?,
-            tool_calls: [ToolCall] = [],
-            tool_call_id: String? = nil,
-            name: String? = nil
-        ) {
+        init(role: String, content: String?, tool_calls: [ToolCall] = [], tool_call_id: String? = nil, name: String? = nil) {
             self.role = role
             self.content = content
             self.tool_calls = tool_calls
@@ -231,10 +221,7 @@ final class FunctionCallingProvider {
             tool_choice: tools.isEmpty ? nil : "auto"
         )
 
-        DebugLogger.shared.info(
-            "📤 Sending to LLM: \(tools.count) tools, model: \(model)",
-            source: "FunctionCallingProvider"
-        )
+        DebugLogger.shared.info("📤 Sending to LLM: \(tools.count) tools, model: \(model)", source: "FunctionCallingProvider")
         if !tools.isEmpty {
             DebugLogger.shared
                 .info(

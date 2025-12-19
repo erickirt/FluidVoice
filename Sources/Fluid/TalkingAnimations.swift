@@ -1,3 +1,10 @@
+//
+//  TalkingAnimations.swift
+//  fluid
+//
+//  Created by Assistant
+//
+
 import AppKit
 import Combine
 import CoreGraphics
@@ -122,8 +129,7 @@ struct SpokenlyWaveform: View {
     @State private var lastUpdateTime: TimeInterval = 0
     @State private var isViewVisible: Bool = true
 
-    private let animationTimer = Timer.publish(every: 0.033, on: .main, in: .common)
-        .autoconnect() // 30 FPS base timer - safer for CoreML concurrency
+    private let animationTimer = Timer.publish(every: 0.033, on: .main, in: .common).autoconnect() // 30 FPS base timer - safer for CoreML concurrency
 
     var body: some View {
         HStack(spacing: self.config.barSpacing) {
@@ -168,8 +174,7 @@ struct SpokenlyWaveform: View {
         self.lastUpdateTime = currentTime
 
         // Safety check
-        guard self.barHeights.count == self.config.barCount,
-              self.barOpacities.count == self.config.barCount else { return }
+        guard self.barHeights.count == self.config.barCount, self.barOpacities.count == self.config.barCount else { return }
 
         // Direct real-time animation based on current audio level
         if self.audioLevel <= self.config.noiseThreshold { // USE THE USER-CONTROLLABLE THRESHOLD!
@@ -243,8 +248,7 @@ struct EnhancedTalkingAudioVisualizationView: View {
                 )
             }
         }
-        .frame(width: CGFloat(self.config.particleCount) * (self.config.maxParticleSize + self.config.particleSpacing) -
-            self.config.particleSpacing)
+        .frame(width: CGFloat(self.config.particleCount) * (self.config.maxParticleSize + self.config.particleSpacing) - self.config.particleSpacing)
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             // Update threshold when UserDefaults changes
             let newThreshold = CGFloat(SettingsStore.shared.visualizerNoiseThreshold)
@@ -295,50 +299,58 @@ struct PremiumTalkingParticle: View {
         ZStack {
             // Outer glow ring
             Circle()
-                .fill(RadialGradient(
-                    gradient: Gradient(colors: [
-                        Color.clear,
-                        Color.purple.opacity(0.2),
-                        Color.indigo.opacity(0.08),
-                        Color.clear,
-                    ]),
-                    center: .center,
-                    startRadius: self.particleSize * 0.3,
-                    endRadius: self.particleSize * 1.8
-                ))
+                .fill(
+                    RadialGradient(
+                        gradient: Gradient(colors: [
+                            Color.clear,
+                            Color.purple.opacity(0.2),
+                            Color.indigo.opacity(0.08),
+                            Color.clear,
+                        ]),
+                        center: .center,
+                        startRadius: self.particleSize * 0.3,
+                        endRadius: self.particleSize * 1.8
+                    )
+                )
                 .frame(width: self.particleSize * 2.5, height: self.particleSize * 2.5)
                 .opacity(self.isActive ? 0.6 : 0.1)
                 .blur(radius: 2)
 
             // Main particle
             Circle()
-                .fill(AngularGradient(
-                    gradient: Gradient(stops: [
-                        .init(color: Color.gray.opacity(0.6), location: 0.0),
-                        .init(color: Color.purple.opacity(0.7), location: 0.25),
-                        .init(color: Color.indigo.opacity(0.8), location: 0.5),
-                        .init(color: Color.black.opacity(0.9), location: 0.75),
-                        .init(color: Color.gray.opacity(0.6), location: 1.0),
-                    ]),
-                    center: .center,
-                    startAngle: .degrees(self.rotationAngle),
-                    endAngle: .degrees(self.rotationAngle + 360)
-                ))
+                .fill(
+                    AngularGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: Color.gray.opacity(0.6), location: 0.0),
+                            .init(color: Color.purple.opacity(0.7), location: 0.25),
+                            .init(color: Color.indigo.opacity(0.8), location: 0.5),
+                            .init(color: Color.black.opacity(0.9), location: 0.75),
+                            .init(color: Color.gray.opacity(0.6), location: 1.0),
+                        ]),
+                        center: .center,
+                        startAngle: .degrees(self.rotationAngle),
+                        endAngle: .degrees(self.rotationAngle + 360)
+                    )
+                )
                 .frame(width: self.particleSize, height: self.particleSize)
                 .opacity(self.particleOpacity)
                 .scaleEffect(self.pulseScale)
-                .overlay(Circle()
-                    .fill(RadialGradient(
-                        gradient: Gradient(colors: [
-                            Color.white.opacity(0.3),
-                            Color.white.opacity(0.1),
-                            Color.clear,
-                        ]),
-                        center: UnitPoint(x: 0.3, y: 0.3),
-                        startRadius: 0,
-                        endRadius: self.particleSize * 0.6
-                    ))
-                    .frame(width: self.particleSize, height: self.particleSize))
+                .overlay(
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                gradient: Gradient(colors: [
+                                    Color.white.opacity(0.3),
+                                    Color.white.opacity(0.1),
+                                    Color.clear,
+                                ]),
+                                center: UnitPoint(x: 0.3, y: 0.3),
+                                startRadius: 0,
+                                endRadius: self.particleSize * 0.6
+                            )
+                        )
+                        .frame(width: self.particleSize, height: self.particleSize)
+                )
                 .shadow(color: Color.purple.opacity(0.4), radius: 4, x: 0, y: 2)
                 .shadow(color: Color.indigo.opacity(0.3), radius: 8, x: 0, y: 0)
         }

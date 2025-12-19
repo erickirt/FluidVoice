@@ -1,3 +1,10 @@
+//
+//  RecordingView.swift
+//  fluid
+//
+//  Recording controls and configuration view
+//
+
 import AVFoundation
 import SwiftUI
 
@@ -41,11 +48,9 @@ struct RecordingView: View {
                                     .fill(self.asr.isRunning ? .red : self.asr.isAsrReady ? .green : .secondary)
                                     .frame(width: 8, height: 8)
 
-                                Text(self.asr.isRunning ? "Recording..." : self.asr
-                                    .isAsrReady ? "Ready to record" : "Model not ready")
+                                Text(self.asr.isRunning ? "Recording..." : self.asr.isAsrReady ? "Ready to record" : "Model not ready")
                                     .font(.subheadline)
-                                    .foregroundStyle(self.asr.isRunning ? .red : self.asr
-                                        .isAsrReady ? .green : .secondary)
+                                    .foregroundStyle(self.asr.isRunning ? .red : self.asr.isAsrReady ? .green : .secondary)
                             }
 
                             // Recording Control (Single Toggle Button)

@@ -168,13 +168,14 @@ struct MeetingTranscriptionView: View {
         }
         .fileImporter(
             isPresented: self.$showingFilePicker,
-            allowedContentTypes: {
-                var types: [UTType] = [.audio, .movie, .mpeg4Movie]
-                ["wav", "mp3", "m4a"]
-                    .compactMap { UTType(filenameExtension: $0) }
-                    .forEach { types.append($0) }
-                return types
-            }(),
+            allowedContentTypes: [
+                .audio,
+                .movie,
+                .mpeg4Movie,
+                UTType(filenameExtension: "wav") ?? .audio,
+                UTType(filenameExtension: "mp3") ?? .audio,
+                UTType(filenameExtension: "m4a") ?? .audio,
+            ],
             allowsMultipleSelection: false
         ) { result in
             switch result {

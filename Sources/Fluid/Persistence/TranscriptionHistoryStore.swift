@@ -1,3 +1,10 @@
+//
+//  TranscriptionHistoryStore.swift
+//  Fluid
+//
+//  Persistence manager for Transcription Mode history
+//
+
 import Combine
 import Foundation
 
@@ -108,10 +115,7 @@ final class TranscriptionHistoryStore: ObservableObject {
         self.trimOldEntries()
         self.saveEntries()
 
-        DebugLogger.shared.debug(
-            "Added transcription to history (total: \(self.entries.count))",
-            source: "TranscriptionHistoryStore"
-        )
+        DebugLogger.shared.debug("Added transcription to history (total: \(self.entries.count))", source: "TranscriptionHistoryStore")
     }
 
     /// Delete a specific entry

@@ -1,14 +1,7 @@
 import Foundation
 
 protocol AIProvider {
-    func process(
-        systemPrompt: String,
-        userText: String,
-        model: String,
-        apiKey: String,
-        baseURL: String,
-        stream: Bool
-    ) async -> String
+    func process(systemPrompt: String, userText: String, model: String, apiKey: String, baseURL: String, stream: Bool) async -> String
 }
 
 final class OpenAICompatibleProvider: AIProvider {
@@ -75,16 +68,8 @@ final class OpenAICompatibleProvider: AIProvider {
         return modelLower.contains("gpt-oss") || modelLower.hasPrefix("openai/")
     }
 
-    func process(
-        systemPrompt: String,
-        userText: String,
-        model: String,
-        apiKey: String,
-        baseURL: String,
-        stream: Bool = false
-    ) async -> String {
-        let endpoint = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-            .isEmpty ? "https://api.openai.com/v1" : baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    func process(systemPrompt: String, userText: String, model: String, apiKey: String, baseURL: String, stream: Bool = false) async -> String {
+        let endpoint = baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "https://api.openai.com/v1" : baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Build the full URL - only append /chat/completions if not already present
         let fullEndpoint: String

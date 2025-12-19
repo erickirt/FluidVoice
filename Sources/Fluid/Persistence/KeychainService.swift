@@ -101,10 +101,10 @@ final class KeychainService {
 
     func removeLegacyEntries(providerIDs: [String] = []) throws {
         let targets: [String]
-        if providerIDs.isEmpty {
-            targets = try Array(self.legacyProviderEntries().keys)
-        } else {
+        if !providerIDs.isEmpty {
             targets = providerIDs
+        } else {
+            targets = try Array((self.legacyProviderEntries()).keys)
         }
 
         for providerID in targets {

@@ -1,3 +1,10 @@
+//
+//  ChatHistoryStore.swift
+//  Fluid
+//
+//  Persistence manager for Command Mode chat history
+//
+
 import Combine
 import Foundation
 
@@ -34,14 +41,7 @@ struct ChatMessage: Codable, Identifiable, Equatable {
         let purpose: String?
     }
 
-    init(
-        id: UUID = UUID(),
-        role: Role,
-        content: String,
-        toolCall: ToolCall? = nil,
-        stepType: StepType = .normal,
-        timestamp: Date = Date()
-    ) {
+    init(id: UUID = UUID(), role: Role, content: String, toolCall: ToolCall? = nil, stepType: StepType = .normal, timestamp: Date = Date()) {
         self.id = id
         self.role = role
         self.content = content
@@ -60,13 +60,7 @@ struct ChatSession: Codable, Identifiable, Equatable {
     var updatedAt: Date
     var messages: [ChatMessage]
 
-    init(
-        id: String = UUID().uuidString,
-        title: String = "New Chat",
-        createdAt: Date = Date(),
-        updatedAt: Date = Date(),
-        messages: [ChatMessage] = []
-    ) {
+    init(id: String = UUID().uuidString, title: String = "New Chat", createdAt: Date = Date(), updatedAt: Date = Date(), messages: [ChatMessage] = []) {
         self.id = id
         self.title = title
         self.createdAt = createdAt

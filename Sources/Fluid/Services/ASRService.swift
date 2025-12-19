@@ -190,8 +190,7 @@ final class ASRService: ObservableObject {
     // Streaming transcription state (no VAD)
     private var streamingTask: Task<Void, Never>?
     private var lastProcessedSampleCount: Int = 0
-    private let chunkDurationSeconds: Double =
-        0.6 // Fast interval - TranscriptionExecutor actor handles CoreML serialization
+    private let chunkDurationSeconds: Double = 0.6 // Fast interval - TranscriptionExecutor actor handles CoreML serialization
     private var isProcessingChunk: Bool = false
     private var skipNextChunk: Bool = false
     private var previousFullTranscription: String = ""
@@ -371,16 +370,8 @@ final class ASRService: ObservableObject {
                 return ""
             }
 
-            DebugLogger.shared
-                .debug(
-                    "Starting transcription with \(pcm.count) samples (\(Float(pcm.count) / 16_000.0) seconds)",
-                    source: "ASRService"
-                )
-            DebugLogger.shared
-                .debug(
-                    "stop(): starting full transcription (samples: \(pcm.count)) using \(self.transcriptionProvider.name)",
-                    source: "ASRService"
-                )
+            DebugLogger.shared.debug("Starting transcription with \(pcm.count) samples (\(Float(pcm.count) / 16_000.0) seconds)", source: "ASRService")
+            DebugLogger.shared.debug("stop(): starting full transcription (samples: \(pcm.count)) using \(self.transcriptionProvider.name)", source: "ASRService")
             let result = try await transcriptionExecutor.run { [provider = self.transcriptionProvider] in
                 try await provider.transcribe(pcm)
             }
@@ -486,11 +477,7 @@ final class ASRService: ObservableObject {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        let status = AudioObjectAddPropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &address,
-            DispatchQueue.main
-        ) { [weak self] _, _ in
+        let status = AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, DispatchQueue.main) { [weak self] _, _ in
             self?.handleDefaultInputChanged()
         }
         if status == noErr { self.defaultInputListenerInstalled = true }
@@ -652,10 +639,7 @@ final class ASRService: ObservableObject {
     private func performEnsureAsrReady(provider: TranscriptionProvider) async throws {
         // Check if already ready
         if self.isAsrReady, provider.isReady {
-            DebugLogger.shared.debug(
-                "ASR already ready with loaded models, skipping initialization",
-                source: "ASRService"
-            )
+            DebugLogger.shared.debug("ASR already ready with loaded models, skipping initialization", source: "ASRService")
             return
         }
 
@@ -714,11 +698,7 @@ final class ASRService: ObservableObject {
             DebugLogger.shared.info("Calling transcriptionProvider.prepare()...", source: "ASRService")
             try await provider.prepare(progressHandler: nil)
             let downloadDuration = Date().timeIntervalSince(downloadStartTime)
-            DebugLogger.shared
-                .info(
-                    "✓ Provider preparation completed in \(String(format: "%.1f", downloadDuration)) seconds",
-                    source: "ASRService"
-                )
+            DebugLogger.shared.info("✓ Provider preparation completed in \(String(format: "%.1f", downloadDuration)) seconds", source: "ASRService")
 
             DispatchQueue.main.async {
                 self.isDownloadingModel = false
@@ -728,10 +708,7 @@ final class ASRService: ObservableObject {
 
             let totalDuration = Date().timeIntervalSince(totalStartTime)
             DebugLogger.shared.info("=== ASR INITIALIZATION COMPLETE ===", source: "ASRService")
-            DebugLogger.shared.info(
-                "Total initialization time: \(String(format: "%.1f", totalDuration)) seconds",
-                source: "ASRService"
-            )
+            DebugLogger.shared.info("Total initialization time: \(String(format: "%.1f", totalDuration)) seconds", source: "ASRService")
 
             self.isAsrReady = true
         } catch {
@@ -788,10 +765,7 @@ final class ASRService: ObservableObject {
         self.streamingTask?.cancel()
         guard self.isAsrReady else { return }
 
-        DebugLogger.shared.debug(
-            "Starting streaming transcription task (interval: \(self.chunkDurationSeconds)s)",
-            source: "ASRService"
-        )
+        DebugLogger.shared.debug("Starting streaming transcription task (interval: \(self.chunkDurationSeconds)s)", source: "ASRService")
 
         self.streamingTask = Task { [weak self] in
             await self?.runStreamingLoop()
@@ -827,10 +801,7 @@ final class ASRService: ObservableObject {
 
         // Skip if already processing to prevent queue buildup
         guard !self.isProcessingChunk else {
-            DebugLogger.shared.debug(
-                "⚠️ Skipping chunk - previous transcription still in progress",
-                source: "ASRService"
-            )
+            DebugLogger.shared.debug("⚠️ Skipping chunk - previous transcription still in progress", source: "ASRService")
             self.skipNextChunk = true
             return
         }
@@ -857,11 +828,7 @@ final class ASRService: ObservableObject {
         let startTime = Date()
 
         do {
-            DebugLogger.shared
-                .debug(
-                    "Streaming chunk starting transcription (samples: \(chunk.count)) using \(self.transcriptionProvider.name)",
-                    source: "ASRService"
-                )
+            DebugLogger.shared.debug("Streaming chunk starting transcription (samples: \(chunk.count)) using \(self.transcriptionProvider.name)", source: "ASRService")
             let result = try await transcriptionExecutor.run { [provider = self.transcriptionProvider] in
                 try await provider.transcribe(chunk)
             }
@@ -880,20 +847,13 @@ final class ASRService: ObservableObject {
                 self.partialTranscription = updatedText
                 self.previousFullTranscription = newText
 
-                DebugLogger.shared.debug(
-                    "✅ Streaming: '\(updatedText)' (\(String(format: "%.2f", duration))s)",
-                    source: "ASRService"
-                )
+                DebugLogger.shared.debug("✅ Streaming: '\(updatedText)' (\(String(format: "%.2f", duration))s)", source: "ASRService")
             }
 
             // If transcription takes longer than the interval, skip next to prevent queue buildup
             // This allows slower machines to still work without overwhelming the system
             if duration > self.chunkDurationSeconds {
-                DebugLogger.shared
-                    .debug(
-                        "⚠️ Transcription slow (\(String(format: "%.2f", duration))s > \(self.chunkDurationSeconds)s), skipping next chunk",
-                        source: "ASRService"
-                    )
+                DebugLogger.shared.debug("⚠️ Transcription slow (\(String(format: "%.2f", duration))s > \(self.chunkDurationSeconds)s), skipping next chunk", source: "ASRService")
                 self.skipNextChunk = true
             }
         } catch {

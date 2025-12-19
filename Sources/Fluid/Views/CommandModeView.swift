@@ -271,6 +271,8 @@ struct CommandModeView: View {
 
     // MARK: - Chat Area
 
+    @State private var isThinkingExpanded = false
+
     private var chatArea: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -283,6 +285,12 @@ struct CommandModeView: View {
                     if self.service.isProcessing {
                         VStack(alignment: .leading, spacing: 8) {
                             self.processingIndicator
+
+                            // Show thinking tokens in collapsible section (real-time)
+                            // Only show if setting is enabled AND there are thinking tokens
+                            if self.settings.showThinkingTokens && !self.service.streamingThinkingText.isEmpty {
+                                self.thinkingView
+                            }
 
                             // Show streaming text in real-time
                             if !self.service.streamingText.isEmpty {
@@ -303,6 +311,7 @@ struct CommandModeView: View {
                 // Scroll when processing starts, not on every streaming update
                 if isProcessing {
                     self.scrollToBottom(proxy)
+                    self.isThinkingExpanded = false // Collapse thinking for new request
                 }
             }
             .onChange(of: self.service.currentStep) { _, _ in
@@ -310,6 +319,55 @@ struct CommandModeView: View {
             }
             // Removed: .onChange(of: service.streamingText) - causes scroll on every token, too expensive
         }
+    }
+
+    // MARK: - Thinking View (Cursor-style shimmer)
+
+    private var thinkingView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header with shimmer effect - tap to expand/collapse
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { self.isThinkingExpanded.toggle() } }) {
+                HStack(spacing: 8) {
+                    ThinkingShimmerLabel()
+
+                    Spacer()
+
+                    Image(systemName: self.isThinkingExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary.opacity(0.6))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+
+            // Expanded content
+            if self.isThinkingExpanded {
+                ScrollView(.vertical, showsIndicators: true) {
+                    Text(self.service.streamingThinkingText)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 10)
+                }
+                .frame(maxHeight: 200)
+            } else {
+                // Preview - first 150 chars
+                if !self.service.streamingThinkingText.isEmpty {
+                    Text(String(self.service.streamingThinkingText.prefix(150)) + (self.service.streamingThinkingText.count > 150 ? "..." : ""))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary.opacity(0.7))
+                        .lineLimit(2)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
+                }
+            }
+        }
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
+        .frame(maxWidth: 520, alignment: .leading)
     }
 
     // MARK: - Processing Indicator (Minimal with Shimmer)
@@ -409,8 +467,10 @@ struct CommandModeView: View {
             }
             .background(Color(nsColor: .textBackgroundColor))
             .cornerRadius(8)
-            .overlay(RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.orange.opacity(0.5), lineWidth: 1))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.orange.opacity(0.5), lineWidth: 1)
+            )
 
             HStack(spacing: 12) {
                 Button(action: { self.service.cancelPendingCommand() }) {
@@ -460,15 +520,10 @@ struct CommandModeView: View {
             }
 
             // Model Selector (compact)
-            Picker(
-                "",
-                selection: Binding(
-                    get: {
-                        self.settings.commandModeSelectedModel ?? self.availableModels.first ?? "gpt-4o"
-                    },
-                    set: { self.settings.commandModeSelectedModel = $0 }
-                )
-            ) {
+            Picker("", selection: Binding(
+                get: { self.settings.commandModeSelectedModel ?? self.availableModels.first ?? "gpt-4o" },
+                set: { self.settings.commandModeSelectedModel = $0 }
+            )) {
                 ForEach(self.availableModels, id: \.self) { model in
                     Text(model).tag(model)
                 }
@@ -588,17 +643,19 @@ struct CommandShimmerText: View {
     var body: some View {
         Text(self.text)
             .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(LinearGradient(
-                colors: [
-                    Color.primary.opacity(0.4),
-                    Color.primary.opacity(0.4),
-                    Color.primary.opacity(0.8),
-                    Color.primary.opacity(0.4),
-                    Color.primary.opacity(0.4),
-                ],
-                startPoint: UnitPoint(x: self.shimmerPhase - 0.3, y: 0.5),
-                endPoint: UnitPoint(x: self.shimmerPhase + 0.3, y: 0.5)
-            ))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [
+                        Color.primary.opacity(0.4),
+                        Color.primary.opacity(0.4),
+                        Color.primary.opacity(0.8),
+                        Color.primary.opacity(0.4),
+                        Color.primary.opacity(0.4),
+                    ],
+                    startPoint: UnitPoint(x: self.shimmerPhase - 0.3, y: 0.5),
+                    endPoint: UnitPoint(x: self.shimmerPhase + 0.3, y: 0.5)
+                )
+            )
             .onAppear {
                 withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
                     self.shimmerPhase = 1.3
@@ -607,10 +664,69 @@ struct CommandShimmerText: View {
     }
 }
 
+// MARK: - Thinking Shimmer Label (Cursor-style sparkle)
+
+struct ThinkingShimmerLabel: View {
+    @State private var shimmerPhase: CGFloat = -0.5
+    @State private var sparkleOpacity: [Double] = [0.3, 0.5, 0.7, 0.4, 0.6]
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // Sparkle dots with staggered animation
+            HStack(spacing: 2) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(Color.primary.opacity(self.sparkleOpacity[index]))
+                        .frame(width: 4, height: 4)
+                }
+            }
+
+            // Shimmering "Think" text
+            Text("Think")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(
+                    LinearGradient(
+                        stops: [
+                            .init(color: Color.primary.opacity(0.35), location: 0),
+                            .init(color: Color.primary.opacity(0.35), location: max(0, self.shimmerPhase - 0.15)),
+                            .init(color: Color.primary.opacity(0.85), location: self.shimmerPhase),
+                            .init(color: Color.primary.opacity(0.35), location: min(1, self.shimmerPhase + 0.15)),
+                            .init(color: Color.primary.opacity(0.35), location: 1),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+        }
+        .onAppear {
+            // Shimmer animation - smooth left to right
+            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                self.shimmerPhase = 1.5
+            }
+
+            // Sparkle animation - staggered twinkling
+            self.animateSparkles()
+        }
+    }
+
+    private func animateSparkles() {
+        // Create twinkling effect with staggered delays
+        for i in 0..<3 {
+            let delay = Double(i) * 0.15
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                withAnimation(.easeInOut(duration: 0.4).repeatForever(autoreverses: true)) {
+                    self.sparkleOpacity[i] = self.sparkleOpacity[i] > 0.5 ? 0.2 : 0.8
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Message Bubble (Minimal Design)
 
 struct MessageBubble: View {
     let message: CommandModeService.Message
+    @State private var isThinkingExpanded: Bool = false
 
     var body: some View {
         HStack(alignment: .top) {
@@ -640,6 +756,11 @@ struct MessageBubble: View {
 
     private var agentMessageView: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // Thinking section (collapsible) - only if setting is enabled
+            if let thinking = message.thinking, !thinking.isEmpty, SettingsStore.shared.showThinkingTokens {
+                self.thinkingSection(thinking)
+            }
+
             // Purpose label (minimal, gray)
             if let tc = message.toolCall, let purpose = tc.purpose {
                 Text(purpose)
@@ -657,6 +778,65 @@ struct MessageBubble: View {
             }
         }
         .frame(maxWidth: 520, alignment: .leading)
+    }
+
+    // MARK: - Thinking Section (Persisted, Collapsible)
+
+    private func thinkingSection(_ thinking: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header - tap to expand/collapse
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { self.isThinkingExpanded.toggle() } }) {
+                HStack(spacing: 6) {
+                    HStack(spacing: 2) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            Circle()
+                                .fill(Color.primary.opacity(0.4))
+                                .frame(width: 3, height: 3)
+                        }
+                    }
+                    Text("Think")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Text("\(thinking.count) chars")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+
+                    Image(systemName: self.isThinkingExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+
+            // Expanded content
+            if self.isThinkingExpanded {
+                ScrollView(.vertical, showsIndicators: true) {
+                    Text(thinking)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 8)
+                }
+                .frame(maxHeight: 150)
+            } else {
+                // Preview - first 80 chars
+                Text(String(thinking.prefix(80)) + (thinking.count > 80 ? "..." : ""))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 6)
+            }
+        }
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.4))
+        .cornerRadius(6)
     }
 
     // MARK: - Command Call View (Minimal)

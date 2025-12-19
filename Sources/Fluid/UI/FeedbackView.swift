@@ -83,8 +83,8 @@ struct FeedbackView: View {
 
                             Spacer()
 
-                            if let url = URL(string: "https://github.com/altic-dev/Fluid-oss") {
-                                Link(destination: url) {
+                            if let githubURL = URL(string: "https://github.com/altic-dev/Fluid-oss") {
+                                Link(destination: githubURL) {
                                     HStack(spacing: 8) {
                                         Image(systemName: "star.fill")
                                         Text("Star on GitHub")
@@ -94,11 +94,13 @@ struct FeedbackView: View {
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 10)
-                                    .background(LinearGradient(
-                                        colors: [.purple, .blue],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    ))
+                                    .background(
+                                        LinearGradient(
+                                            colors: [.purple, .blue],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
                                     .cornerRadius(8)
                                 }
                                 .buttonStyle(.plain)
@@ -135,14 +137,16 @@ struct FeedbackView: View {
                                     .overlay(RoundedRectangle(cornerRadius: 8)
                                         .strokeBorder(Color(nsColor: NSColor.separatorColor), lineWidth: 1.5)))
                                 .scrollContentBackground(.hidden)
-                                .overlay(VStack {
-                                    if self.feedbackText.isEmpty {
-                                        Text("Share your thoughts, report bugs, or suggest features...")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                                .overlay(
+                                    VStack {
+                                        if self.feedbackText.isEmpty {
+                                            Text("Share your thoughts, report bugs, or suggest features...")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
-                                }
-                                .allowsHitTesting(false))
+                                )
+                                .allowsHitTesting(false)
 
                             // Debug logs option
                             Toggle("Include debug logs", isOn: self.$includeDebugLogs)

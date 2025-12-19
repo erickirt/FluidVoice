@@ -23,14 +23,15 @@ struct HoverableGlossyCard<Content: View>: View {
             .background {
                 shape
                     .fill(self.theme.palette.cardBackground)
-                    .overlay(shape
-                        .stroke(
-                            self.theme.palette.cardBorder.opacity(self.isHovered ? 0.5 : 0.25),
-                            lineWidth: self.isHovered ? 1.2 : 1
-                        ))
+                    .overlay(
+                        shape
+                            .stroke(
+                                self.theme.palette.cardBorder.opacity(self.isHovered ? 0.5 : 0.25),
+                                lineWidth: self.isHovered ? 1.2 : 1
+                            )
+                    )
                     .shadow(
-                        color: cardShadow.color
-                            .opacity(self.isHovered ? min(cardShadow.opacity + 0.1, 1.0) : cardShadow.opacity),
+                        color: cardShadow.color.opacity(self.isHovered ? min(cardShadow.opacity + 0.1, 1.0) : cardShadow.opacity),
                         radius: self.isHovered ? cardShadow.radius + 2 : cardShadow.radius,
                         x: cardShadow.x,
                         y: self.isHovered ? cardShadow.y + 1 : cardShadow.y

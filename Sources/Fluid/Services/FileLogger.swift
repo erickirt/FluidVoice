@@ -13,8 +13,7 @@ final class FileLogger {
     private let maxLogFileAge: TimeInterval = 72 * 60 * 60 // Rotate every 72 hours
 
     private init() {
-        let baseDirectory = self.fileManager.urls(for: .libraryDirectory, in: .userDomainMask)
-            .first ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let baseDirectory = self.fileManager.urls(for: .libraryDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory())
         self.logDirectory = baseDirectory.appendingPathComponent("Logs/Fluid", isDirectory: true)
         self.logFileURL = self.logDirectory.appendingPathComponent("fluid.log", isDirectory: false)
         self.backupLogURL = self.logDirectory.appendingPathComponent("fluid.log.1", isDirectory: false)

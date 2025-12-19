@@ -1,3 +1,10 @@
+//
+//  WelcomeView.swift
+//  fluid
+//
+//  Welcome and setup guide view
+//
+
 import AppKit
 import AVFoundation
 import SwiftUI
@@ -55,16 +62,13 @@ struct WelcomeView: View {
                             SetupStepView(
                                 step: 1,
                                 // Consider model step complete if ready OR downloaded (even if not loaded)
-                                title: (self.asr.isAsrReady || self.asr.modelsExistOnDisk) ?
-                                    "Voice Model Ready" :
-                                    "Download Voice Model",
+                                title: (self.asr.isAsrReady || self.asr.modelsExistOnDisk) ? "Voice Model Ready" : "Download Voice Model",
                                 description: self.asr.isAsrReady
                                     ? "Speech recognition model is loaded and ready"
                                     : (self.asr.modelsExistOnDisk
                                         ? "Model downloaded, will load when needed"
                                         : "Download the AI model for offline voice transcription (~500MB)"),
-                                status: (self.asr.isAsrReady || self.asr.modelsExistOnDisk) ? .completed :
-                                    .pending,
+                                status: (self.asr.isAsrReady || self.asr.modelsExistOnDisk) ? .completed : .pending,
                                 action: {
                                     self.selectedSidebarItem = .aiSettings
                                 },
@@ -74,9 +78,7 @@ struct WelcomeView: View {
 
                             SetupStepView(
                                 step: 2,
-                                title: self.asr
-                                    .micStatus == .authorized ? "Microphone Permission Granted" :
-                                    "Grant Microphone Permission",
+                                title: self.asr.micStatus == .authorized ? "Microphone Permission Granted" : "Grant Microphone Permission",
                                 description: self.asr.micStatus == .authorized
                                     ? "FluidVoice has access to your microphone"
                                     : "Allow FluidVoice to access your microphone for voice input",
@@ -88,15 +90,13 @@ struct WelcomeView: View {
                                         self.asr.openSystemSettingsForMic()
                                     }
                                 },
-                                actionButtonTitle: self.asr
-                                    .micStatus == .notDetermined ? "Grant Access" : "Open Settings",
+                                actionButtonTitle: self.asr.micStatus == .notDetermined ? "Grant Access" : "Open Settings",
                                 showActionButton: self.asr.micStatus != .authorized
                             )
 
                             SetupStepView(
                                 step: 3,
-                                title: self
-                                    .accessibilityEnabled ? "Accessibility Enabled" : "Enable Accessibility",
+                                title: self.accessibilityEnabled ? "Accessibility Enabled" : "Enable Accessibility",
                                 description: self.accessibilityEnabled
                                     ? "Accessibility permission granted for typing into apps"
                                     : "Grant accessibility permission to type text into other apps",
@@ -111,21 +111,15 @@ struct WelcomeView: View {
                             SetupStepView(
                                 step: 4,
                                 title: {
-                                    let hasApiKey = self.providerAPIKeys[self.currentProvider]?
-                                        .isEmpty == false
-                                    let isLocal = self
-                                        .isLocalEndpoint(self.openAIBaseURL
-                                            .trimmingCharacters(in: .whitespacesAndNewlines))
+                                    let hasApiKey = self.providerAPIKeys[self.currentProvider]?.isEmpty == false
+                                    let isLocal = self.isLocalEndpoint(self.openAIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines))
                                     let hasModel = self.availableModels.contains(self.selectedModel)
                                     let isConfigured = (isLocal || hasApiKey) && hasModel
                                     return isConfigured ? "AI Enhancement Configured" : "Set Up AI Enhancement (Optional)"
                                 }(),
                                 description: {
-                                    let hasApiKey = self.providerAPIKeys[self.currentProvider]?
-                                        .isEmpty == false
-                                    let isLocal = self
-                                        .isLocalEndpoint(self.openAIBaseURL
-                                            .trimmingCharacters(in: .whitespacesAndNewlines))
+                                    let hasApiKey = self.providerAPIKeys[self.currentProvider]?.isEmpty == false
+                                    let isLocal = self.isLocalEndpoint(self.openAIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines))
                                     let hasModel = self.availableModels.contains(self.selectedModel)
                                     let isConfigured = (isLocal || hasApiKey) && hasModel
                                     return isConfigured
@@ -133,11 +127,8 @@ struct WelcomeView: View {
                                         : "Configure API keys for AI-powered text enhancement"
                                 }(),
                                 status: {
-                                    let hasApiKey = self.providerAPIKeys[self.currentProvider]?
-                                        .isEmpty == false
-                                    let isLocal = self
-                                        .isLocalEndpoint(self.openAIBaseURL
-                                            .trimmingCharacters(in: .whitespacesAndNewlines))
+                                    let hasApiKey = self.providerAPIKeys[self.currentProvider]?.isEmpty == false
+                                    let isLocal = self.isLocalEndpoint(self.openAIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines))
                                     let hasModel = self.availableModels.contains(self.selectedModel)
                                     return ((isLocal || hasApiKey) && hasModel) ? .completed : .pending
                                 }(),
@@ -177,21 +168,9 @@ struct WelcomeView: View {
                             .foregroundStyle(.green)
 
                         VStack(alignment: .leading, spacing: 10) {
-                            self.howToStep(
-                                number: 1,
-                                title: "Start Recording",
-                                description: "Press your hotkey (default: Right Option/Alt) or click the button"
-                            )
-                            self.howToStep(
-                                number: 2,
-                                title: "Speak Clearly",
-                                description: "Speak naturally - works best in quiet environments"
-                            )
-                            self.howToStep(
-                                number: 3,
-                                title: "Auto-Type Result",
-                                description: "Transcription is automatically typed into your focused app"
-                            )
+                            self.howToStep(number: 1, title: "Start Recording", description: "Press your hotkey (default: Right Option/Alt) or click the button")
+                            self.howToStep(number: 2, title: "Speak Clearly", description: "Speak naturally - works best in quiet environments")
+                            self.howToStep(number: 3, title: "Auto-Type Result", description: "Transcription is automatically typed into your focused app")
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -242,10 +221,7 @@ struct WelcomeView: View {
                                 .font(.subheadline.weight(.medium))
                                 .foregroundStyle(.orange)
                             self.commandModeExample(icon: "folder", text: "\"List files in my Downloads folder\"")
-                            self.commandModeExample(
-                                icon: "plus.rectangle.on.folder",
-                                text: "\"Create a folder called Projects on Desktop\""
-                            )
+                            self.commandModeExample(icon: "plus.rectangle.on.folder", text: "\"Create a folder called Projects on Desktop\"")
                             self.commandModeExample(icon: "network", text: "\"What's my IP address?\"")
                             self.commandModeExample(icon: "safari", text: "\"Open Safari\"")
                         }
@@ -418,39 +394,45 @@ struct WelcomeView: View {
                                 .focused(self.isTranscriptionFocused)
                                 .frame(height: 140)
                                 .padding(10)
-                                .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(self.asr.isRunning ? self.theme.palette.accent
-                                        .opacity(0.06) : Color(nsColor: NSColor.textBackgroundColor))
-                                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .strokeBorder(
-                                            self.asr.isRunning ? self.theme.palette.accent
-                                                .opacity(0.4) : Color(nsColor: NSColor.separatorColor),
-                                            lineWidth: self.asr.isRunning ? 2 : 1
-                                        )))
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(
+                                            self.asr.isRunning ? self.theme.palette.accent.opacity(0.06) : Color(nsColor: NSColor.textBackgroundColor)
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                .strokeBorder(
+                                                    self.asr.isRunning ? self.theme.palette.accent.opacity(0.4) : Color(nsColor: NSColor.separatorColor),
+                                                    lineWidth: self.asr.isRunning ? 2 : 1
+                                                )
+                                        )
+                                )
                                 .scrollContentBackground(.hidden)
-                                .overlay(VStack(spacing: 8) {
-                                    if self.asr.isRunning {
-                                        Image(systemName: "waveform")
-                                            .font(.title2)
-                                            .foregroundStyle(self.theme.palette.accent)
-                                        Text("Listening... Speak now!")
-                                            .font(.subheadline.weight(.medium))
-                                            .foregroundStyle(self.theme.palette.accent)
-                                        Text("Transcription will appear when you stop recording")
-                                            .font(.caption)
-                                            .foregroundStyle(self.theme.palette.accent.opacity(0.7))
-                                    } else if self.asr.finalText.isEmpty {
-                                        Image(systemName: "text.bubble")
-                                            .font(.title2)
-                                            .foregroundStyle(.secondary.opacity(0.5))
-                                        Text("Ready to test!")
-                                            .font(.subheadline.weight(.medium))
-                                        Text("Click 'Start Recording' or press your hotkey")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                .overlay(
+                                    VStack(spacing: 8) {
+                                        if self.asr.isRunning {
+                                            Image(systemName: "waveform")
+                                                .font(.title2)
+                                                .foregroundStyle(self.theme.palette.accent)
+                                            Text("Listening... Speak now!")
+                                                .font(.subheadline.weight(.medium))
+                                                .foregroundStyle(self.theme.palette.accent)
+                                            Text("Transcription will appear when you stop recording")
+                                                .font(.caption)
+                                                .foregroundStyle(self.theme.palette.accent.opacity(0.7))
+                                        } else if self.asr.finalText.isEmpty {
+                                            Image(systemName: "text.bubble")
+                                                .font(.title2)
+                                                .foregroundStyle(.secondary.opacity(0.5))
+                                            Text("Ready to test!")
+                                                .font(.subheadline.weight(.medium))
+                                            Text("Click 'Start Recording' or press your hotkey")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
-                                }
-                                .allowsHitTesting(false))
+                                    .allowsHitTesting(false)
+                                )
 
                                 if !self.asr.finalText.isEmpty {
                                     HStack(spacing: 8) {

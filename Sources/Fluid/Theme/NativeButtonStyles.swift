@@ -24,22 +24,24 @@ struct GlassButtonStyle: ButtonStyle {
                 .frame(minHeight: 36)
                 .foregroundStyle(self.theme.palette.primaryText)
                 .background(self.theme.materials.card, in: self.shape)
-                .background(self.shape
-                    .fill(self.theme.palette.cardBackground)
-                    .overlay(self.shape.stroke(
-                        self.theme.palette.cardBorder.opacity(self.isHovered ? 0.45 : 0.25),
-                        lineWidth: 1
-                    )))
-                .overlay(self.shape
-                    .stroke(self.theme.palette.accent.opacity(self.isHovered ? 0.25 : 0.1), lineWidth: 1)
-                    .blendMode(.plusLighter))
+                .background(
+                    self.shape
+                        .fill(self.theme.palette.cardBackground)
+                        .overlay(
+                            self.shape.stroke(
+                                self.theme.palette.cardBorder.opacity(self.isHovered ? 0.45 : 0.25),
+                                lineWidth: 1
+                            )
+                        )
+                )
+                .overlay(
+                    self.shape
+                        .stroke(self.theme.palette.accent.opacity(self.isHovered ? 0.25 : 0.1), lineWidth: 1)
+                        .blendMode(.plusLighter)
+                )
                 .shadow(
                     color: self.theme.palette.cardBorder.opacity(self.isHovered ? 0.45 : 0.22),
-                    radius: self.isHovered ? self.theme.metrics.cardShadow
-                        .radius : max(
-                            self.theme.metrics.cardShadow.radius - 3,
-                            2
-                        ),
+                    radius: self.isHovered ? self.theme.metrics.cardShadow.radius : max(self.theme.metrics.cardShadow.radius - 3, 2),
                     x: 0,
                     y: self.isHovered ? self.theme.metrics.cardShadow.y : self.theme.metrics.cardShadow.y - 2
                 )
@@ -100,20 +102,20 @@ struct PremiumButtonStyle: ButtonStyle {
                 .frame(maxWidth: .infinity)
                 .frame(height: self.height)
                 .foregroundStyle(self.isRecording ? Color.white : self.theme.palette.primaryText)
-                .background(self.shape
-                    .fill(self.baseGradient)
-                    .overlay(self.shape.stroke(
-                        Color.white.opacity(self.isHovered ? 0.35 : 0.2),
-                        lineWidth: 1
-                    )))
+                .background(
+                    self.shape
+                        .fill(self.baseGradient)
+                        .overlay(
+                            self.shape.stroke(
+                                Color.white.opacity(self.isHovered ? 0.35 : 0.2),
+                                lineWidth: 1
+                            )
+                        )
+                )
                 .shadow(
                     color: (self.isRecording ? Color(nsColor: .systemRed) : self.theme.palette.accent)
                         .opacity(self.isHovered ? 0.45 : 0.25),
-                    radius: self.isHovered ? self.theme.metrics.elevatedCardShadow
-                        .radius : max(
-                            self.theme.metrics.cardShadow.radius - 2,
-                            2
-                        ),
+                    radius: self.isHovered ? self.theme.metrics.elevatedCardShadow.radius : max(self.theme.metrics.cardShadow.radius - 2, 2),
                     x: 0,
                     y: self.isHovered ? self.theme.metrics.elevatedCardShadow.y : self.theme.metrics.cardShadow.y
                 )
@@ -148,19 +150,19 @@ struct SecondaryButtonStyle: ButtonStyle {
                 .frame(height: 42)
                 .foregroundStyle(self.theme.palette.primaryText)
                 .background(self.theme.materials.card, in: self.shape)
-                .background(self.shape
-                    .fill(self.theme.palette.cardBackground)
-                    .overlay(self.shape.stroke(
-                        self.theme.palette.cardBorder.opacity(self.isHovered ? 0.45 : 0.25),
-                        lineWidth: 1
-                    )))
+                .background(
+                    self.shape
+                        .fill(self.theme.palette.cardBackground)
+                        .overlay(
+                            self.shape.stroke(
+                                self.theme.palette.cardBorder.opacity(self.isHovered ? 0.45 : 0.25),
+                                lineWidth: 1
+                            )
+                        )
+                )
                 .shadow(
                     color: self.theme.palette.cardBorder.opacity(self.isHovered ? 0.35 : 0.15),
-                    radius: self.isHovered ? self.theme.metrics.cardShadow
-                        .radius : max(
-                            self.theme.metrics.cardShadow.radius - 4,
-                            1
-                        ),
+                    radius: self.isHovered ? self.theme.metrics.cardShadow.radius : max(self.theme.metrics.cardShadow.radius - 4, 1),
                     x: 0,
                     y: self.isHovered ? self.theme.metrics.cardShadow.y : self.theme.metrics.cardShadow.y - 2
                 )
@@ -198,14 +200,17 @@ struct CompactButtonStyle: ButtonStyle {
                 .frame(height: 34)
                 .foregroundStyle(self.theme.palette.primaryText)
                 .background(self.theme.materials.card, in: self.shape)
-                .background(self.shape
-                    .fill(self.theme.palette.cardBackground)
-                    .overlay(self.shape
-                        .stroke(
-                            (self.isReady ? self.theme.palette.accent : self.theme.palette.cardBorder)
-                                .opacity(self.isHovered ? 0.45 : 0.25),
-                            lineWidth: 1
-                        )))
+                .background(
+                    self.shape
+                        .fill(self.theme.palette.cardBackground)
+                        .overlay(
+                            self.shape.stroke(
+                                (self.isReady ? self.theme.palette.accent : self.theme.palette.cardBorder)
+                                    .opacity(self.isHovered ? 0.45 : 0.25),
+                                lineWidth: 1
+                            )
+                        )
+                )
                 .shadow(
                     color: (self.isReady ? self.theme.palette.accent : self.theme.palette.cardBorder)
                         .opacity(self.isHovered ? 0.3 : 0.12),
@@ -244,8 +249,10 @@ struct InlineButtonStyle: ButtonStyle {
                 .padding(.horizontal, self.theme.metrics.spacing.md)
                 .padding(.vertical, self.theme.metrics.spacing.xs)
                 .foregroundStyle(Color.white)
-                .background(self.shape
-                    .fill(self.theme.palette.accent.opacity(self.isHovered ? 0.9 : 0.8)))
+                .background(
+                    self.shape
+                        .fill(self.theme.palette.accent.opacity(self.isHovered ? 0.9 : 0.8))
+                )
                 .shadow(
                     color: self.theme.palette.accent.opacity(self.isHovered ? 0.45 : 0.25),
                     radius: self.isHovered ? 6 : 3,

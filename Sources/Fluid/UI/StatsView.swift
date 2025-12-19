@@ -320,8 +320,10 @@ struct StatsView: View {
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
-                .background(RoundedRectangle(cornerRadius: 4)
-                    .fill(milestone.achieved ? self.theme.palette.success.opacity(0.1) : Color.clear))
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(milestone.achieved ? self.theme.palette.success.opacity(0.1) : Color.clear)
+                )
             }
 
             Spacer()
@@ -449,8 +451,10 @@ struct StatsView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
-        .background(RoundedRectangle(cornerRadius: 8)
-            .fill(self.theme.palette.accent.opacity(0.08)))
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(self.theme.palette.accent.opacity(0.08))
+        )
     }
 
     // MARK: - Reset Section

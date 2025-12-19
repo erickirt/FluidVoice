@@ -126,12 +126,7 @@ class DebugLogger: ObservableObject {
     }
 
     private func formatLogEntry(_ entry: LogEntry) -> String {
-        self.formatLogLine(
-            timestamp: entry.formattedTimestamp,
-            level: entry.level,
-            source: entry.source,
-            message: entry.message
-        )
+        self.formatLogLine(timestamp: entry.formattedTimestamp, level: entry.level, source: entry.source, message: entry.message)
     }
 
     private func formatLogLine(timestamp: String, level: LogLevel, source: String, message: String) -> String {

@@ -1,3 +1,10 @@
+//
+//  AudioDeviceService.swift
+//  fluid
+//
+//  CoreAudio device management and monitoring
+//
+
 import Combine
 import CoreAudio
 import Foundation
@@ -50,16 +57,8 @@ enum AudioDevice {
         devices.reserveCapacity(deviceIDs.count)
 
         for devId in deviceIDs {
-            let name = self.getStringProperty(
-                devId,
-                selector: kAudioObjectPropertyName,
-                scope: kAudioObjectPropertyScopeGlobal
-            ) ?? "Unknown"
-            let uid = self.getStringProperty(
-                devId,
-                selector: kAudioDevicePropertyDeviceUID,
-                scope: kAudioObjectPropertyScopeGlobal
-            ) ?? ""
+            let name = self.getStringProperty(devId, selector: kAudioObjectPropertyName, scope: kAudioObjectPropertyScopeGlobal) ?? "Unknown"
+            let uid = self.getStringProperty(devId, selector: kAudioDevicePropertyDeviceUID, scope: kAudioObjectPropertyScopeGlobal) ?? ""
             let hasIn = self.hasChannels(devId, scope: kAudioObjectPropertyScopeInput)
             let hasOut = self.hasChannels(devId, scope: kAudioObjectPropertyScopeOutput)
             devices.append(Device(id: devId, uid: uid, name: name, hasInput: hasIn, hasOutput: hasOut))
@@ -77,14 +76,12 @@ enum AudioDevice {
     }
 
     static func getDefaultInputDevice() -> Device? {
-        guard let devId: AudioObjectID = getDefaultDeviceId(selector: kAudioHardwarePropertyDefaultInputDevice)
-        else { return nil }
+        guard let devId: AudioObjectID = getDefaultDeviceId(selector: kAudioHardwarePropertyDefaultInputDevice) else { return nil }
         return self.listAllDevices().first { $0.id == devId }
     }
 
     static func getDefaultOutputDevice() -> Device? {
-        guard let devId: AudioObjectID = getDefaultDeviceId(selector: kAudioHardwarePropertyDefaultOutputDevice)
-        else { return nil }
+        guard let devId: AudioObjectID = getDefaultDeviceId(selector: kAudioHardwarePropertyDefaultOutputDevice) else { return nil }
         return self.listAllDevices().first { $0.id == devId }
     }
 

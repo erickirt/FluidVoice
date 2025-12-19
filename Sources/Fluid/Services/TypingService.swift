@@ -150,11 +150,7 @@ final class TypingService {
         let systemWideElement = AXUIElementCreateSystemWide()
         var focusedElement: CFTypeRef?
 
-        let result = AXUIElementCopyAttributeValue(
-            systemWideElement,
-            kAXFocusedUIElementAttribute as CFString,
-            &focusedElement
-        )
+        let result = AXUIElementCopyAttributeValue(systemWideElement, kAXFocusedUIElementAttribute as CFString, &focusedElement)
 
         if result == .success, let focusedElement {
             guard CFGetTypeID(focusedElement) == AXUIElementGetTypeID() else { return nil }
@@ -213,11 +209,7 @@ final class TypingService {
         let appElement = AXUIElementCreateApplication(frontmostApp.processIdentifier)
         var focusedElement: CFTypeRef?
 
-        let result = AXUIElementCopyAttributeValue(
-            appElement,
-            kAXFocusedUIElementAttribute as CFString,
-            &focusedElement
-        )
+        let result = AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedElement)
 
         if result == .success, let focusedElement {
             guard CFGetTypeID(focusedElement) == AXUIElementGetTypeID() else { return nil }
@@ -285,11 +277,7 @@ final class TypingService {
 
     private func setTextViaSelection(_ element: AXUIElement, _ text: String) -> Bool {
         // First, select all existing text
-        let selectAllResult = AXUIElementSetAttributeValue(
-            element,
-            kAXSelectedTextAttribute as CFString,
-            "" as CFString
-        )
+        let selectAllResult = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, "" as CFString)
         self.log("[TypingService] Select all result: \(selectAllResult.rawValue)")
 
         // Then replace the selection with our text
@@ -308,11 +296,7 @@ final class TypingService {
     private func insertTextAtInsertionPoint(_ element: AXUIElement, _ text: String) -> Bool {
         // Try to get the insertion point
         var insertionPoint: CFTypeRef?
-        let getResult = AXUIElementCopyAttributeValue(
-            element,
-            kAXInsertionPointLineNumberAttribute as CFString,
-            &insertionPoint
-        )
+        let getResult = AXUIElementCopyAttributeValue(element, kAXInsertionPointLineNumberAttribute as CFString, &insertionPoint)
         self.log("[TypingService] Get insertion point result: \(getResult.rawValue)")
 
         // Try to insert text using parameterized attribute
@@ -340,8 +324,7 @@ final class TypingService {
         let targetPID = frontApp.processIdentifier
         self.log("[TypingService] Targeting PID \(targetPID) for bulk insertion")
 
-        // Try word-by-word insertion instead of entire text at once (faster than char-by-char but more reliable than
-        // bulk)
+        // Try word-by-word insertion instead of entire text at once (faster than char-by-char but more reliable than bulk)
         let words = text.components(separatedBy: " ")
         self.log("[TypingService] Splitting text into \(words.count) words for bulk insertion")
 

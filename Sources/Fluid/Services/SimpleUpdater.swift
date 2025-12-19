@@ -218,12 +218,10 @@ final class SimpleUpdater {
         let curTeam = teamID(from: curID)
         let newTeam = teamID(from: newID)
         let sameTeam = (curTeam != nil && curTeam == newTeam)
-        let bothAllowed: Bool
-        if let curTeam, let newTeam {
-            bothAllowed = self.allowedTeamIDs.contains(curTeam) && self.allowedTeamIDs.contains(newTeam)
-        } else {
-            bothAllowed = false
-        }
+        let bothAllowed: Bool = {
+            guard let ct = curTeam, let nt = newTeam else { return false }
+            return self.allowedTeamIDs.contains(ct) && self.allowedTeamIDs.contains(nt)
+        }()
 
         guard sameIdentity || sameTeam || bothAllowed else {
             print("SimpleUpdater: Code-sign mismatch. Current=\(curID) New=\(newID)")

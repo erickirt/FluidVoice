@@ -1,3 +1,10 @@
+//
+//  SetupComponents.swift
+//  fluid
+//
+//  Helper components for setup and onboarding UI
+//
+
 import AppKit
 import SwiftUI
 
@@ -29,8 +36,10 @@ struct SetupStepView: View {
                     Circle()
                         .fill(self.statusColor.opacity(0.12))
                         .frame(width: 28, height: 28)
-                        .overlay(Circle()
-                            .stroke(self.statusColor.opacity(0.25), lineWidth: 1))
+                        .overlay(
+                            Circle()
+                                .stroke(self.statusColor.opacity(0.25), lineWidth: 1)
+                        )
 
                     if self.status == .completed {
                         Image(systemName: "checkmark.circle.fill")
@@ -82,17 +91,21 @@ struct SetupStepView: View {
                 }
             }
             .padding(10)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(self.status == .completed
-                    ? Color.green.opacity(0.06)
-                    : self.theme.palette.cardBackground.opacity(0.5))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(
-                        self.status == .completed
-                            ? Color.green.opacity(0.25)
-                            : self.theme.palette.cardBorder.opacity(0.2),
-                        lineWidth: 1
-                    )))
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(self.status == .completed
+                        ? Color.green.opacity(0.06)
+                        : self.theme.palette.cardBackground.opacity(0.5))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(
+                                self.status == .completed
+                                    ? Color.green.opacity(0.25)
+                                    : self.theme.palette.cardBorder.opacity(0.2),
+                                lineWidth: 1
+                            )
+                    )
+            )
         }
         .buttonStyle(.plain)
         .disabled(self.status == .completed || !self.showActionButton)

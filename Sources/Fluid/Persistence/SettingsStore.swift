@@ -57,6 +57,7 @@ final class SettingsStore: ObservableObject {
         // Model Reasoning Config Keys
         static let modelReasoningConfigs = "ModelReasoningConfigs"
         static let rewriteModeShortcutEnabled = "RewriteModeShortcutEnabled"
+        static let showThinkingTokens = "ShowThinkingTokens"
 
         // Stats Keys
         static let userTypingWPM = "UserTypingWPM"
@@ -395,11 +396,7 @@ final class SettingsStore: ObservableObject {
     }
 
     var commandModeLinkedToGlobal: Bool {
-        get {
-            self.defaults
-                .bool(forKey: Keys.commandModeLinkedToGlobal)
-        } // Default to false (let user opt-in, or true if
-        // preferred)
+        get { self.defaults.bool(forKey: Keys.commandModeLinkedToGlobal) } // Default to false (let user opt-in, or true if preferred)
         set {
             objectWillChange.send()
             self.defaults.set(newValue, forKey: Keys.commandModeLinkedToGlobal)
@@ -580,6 +577,31 @@ final class SettingsStore: ObservableObject {
         set {
             objectWillChange.send()
             self.defaults.set(newValue, forKey: Keys.rewriteModeShortcutEnabled)
+        }
+    }
+
+    /// Global check if a model is a reasoning model (requires special params/max_completion_tokens)
+    func isReasoningModel(_ model: String) -> Bool {
+        let modelLower = model.lowercased()
+        return modelLower.hasPrefix("gpt-5") ||
+            modelLower.contains("gpt-5.") ||
+            modelLower.hasPrefix("o1") ||
+            modelLower.hasPrefix("o3") ||
+            modelLower.contains("gpt-oss") ||
+            modelLower.hasPrefix("openai/") ||
+            (modelLower.contains("deepseek") && modelLower.contains("reasoner"))
+    }
+
+    /// Whether to display thinking tokens in the UI (Command Mode, Rewrite Mode)
+    /// If false, thinking tokens are extracted but not shown to user
+    var showThinkingTokens: Bool {
+        get {
+            let value = self.defaults.object(forKey: Keys.showThinkingTokens)
+            return value as? Bool ?? true // Default to true (show thinking)
+        }
+        set {
+            objectWillChange.send()
+            self.defaults.set(newValue, forKey: Keys.showThinkingTokens)
         }
     }
 
@@ -1064,11 +1086,7 @@ final class SettingsStore: ObservableObject {
 
         // Persist the migrated value
         self.defaults.set(newModel.rawValue, forKey: Keys.selectedSpeechModel)
-        DebugLogger.shared
-            .info(
-                "Migrated speech model settings: \(oldProvider)/\(oldWhisperSize) -> \(newModel.rawValue)",
-                source: "SettingsStore"
-            )
+        DebugLogger.shared.info("Migrated speech model settings: \(oldProvider)/\(oldWhisperSize) -> \(newModel.rawValue)", source: "SettingsStore")
 
         return newModel
     }

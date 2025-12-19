@@ -41,11 +41,7 @@ final class TextSelectionService {
         let systemWideElement = AXUIElementCreateSystemWide()
         var focusedElement: CFTypeRef?
 
-        let result = AXUIElementCopyAttributeValue(
-            systemWideElement,
-            kAXFocusedUIElementAttribute as CFString,
-            &focusedElement
-        )
+        let result = AXUIElementCopyAttributeValue(systemWideElement, kAXFocusedUIElementAttribute as CFString, &focusedElement)
 
         if result == .success, let focusedElement {
             guard CFGetTypeID(focusedElement) == AXUIElementGetTypeID() else { return nil }
@@ -57,11 +53,7 @@ final class TextSelectionService {
 
     private func getFocusedElement(from appElement: AXUIElement) -> AXUIElement? {
         var focusedElement: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(
-            appElement,
-            kAXFocusedUIElementAttribute as CFString,
-            &focusedElement
-        )
+        let result = AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedElement)
 
         if result == .success, let focusedElement {
             guard CFGetTypeID(focusedElement) == AXUIElementGetTypeID() else { return nil }

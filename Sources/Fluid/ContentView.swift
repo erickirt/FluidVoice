@@ -1,3 +1,10 @@
+//
+//  ContentView.swift
+//  fluid
+//
+//  Created by Barathwaj Anandan on 7/30/25.
+//
+
 import AppKit
 import AVFoundation
 import Combine
@@ -26,19 +33,7 @@ enum SidebarItem: Hashable {
 
 // Removed deprecated inline service and model
 
-// MARK: - Streaming Response Structures
-
-private struct StreamingDelta: Codable { let role: String?; let content: String? }
-private struct StreamingChoice: Codable { let index: Int?; let delta: StreamingDelta; let finish_reason: String? }
-private struct StreamingChunk: Codable { let choices: [StreamingChoice] }
-
-// MARK: - AI Processing Response Structures
-
-// NOTE: Keep Codable types out of View methods to avoid SwiftUI/metadata blowups at launch.
-private struct AIProcessingMessage: Codable { let role: String; let content: String }
-private struct AIProcessingChoiceMessage: Codable { let role: String; let content: String }
-private struct AIProcessingChoice: Codable { let index: Int?; let message: AIProcessingChoiceMessage }
-private struct AIProcessingResponse: Codable { let choices: [AIProcessingChoice] }
+// NOTE: Streaming and AI response parsing is now handled by LLMClient
 
 struct ContentView: View {
     @StateObject private var audioObserver = AudioHardwareObserver()
@@ -128,12 +123,14 @@ struct ContentView: View {
     @State private var selectedProviderID: String = SettingsStore.shared.selectedProviderID
 
     var body: some View {
-        let splitView = AnyView(NavigationSplitView {
-            self.sidebarView
-                .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
-        } detail: {
-            self.detailView
-        })
+        let splitView = AnyView(
+            NavigationSplitView {
+                self.sidebarView
+                    .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
+            } detail: {
+                self.detailView
+            }
+        )
 
         let tracked = splitView.withMouseTracking(self.mouseTracker)
         let env = tracked.environmentObject(self.mouseTracker)
@@ -182,10 +179,8 @@ struct ContentView: View {
                 self.refreshDevices()
 
                 // Set default selection if empty
-                if self.selectedInputUID.isEmpty,
-                   let defIn = AudioDevice.getDefaultInputDevice()?.uid { self.selectedInputUID = defIn }
-                if self.selectedOutputUID.isEmpty,
-                   let defOut = AudioDevice.getDefaultOutputDevice()?.uid { self.selectedOutputUID = defOut }
+                if self.selectedInputUID.isEmpty, let defIn = AudioDevice.getDefaultInputDevice()?.uid { self.selectedInputUID = defIn }
+                if self.selectedOutputUID.isEmpty, let defOut = AudioDevice.getDefaultOutputDevice()?.uid { self.selectedOutputUID = defOut }
 
                 // Load saved preferences for UI display (but don't force system defaults)
                 // FluidVoice should NOT control system-wide audio routing
@@ -311,29 +306,13 @@ struct ContentView: View {
 
             NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { event in
                 let eventModifiers = event.modifierFlags.intersection([.function, .command, .option, .control, .shift])
-                let shortcutModifiers = self.hotkeyShortcut.modifierFlags.intersection([
-                    .function,
-                    .command,
-                    .option,
-                    .control,
-                    .shift,
-                ])
+                let shortcutModifiers = self.hotkeyShortcut.modifierFlags.intersection([.function, .command, .option, .control, .shift])
 
-                let isRecordingAnyShortcut = self.isRecordingShortcut || self.isRecordingCommandModeShortcut || self
-                    .isRecordingRewriteShortcut
-                DebugLogger.shared
-                    .debug(
-                        "NSEvent \(event.type) keyCode=\(event.keyCode) recordingShortcut=\(self.isRecordingShortcut) recordingCommand=\(self.isRecordingCommandModeShortcut) recordingRewrite=\(self.isRecordingRewriteShortcut)",
-                        source: "ContentView"
-                    )
+                let isRecordingAnyShortcut = self.isRecordingShortcut || self.isRecordingCommandModeShortcut || self.isRecordingRewriteShortcut
 
                 if event.type == .keyDown {
                     if event.keyCode == self.hotkeyShortcut.keyCode && eventModifiers == shortcutModifiers {
-                        DebugLogger.shared
-                            .debug(
-                                "NSEvent monitor: Global hotkey matched on keyDown, passing event through (GlobalHotkeyManager handles)",
-                                source: "ContentView"
-                            )
+                        DebugLogger.shared.debug("NSEvent monitor: Global hotkey matched on keyDown, passing event through (GlobalHotkeyManager handles)", source: "ContentView")
                         return event
                     }
 
@@ -354,20 +333,14 @@ struct ContentView: View {
                             }
 
                             if self.asr.isRunning {
-                                DebugLogger.shared.debug(
-                                    "NSEvent monitor: Escape pressed, cancelling ASR recording",
-                                    source: "ContentView"
-                                )
+                                DebugLogger.shared.debug("NSEvent monitor: Escape pressed, cancelling ASR recording", source: "ContentView")
                                 self.asr.stopWithoutTranscription()
                                 handled = true
                             }
 
                             // Close mode views if active
                             if self.selectedSidebarItem == .commandMode || self.selectedSidebarItem == .rewriteMode {
-                                DebugLogger.shared.debug(
-                                    "NSEvent monitor: Escape pressed, closing mode view",
-                                    source: "ContentView"
-                                )
+                                DebugLogger.shared.debug("NSEvent monitor: Escape pressed, closing mode view", source: "ContentView")
                                 self.selectedSidebarItem = .welcome
                                 handled = true
                             }
@@ -382,10 +355,7 @@ struct ContentView: View {
 
                     let keyCode = event.keyCode
                     if keyCode == 53 {
-                        DebugLogger.shared.debug(
-                            "NSEvent monitor: Escape pressed, cancelling shortcut recording",
-                            source: "ContentView"
-                        )
+                        DebugLogger.shared.debug("NSEvent monitor: Escape pressed, cancelling shortcut recording", source: "ContentView")
                         self.isRecordingShortcut = false
                         self.isRecordingCommandModeShortcut = false
                         self.isRecordingRewriteShortcut = false
@@ -395,10 +365,7 @@ struct ContentView: View {
 
                     let combinedModifiers = self.pendingModifierFlags.union(eventModifiers)
                     let newShortcut = HotkeyShortcut(keyCode: keyCode, modifierFlags: combinedModifiers)
-                    DebugLogger.shared.debug(
-                        "NSEvent monitor: Recording new shortcut: \(newShortcut.displayString)",
-                        source: "ContentView"
-                    )
+                    DebugLogger.shared.debug("NSEvent monitor: Recording new shortcut: \(newShortcut.displayString)", source: "ContentView")
 
                     if self.isRecordingRewriteShortcut {
                         self.rewriteModeHotkeyShortcut = newShortcut
@@ -423,11 +390,7 @@ struct ContentView: View {
                     if self.hotkeyShortcut.modifierFlags.isEmpty {
                         let isModifierKeyPressed = eventModifiers.isEmpty == false
                         if event.keyCode == self.hotkeyShortcut.keyCode && isModifierKeyPressed {
-                            DebugLogger.shared
-                                .debug(
-                                    "NSEvent monitor: Global hotkey matched on flagsChanged, passing event through (GlobalHotkeyManager handles)",
-                                    source: "ContentView"
-                                )
+                            DebugLogger.shared.debug("NSEvent monitor: Global hotkey matched on flagsChanged, passing event through (GlobalHotkeyManager handles)", source: "ContentView")
                             return event
                         }
                     }
@@ -440,11 +403,7 @@ struct ContentView: View {
                     if eventModifiers.isEmpty {
                         if self.pendingModifierOnly, let modifierKeyCode = pendingModifierKeyCode {
                             let newShortcut = HotkeyShortcut(keyCode: modifierKeyCode, modifierFlags: [])
-                            DebugLogger.shared
-                                .debug(
-                                    "NSEvent monitor: Recording modifier-only shortcut: \(newShortcut.displayString)",
-                                    source: "ContentView"
-                                )
+                            DebugLogger.shared.debug("NSEvent monitor: Recording modifier-only shortcut: \(newShortcut.displayString)", source: "ContentView")
 
                             if self.isRecordingRewriteShortcut {
                                 self.rewriteModeHotkeyShortcut = newShortcut
@@ -463,19 +422,12 @@ struct ContentView: View {
                                 self.isRecordingShortcut = false
                             }
                             self.resetPendingShortcutState()
-                            DebugLogger.shared.debug(
-                                "NSEvent monitor: Finished recording modifier shortcut",
-                                source: "ContentView"
-                            )
+                            DebugLogger.shared.debug("NSEvent monitor: Finished recording modifier shortcut", source: "ContentView")
                             return nil
                         }
 
                         self.resetPendingShortcutState()
-                        DebugLogger.shared
-                            .debug(
-                                "NSEvent monitor: Modifiers released without recording, continuing to wait",
-                                source: "ContentView"
-                            )
+                        DebugLogger.shared.debug("NSEvent monitor: Modifiers released without recording, continuing to wait", source: "ContentView")
                         return nil
                     }
 
@@ -496,11 +448,7 @@ struct ContentView: View {
                     self.pendingModifierFlags = eventModifiers
                     self.pendingModifierKeyCode = actualKeyCode
                     self.pendingModifierOnly = true
-                    DebugLogger.shared
-                        .debug(
-                            "NSEvent monitor: Modifier key pressed during recording, pending modifiers: \(self.pendingModifierFlags)",
-                            source: "ContentView"
-                        )
+                    DebugLogger.shared.debug("NSEvent monitor: Modifier key pressed during recording, pending modifiers: \(self.pendingModifierFlags)", source: "ContentView")
                     return nil
                 }
 
@@ -613,10 +561,7 @@ struct ContentView: View {
 
     /// Centralized handler for sidebar mode transitions to ensure proper cleanup and state management
     private func handleModeTransition(from oldValue: SidebarItem?, to newValue: SidebarItem?) {
-        DebugLogger.shared.debug(
-            "Mode transition: \(String(describing: oldValue)) → \(String(describing: newValue))",
-            source: "ContentView"
-        )
+        DebugLogger.shared.debug("Mode transition: \(String(describing: oldValue)) → \(String(describing: newValue))", source: "ContentView")
 
         // Clean up state from the previous mode
         if let old = oldValue {
@@ -810,8 +755,7 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(self.labelFor(status: self.asr.micStatus))
                         .fontWeight(.medium)
-                        .foregroundStyle(self.asr.micStatus == .authorized ? self.theme.palette.primaryText : self.theme
-                            .palette.warning)
+                        .foregroundStyle(self.asr.micStatus == .authorized ? self.theme.palette.primaryText : self.theme.palette.warning)
 
                     if self.asr.micStatus != .authorized {
                         Text("Microphone access is required for voice recording")
@@ -1226,6 +1170,8 @@ struct ContentView: View {
         return false
     }
 
+    // NOTE: Thinking token filtering is now handled by LLMClient.stripThinkingTags()
+
     // MARK: - Modular AI Processing
 
     private func processTextWithAI(_ inputText: String) async -> String {
@@ -1260,11 +1206,7 @@ struct ContentView: View {
             derivedSelectedModel = storedSelectedModelByProvider[currentSelectedProviderID] ?? ""
         }
 
-        DebugLogger.shared
-            .debug(
-                "processTextWithAI using provider=\(derivedCurrentProvider), model=\(derivedSelectedModel)",
-                source: "ContentView"
-            )
+        DebugLogger.shared.debug("processTextWithAI using provider=\(derivedCurrentProvider), model=\(derivedSelectedModel)", source: "ContentView")
 
         // Route to Apple Intelligence if selected
         if currentSelectedProviderID == "apple-intelligence" {
@@ -1280,31 +1222,10 @@ struct ContentView: View {
             return inputText // Fallback if not available
         }
 
-        let endpoint = derivedBaseURL.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-            .isEmpty ? "https://api.openai.com/v1" : derivedBaseURL
-            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-
-        // Build the full URL - only append /chat/completions if not already present
-        let fullEndpoint: String
-        if endpoint.contains("/chat/completions") ||
-            endpoint.contains("/api/chat") ||
-            endpoint.contains("/api/generate")
-        {
-            // URL already has a complete path, use as-is
-            fullEndpoint = endpoint
-        } else {
-            // Append /chat/completions for OpenAI-compatible endpoints
-            fullEndpoint = endpoint + "/chat/completions"
-        }
-
-        guard let url = URL(string: fullEndpoint) else {
-            return "Error: Invalid Base URL"
-        }
-
-        let isLocal = self.isLocalEndpoint(endpoint)
+        // Skip API key validation for local endpoints
+        let isLocal = self.isLocalEndpoint(derivedBaseURL)
         let apiKey = storedProviderAPIKeys[derivedCurrentProvider] ?? ""
 
-        // Skip API key validation for local endpoints
         if !isLocal {
             guard !apiKey.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty else {
                 return "Error: API Key not set for \(derivedCurrentProvider)"
@@ -1314,59 +1235,26 @@ struct ContentView: View {
         // Get app context captured at start of recording if available
         let appInfo = self.recordingAppInfo ?? self.getCurrentAppInfo()
         let systemPrompt = self.buildSystemPrompt(appInfo: appInfo)
-        DebugLogger.shared
-            .debug(
-                "Using app context for AI: app=\(appInfo.name), bundleId=\(appInfo.bundleId), title=\(appInfo.windowTitle)",
-                source: "ContentView"
-            )
-
-        // Get reasoning config for this model (uses per-model settings or auto-detection)
-        let providerKey = self.providerKey(for: currentSelectedProviderID)
-        let reasoningConfig = SettingsStore.shared.getReasoningConfig(
-            forModel: derivedSelectedModel,
-            provider: providerKey
-        )
-
-        if let config = reasoningConfig {
-            DebugLogger.shared
-                .debug(
-                    "Model '\(derivedSelectedModel)' reasoning config: \(config.parameterName)=\(config.parameterValue), enabled=\(config.isEnabled)",
-                    source: "ContentView"
-                )
-        } else {
-            DebugLogger.shared.debug("Model '\(derivedSelectedModel)' has no reasoning config", source: "ContentView")
-        }
-
-        // Get streaming setting
-        let enableStreaming = SettingsStore.shared.enableAIStreaming
+        DebugLogger.shared.debug("Using app context for AI: app=\(appInfo.name), bundleId=\(appInfo.bundleId), title=\(appInfo.windowTitle)", source: "ContentView")
 
         // Check if this is a reasoning model that doesn't support temperature parameter
         let modelLower = derivedSelectedModel.lowercased()
         let isReasoningModel = modelLower.hasPrefix("o1") || modelLower.hasPrefix("o3") || modelLower.hasPrefix("gpt-5")
 
-        // Build request body dynamically to support different reasoning parameters
-        var requestDict: [String: Any] = [
-            "model": derivedSelectedModel,
-            "messages": [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": inputText],
-            ],
-        ]
+        // Get reasoning config for this model (uses per-model settings or auto-detection)
+        // This handles custom parameters like reasoning_effort, enable_thinking, etc.
+        let providerKey = self.providerKey(for: currentSelectedProviderID)
+        let reasoningConfig = SettingsStore.shared.getReasoningConfig(forModel: derivedSelectedModel, provider: providerKey)
 
-        // Only add temperature for non-reasoning models
-        // OpenAI reasoning models (o1, o3, gpt-5) don't support custom temperature
-        if !isReasoningModel {
-            requestDict["temperature"] = 0.2
-        }
-
-        // Add reasoning parameter if configured for this model
+        // Build extra parameters from reasoning config
+        var extraParams: [String: Any] = [:]
         if let config = reasoningConfig, config.isEnabled {
             if config.parameterName == "enable_thinking" {
                 // DeepSeek uses boolean
-                requestDict[config.parameterName] = config.parameterValue == "true"
+                extraParams = [config.parameterName: config.parameterValue == "true"]
             } else {
-                // OpenAI/Groq use string values
-                requestDict[config.parameterName] = config.parameterValue
+                // OpenAI/Groq use string values (reasoning_effort, etc.)
+                extraParams = [config.parameterName: config.parameterValue]
             }
             DebugLogger.shared.debug(
                 "Added reasoning param: \(config.parameterName)=\(config.parameterValue)",
@@ -1374,123 +1262,51 @@ struct ContentView: View {
             )
         }
 
-        // Add streaming if enabled
-        if enableStreaming {
-            requestDict["stream"] = true
-        }
+        // Build messages array
+        let messages: [[String: Any]] = [
+            ["role": "system", "content": systemPrompt],
+            ["role": "user", "content": inputText],
+        ]
 
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: requestDict, options: []) else {
-            return "Error: Failed to encode request"
-        }
+        // NOTE: Transcription doesn't need streaming - the full result appears at once
+        // Streaming is only useful for Command/Rewrite modes where real-time display helps
+        // Using non-streaming is simpler and more reliable for transcription cleanup
+        let enableStreaming = false // Hardcoded off for transcription
 
-        // Debug: Log request body
-        if let bodyStr = String(data: jsonData, encoding: .utf8) {
-            DebugLogger.shared.debug("AI Request body: \(bodyStr)", source: "ContentView")
-        }
+        // Build LLMClient configuration
+        // Note: No onContentChunk callback needed since we don't display real-time
+        // Thinking tokens are extracted but not displayed (no onThinkingChunk)
+        let config = LLMClient.Config(
+            messages: messages,
+            model: derivedSelectedModel,
+            baseURL: derivedBaseURL,
+            apiKey: apiKey,
+            streaming: enableStreaming,
+            tools: [],
+            temperature: isReasoningModel ? nil : 0.2,
+            extraParameters: extraParams
+        )
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        // Only add Authorization header for non-local endpoints
-        if !isLocal {
-            request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        }
-
-        request.httpBody = jsonData
+        DebugLogger.shared.info("Using LLMClient for transcription (streaming=\(enableStreaming))", source: "ContentView")
 
         do {
-            if enableStreaming {
-                // Streaming mode - parse SSE response
-                DebugLogger.shared.info("Using STREAMING mode for AI request", source: "ContentView")
-                return try await self.processStreamingResponse(request: request)
-            } else {
-                // Non-streaming mode - single JSON response
-                DebugLogger.shared.info("Using NON-STREAMING mode for AI request", source: "ContentView")
-                let (data, response) = try await URLSession.shared.data(for: request)
+            let response = try await LLMClient.shared.call(config)
 
-                if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
-                    let errText = String(data: data, encoding: .utf8) ?? "Unknown error"
-                    return "Error: HTTP \(http.statusCode): \(errText)"
-                }
-                let decoded = try JSONDecoder().decode(AIProcessingResponse.self, from: data)
-                return decoded.choices.first?.message.content ?? "<no content>"
+            // Log thinking if present (for debugging)
+            if let thinking = response.thinking {
+                DebugLogger.shared.debug("LLM thinking tokens extracted (\(thinking.count) chars)", source: "ContentView")
             }
+
+            return response.content.isEmpty ? "<no content>" : response.content
         } catch {
             DebugLogger.shared.error("AI API error: \(error.localizedDescription)", source: "ContentView")
             return "Error: \(error.localizedDescription)"
         }
     }
 
-    // MARK: - Streaming Response Handler
+    // MARK: - Streaming Response Handler (DEPRECATED - Now handled by LLMClient)
 
-    private func processStreamingResponse(request: URLRequest) async throws -> String {
-        DebugLogger.shared.debug(
-            "Starting streaming request to: \(request.url?.absoluteString ?? "unknown")",
-            source: "Streaming"
-        )
-
-        let (bytes, response) = try await URLSession.shared.bytes(for: request)
-
-        if let http = response as? HTTPURLResponse {
-            DebugLogger.shared.debug("Streaming response status: \(http.statusCode)", source: "Streaming")
-            if http.statusCode >= 400 {
-                var errorData = Data()
-                for try await byte in bytes {
-                    errorData.append(byte)
-                }
-                let errText = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-                DebugLogger.shared.error("Streaming error: \(errText)", source: "Streaming")
-                return "Error: HTTP \(http.statusCode): \(errText)"
-            }
-        }
-
-        var fullContent = ""
-
-        // Use efficient line-based iteration instead of byte-by-byte
-        for try await rawLine in bytes.lines {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-
-            guard line.hasPrefix("data:") else { continue }
-
-            // Handle both "data: " and "data:" formats
-            var jsonString = String(line.dropFirst(5))
-            if jsonString.hasPrefix(" ") {
-                jsonString = String(jsonString.dropFirst(1))
-            }
-
-            // Skip [DONE] marker
-            if jsonString.trimmingCharacters(in: .whitespaces) == "[DONE]" {
-                DebugLogger.shared.debug("Received [DONE] marker", source: "Streaming")
-                continue
-            }
-
-            // Parse the JSON chunk
-            guard let jsonData = jsonString.data(using: .utf8) else { continue }
-
-            do {
-                let chunk = try JSONDecoder().decode(StreamingChunk.self, from: jsonData)
-                if let delta = chunk.choices.first?.delta,
-                   let content = delta.content
-                {
-                    fullContent += content
-                }
-            } catch {
-                // Try alternative parsing for different response formats
-                if let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-                   let choices = json["choices"] as? [[String: Any]],
-                   let firstChoice = choices.first,
-                   let delta = firstChoice["delta"] as? [String: Any],
-                   let content = delta["content"] as? String
-                {
-                    fullContent += content
-                }
-            }
-        }
-
-        DebugLogger.shared.debug("Streaming complete. Content length: \(fullContent.count)", source: "Streaming")
-        return fullContent.isEmpty ? "<no content>" : fullContent
-    }
+    // This method is no longer used - LLMClient.call() handles streaming internally
 
     // MARK: - Stop and Process Transcription
 
@@ -1548,8 +1364,7 @@ struct ContentView: View {
         }
         let trimmedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let isLocal = self.isLocalEndpoint(trimmedBaseURL)
-        let apiKey = (SettingsStore.shared.getAPIKey(for: currentProviderID) ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiKey = (SettingsStore.shared.getAPIKey(for: currentProviderID) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let shouldUseAI = SettingsStore.shared.enableAIProcessing && (isLocal || !apiKey.isEmpty)
 
         if shouldUseAI {
@@ -1588,11 +1403,10 @@ struct ContentView: View {
             let isFluidFrontmost = frontmostApp?.bundleIdentifier?.contains("fluid") == true
             let shouldTypeExternally = !isFluidFrontmost || self.isTranscriptionFocused == false
 
-            DebugLogger.shared
-                .debug(
-                    "Typing decision → frontmost: \(frontmostName), fluidFrontmost: \(isFluidFrontmost), editorFocused: \(self.isTranscriptionFocused), willTypeExternally: \(shouldTypeExternally)",
-                    source: "ContentView"
-                )
+            DebugLogger.shared.debug(
+                "Typing decision → frontmost: \(frontmostName), fluidFrontmost: \(isFluidFrontmost), editorFocused: \(self.isTranscriptionFocused), willTypeExternally: \(shouldTypeExternally)",
+                source: "ContentView"
+            )
 
             if shouldTypeExternally {
                 self.asr.typeTextToActiveField(finalText)
@@ -1604,11 +1418,7 @@ struct ContentView: View {
 
     private func processRewriteWithVoiceInstruction(_ instruction: String) async {
         let hasOriginalText = !self.rewriteModeService.originalText.isEmpty
-        DebugLogger.shared
-            .info(
-                "Processing \(hasOriginalText ? "rewrite" : "write/improve") - instruction: '\(instruction)', originalText length: \(self.rewriteModeService.originalText.count)",
-                source: "ContentView"
-            )
+        DebugLogger.shared.info("Processing \(hasOriginalText ? "rewrite" : "write/improve") - instruction: '\(instruction)', originalText length: \(self.rewriteModeService.originalText.count)", source: "ContentView")
 
         // Show processing animation
         self.menuBarManager.setProcessing(true)
@@ -1623,11 +1433,7 @@ struct ContentView: View {
 
         // If rewrite was successful, type the result
         if !self.rewriteModeService.rewrittenText.isEmpty {
-            DebugLogger.shared
-                .info(
-                    "Rewrite successful, typing result (chars: \(self.rewriteModeService.rewrittenText.count))",
-                    source: "ContentView"
-                )
+            DebugLogger.shared.info("Rewrite successful, typing result (chars: \(self.rewriteModeService.rewrittenText.count))", source: "ContentView")
 
             // Copy to clipboard as backup
             if SettingsStore.shared.copyTranscriptionToClipboard {
@@ -1671,11 +1477,7 @@ struct ContentView: View {
 
         let info = self.getCurrentAppInfo()
         self.recordingAppInfo = info
-        DebugLogger.shared
-            .debug(
-                "Captured recording app context: app=\(info.name), bundleId=\(info.bundleId), title=\(info.windowTitle)",
-                source: "ContentView"
-            )
+        DebugLogger.shared.debug("Captured recording app context: app=\(info.name), bundleId=\(info.bundleId), title=\(info.windowTitle)", source: "ContentView")
         self.asr.start()
 
         // Pre-load model in background while recording (avoids 10s freeze on stop)
@@ -1845,10 +1647,7 @@ struct ContentView: View {
                 let nowTrusted = AXIsProcessTrusted()
                 if nowTrusted && !self.accessibilityEnabled {
                     await MainActor.run {
-                        DebugLogger.shared.info(
-                            "Accessibility permission granted! Auto-restarting app...",
-                            source: "ContentView"
-                        )
+                        DebugLogger.shared.info("Accessibility permission granted! Auto-restarting app...", source: "ContentView")
 
                         // Mark that we've auto-restarted to prevent loops
                         UserDefaults.standard.set(true, forKey: self.hasAutoRestartedForAccessibilityKey)
@@ -1890,13 +1689,9 @@ struct ContentView: View {
                 await self.stopAndProcessTranscription()
             },
             commandModeCallback: {
-                DebugLogger.shared.info(
-                    "Command mode triggered",
-                    source: "ContentView"
-                )
+                DebugLogger.shared.info("Command mode triggered", source: "ContentView")
 
-                // Set flag so stopAndProcessTranscription knows to process as
-                // command
+                // Set flag so stopAndProcessTranscription knows to process as command
                 self.isRecordingForCommand = true
 
                 // Set overlay mode to command
@@ -1912,11 +1707,7 @@ struct ContentView: View {
             rewriteModeCallback: {
                 // Try to capture text first while still in the other app
                 let captured = self.rewriteModeService.captureSelectedText()
-                DebugLogger.shared
-                    .info(
-                        "Rewrite mode triggered, text captured: \(captured)",
-                        source: "ContentView"
-                    )
+                DebugLogger.shared.info("Rewrite mode triggered, text captured: \(captured)", source: "ContentView")
 
                 if !captured {
                     // No text selected - start in "write mode" where user speaks
@@ -1934,17 +1725,11 @@ struct ContentView: View {
                     self.menuBarManager.setOverlayMode(.rewrite)
                 }
 
-                // Set flag so stopAndProcessTranscription knows to process as
-                // rewrite
+                // Set flag so stopAndProcessTranscription knows to process as rewrite
                 self.isRecordingForRewrite = true
 
-                // Start recording immediately for the rewrite instruction (or text
-                // to improve)
-                DebugLogger.shared
-                    .info(
-                        "Starting voice recording for rewrite/write mode",
-                        source: "ContentView"
-                    )
+                // Start recording immediately for the rewrite instruction (or text to improve)
+                DebugLogger.shared.info("Starting voice recording for rewrite/write mode", source: "ContentView")
                 self.asr.start()
             }
         )
@@ -2096,9 +1881,6 @@ struct CardAppearAnimation: ViewModifier {
         content
             .scaleEffect(self.appear ? 1.0 : 0.96)
             .opacity(self.appear ? 1.0 : 0)
-            .animation(
-                .spring(response: 0.8, dampingFraction: 0.75, blendDuration: 0.2).delay(self.delay),
-                value: self.appear
-            )
+            .animation(.spring(response: 0.8, dampingFraction: 0.75, blendDuration: 0.2).delay(self.delay), value: self.appear)
     }
 }

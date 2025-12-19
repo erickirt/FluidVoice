@@ -1,3 +1,10 @@
+//
+//  SettingsView.swift
+//  fluid
+//
+//  App preferences and audio device settings
+//
+
 import AVFoundation
 import PromiseKit
 import SwiftUI
@@ -165,8 +172,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack(spacing: 10) {
                                 Circle()
-                                    .fill(self.asr.micStatus == .authorized ? self.theme.palette.success : self.theme
-                                        .palette.warning)
+                                    .fill(self.asr.micStatus == .authorized ? self.theme.palette.success : self.theme.palette.warning)
                                     .frame(width: 8, height: 8)
 
                                 VStack(alignment: .leading, spacing: 2) {
@@ -174,8 +180,7 @@ struct SettingsView: View {
                                         self.asr.micStatus == .denied ? "Microphone access denied" :
                                         "Microphone access not determined")
                                         .font(.body)
-                                        .foregroundStyle(self.asr.micStatus == .authorized ? .primary : self.theme
-                                            .palette.warning)
+                                        .foregroundStyle(self.asr.micStatus == .authorized ? .primary : self.theme.palette.warning)
 
                                     if self.asr.micStatus != .authorized {
                                         Text("Microphone access is required for voice recording")
@@ -209,15 +214,8 @@ struct SettingsView: View {
                                 self.instructionsBox(
                                     title: "How to enable microphone access:",
                                     steps: self.asr.micStatus == .notDetermined
-                                        ? [
-                                            "Click **Grant Access** above",
-                                            "Choose **Allow** in the system dialog",
-                                        ]
-                                        : [
-                                            "Click **Open Settings** above",
-                                            "Find **FluidVoice** in the microphone list",
-                                            "Toggle **FluidVoice ON** to allow access",
-                                        ]
+                                        ? ["Click **Grant Access** above", "Choose **Allow** in the system dialog"]
+                                        : ["Click **Open Settings** above", "Find **FluidVoice** in the microphone list", "Toggle **FluidVoice ON** to allow access"]
                                 )
                             }
                         }
@@ -236,9 +234,7 @@ struct SettingsView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 // Status indicator
                                 HStack(spacing: 8) {
-                                    if self.isRecordingShortcut || self.isRecordingCommandModeShortcut || self
-                                        .isRecordingRewriteShortcut
-                                    {
+                                    if self.isRecordingShortcut || self.isRecordingCommandModeShortcut || self.isRecordingRewriteShortcut {
                                         Image(systemName: "hand.point.up.left.fill")
                                             .foregroundStyle(.orange)
                                         Text("Press your new hotkey combination now...")
@@ -266,10 +262,14 @@ struct SettingsView: View {
                                 }
                                 .padding(10)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(.ultraThinMaterial.opacity(0.5))
-                                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .stroke(.white.opacity(0.1), lineWidth: 1)))
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(.ultraThinMaterial.opacity(0.5))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                .stroke(.white.opacity(0.1), lineWidth: 1)
+                                        )
+                                )
 
                                 // MARK: - Shortcuts Section
 
@@ -286,11 +286,7 @@ struct SettingsView: View {
                                         shortcut: self.hotkeyShortcut,
                                         isRecording: self.isRecordingShortcut,
                                         onChangePressed: {
-                                            DebugLogger.shared
-                                                .debug(
-                                                    "Starting to record new transcribe shortcut",
-                                                    source: "SettingsView"
-                                                )
+                                            DebugLogger.shared.debug("Starting to record new transcribe shortcut", source: "SettingsView")
                                             self.isRecordingShortcut = true
                                         }
                                     )
@@ -306,11 +302,7 @@ struct SettingsView: View {
                                         isRecording: self.isRecordingCommandModeShortcut,
                                         isEnabled: self.$commandModeShortcutEnabled,
                                         onChangePressed: {
-                                            DebugLogger.shared
-                                                .debug(
-                                                    "Starting to record new command mode shortcut",
-                                                    source: "SettingsView"
-                                                )
+                                            DebugLogger.shared.debug("Starting to record new command mode shortcut", source: "SettingsView")
                                             self.isRecordingCommandModeShortcut = true
                                         }
                                     )
@@ -326,20 +318,20 @@ struct SettingsView: View {
                                         isRecording: self.isRecordingRewriteShortcut,
                                         isEnabled: self.$rewriteShortcutEnabled,
                                         onChangePressed: {
-                                            DebugLogger.shared
-                                                .debug(
-                                                    "Starting to record new write mode shortcut",
-                                                    source: "SettingsView"
-                                                )
+                                            DebugLogger.shared.debug("Starting to record new write mode shortcut", source: "SettingsView")
                                             self.isRecordingRewriteShortcut = true
                                         }
                                     )
                                 }
                                 .padding(12)
-                                .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(.ultraThinMaterial.opacity(0.5))
-                                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .stroke(.white.opacity(0.08), lineWidth: 1)))
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(.ultraThinMaterial.opacity(0.5))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                .stroke(.white.opacity(0.08), lineWidth: 1)
+                                        )
+                                )
 
                                 // MARK: - Options Section
 
@@ -707,8 +699,10 @@ struct SettingsView: View {
             }
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill((warningStyle ? self.theme.palette.warning : self.theme.palette.accent).opacity(0.12)))
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill((warningStyle ? self.theme.palette.warning : self.theme.palette.accent).opacity(0.12))
+        )
     }
 
     @ViewBuilder
