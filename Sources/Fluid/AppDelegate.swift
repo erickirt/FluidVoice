@@ -35,7 +35,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func checkForUpdatesManually() {
         // Confirm invocation
-        print("🔎 Manual update check triggered")
+        DebugLogger.shared.info("🔎 Manual update check triggered", source: "AppDelegate")
 
         // We use SimpleUpdater for manual checks; AppUpdater instance is optional
 
@@ -46,8 +46,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             source: "AppDelegate"
         )
         DebugLogger.shared.info("Checking repository: altic-dev/Fluid-oss", source: "AppDelegate")
-        print("🔍 DEBUG: Manual update check started - Current version: \(currentVersion)")
-        print("🔍 DEBUG: Repository: altic-dev/Fluid-oss")
+        DebugLogger.shared.debug("🔍 DEBUG: Manual update check started - Current version: \(currentVersion)", source: "AppDelegate")
+        DebugLogger.shared.debug("🔍 DEBUG: Repository: altic-dev/Fluid-oss", source: "AppDelegate")
 
         Task { @MainActor in
             do {
@@ -148,7 +148,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     private func showUpdateAlert(title: String, message: String) {
-        print("🔔 Showing alert: \(title)")
+        DebugLogger.shared.info("🔔 Showing alert: \(title)", source: "AppDelegate")
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message

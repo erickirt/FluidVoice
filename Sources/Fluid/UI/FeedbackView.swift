@@ -138,15 +138,16 @@ struct FeedbackView: View {
                                         .strokeBorder(Color(nsColor: NSColor.separatorColor), lineWidth: 1.5)))
                                 .scrollContentBackground(.hidden)
                                 .overlay(
-                                    VStack {
+                                    Group {
                                         if self.feedbackText.isEmpty {
                                             Text("Share your thoughts, report bugs, or suggest features...")
                                                 .font(.subheadline)
                                                 .foregroundStyle(.secondary)
+                                                .padding(.leading, 4)
                                         }
                                     }
+                                    .allowsHitTesting(false)
                                 )
-                                .allowsHitTesting(false)
 
                             // Debug logs option
                             Toggle("Include debug logs", isOn: self.$includeDebugLogs)

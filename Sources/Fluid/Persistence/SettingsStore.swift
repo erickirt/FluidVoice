@@ -61,6 +61,7 @@ final class SettingsStore: ObservableObject {
 
         // Stats Keys
         static let userTypingWPM = "UserTypingWPM"
+        static let saveTranscriptionHistory = "SaveTranscriptionHistory"
 
         // Filler Words
         static let fillerWords = "FillerWords"
@@ -162,6 +163,7 @@ final class SettingsStore: ObservableObject {
         set {
             objectWillChange.send()
             self.defaults.set(newValue, forKey: Keys.enableDebugLogs)
+            DebugLogger.shared.refreshLoggingEnabled()
         }
     }
 
@@ -616,6 +618,19 @@ final class SettingsStore: ObservableObject {
         set {
             objectWillChange.send()
             self.defaults.set(max(1, min(200, newValue)), forKey: Keys.userTypingWPM) // Clamp 1-200
+        }
+    }
+
+    /// Whether to save transcription history for stats tracking
+    /// When disabled, transcriptions are not stored and stats won't update
+    var saveTranscriptionHistory: Bool {
+        get {
+            let value = self.defaults.object(forKey: Keys.saveTranscriptionHistory)
+            return value as? Bool ?? true // Default to true (save history)
+        }
+        set {
+            objectWillChange.send()
+            self.defaults.set(newValue, forKey: Keys.saveTranscriptionHistory)
         }
     }
 

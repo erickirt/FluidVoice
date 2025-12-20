@@ -254,7 +254,7 @@ final class MenuBarManager: ObservableObject {
             self.isSetup = true
         } catch {
             // If setup fails, retry after delay
-            print("MenuBar setup failed, retrying: \(error)")
+            DebugLogger.shared.error("MenuBar setup failed, retrying: \(error)", source: "MenuBarManager")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 self?.setupMenuBarSafely()
             }
@@ -424,7 +424,7 @@ final class MenuBarManager: ObservableObject {
     }
 
     @objc private func checkForUpdates(_ sender: Any?) {
-        print("🔎 Menu action: Check for Updates…")
+        DebugLogger.shared.info("🔎 Menu action: Check for Updates…", source: "MenuBarManager")
 
         // Call the AppDelegate's manual update check method if available
         if let appDelegate = NSApp.delegate as? AppDelegate {

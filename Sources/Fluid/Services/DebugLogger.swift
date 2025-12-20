@@ -75,29 +75,31 @@ class DebugLogger: ObservableObject {
     func log(_ message: String, level: LogLevel = .info, source: String = "App") {
         let loggingEnabled = self.loggingEnabled
 
+        // If logging is disabled, we drop all logs except errors which are always printed to console
+        if !loggingEnabled, level != .error {
+            return
+        }
+
         self.queue.async {
             let timestamp = Date()
             let timestampString = Self.logFormatter.string(from: timestamp)
-            let entry: LogEntry? = loggingEnabled
-                ? LogEntry(
-                    timestamp: timestamp,
-                    level: level,
-                    message: message,
-                    source: source,
-                    formattedTimestamp: timestampString
-                )
-                : nil
-            let formattedLine = entry.map(self.formatLogEntry)
-                ?? self.formatLogLine(timestamp: timestampString, level: level, source: source, message: message)
 
+            let formattedLine = self.formatLogLine(timestamp: timestampString, level: level, source: source, message: message)
+
+            // Always write to FileLogger and Console if we reach this point (either logging is enabled OR it's an error)
             FileLogger.shared.append(line: formattedLine)
+            print(formattedLine)
 
-            if level == .error || level == .warning || level == .debug {
-                // Also print to console for Xcode debugging
-                print(formattedLine)
-            }
+            // Only update the UI logs if logging is enabled (don't show errors in UI if debug is off)
+            guard loggingEnabled else { return }
 
-            guard let entry = entry else { return }
+            let entry = LogEntry(
+                timestamp: timestamp,
+                level: level,
+                message: message,
+                source: source,
+                formattedTimestamp: timestampString
+            )
 
             DispatchQueue.main.async {
                 self.logs.append(entry)

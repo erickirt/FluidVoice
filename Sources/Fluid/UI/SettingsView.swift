@@ -367,6 +367,17 @@ struct SettingsView: View {
                                     .onChange(of: self.copyToClipboard) { _, newValue in
                                         SettingsStore.shared.copyTranscriptionToClipboard = newValue
                                     }
+
+                                    Divider().padding(.vertical, 8)
+
+                                    self.optionToggleRow(
+                                        title: "Save Transcription History",
+                                        description: "Save transcriptions for stats tracking. Disable for privacy.",
+                                        isOn: Binding(
+                                            get: { SettingsStore.shared.saveTranscriptionHistory },
+                                            set: { SettingsStore.shared.saveTranscriptionHistory = $0 }
+                                        )
+                                    )
                                 }
                                 .padding(12)
                                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -447,18 +458,46 @@ struct SettingsView: View {
                                     .font(.body)
                                 Spacer()
                                 Picker("Input Device", selection: self.$selectedInputUID) {
-                                    ForEach(self.inputDevices, id: \.uid) { dev in
-                                        Text(dev.name).tag(dev.uid)
+                                    // Handle empty state gracefully
+                                    if self.inputDevices.isEmpty {
+                                        Text("Loading...").tag("")
+                                    } else {
+                                        ForEach(self.inputDevices, id: \.uid) { dev in
+                                            Text(dev.name).tag(dev.uid)
+                                        }
                                     }
                                 }
                                 .pickerStyle(.menu)
                                 .frame(width: 240)
                                 .onChange(of: self.selectedInputUID) { _, newUID in
+                                    guard !newUID.isEmpty else { return }
                                     SettingsStore.shared.preferredInputDeviceUID = newUID
                                     _ = AudioDevice.setDefaultInputDevice(uid: newUID)
                                     if self.asr.isRunning {
-                                        self.asr.stopWithoutTranscription()
-                                        self.startRecording()
+                                        Task {
+                                            await self.asr.stopWithoutTranscription()
+                                            self.startRecording()
+                                        }
+                                    }
+                                }
+                                // Sync selection when devices load or change
+                                .onChange(of: self.inputDevices) { _, newDevices in
+                                    // If selection is empty or not found in new list, select first available
+                                    if !newDevices.isEmpty {
+                                        let currentValid = newDevices.contains { $0.uid == self.selectedInputUID }
+                                        if !currentValid {
+                                            if let prefUID = SettingsStore.shared.preferredInputDeviceUID,
+                                               newDevices.contains(where: { $0.uid == prefUID })
+                                            {
+                                                self.selectedInputUID = prefUID
+                                            } else if let defaultUID = AudioDevice.getDefaultInputDevice()?.uid,
+                                                      newDevices.contains(where: { $0.uid == defaultUID })
+                                            {
+                                                self.selectedInputUID = defaultUID
+                                            } else {
+                                                self.selectedInputUID = newDevices.first?.uid ?? ""
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -468,15 +507,40 @@ struct SettingsView: View {
                                     .font(.body)
                                 Spacer()
                                 Picker("Output Device", selection: self.$selectedOutputUID) {
-                                    ForEach(self.outputDevices, id: \.uid) { dev in
-                                        Text(dev.name).tag(dev.uid)
+                                    // Handle empty state gracefully
+                                    if self.outputDevices.isEmpty {
+                                        Text("Loading...").tag("")
+                                    } else {
+                                        ForEach(self.outputDevices, id: \.uid) { dev in
+                                            Text(dev.name).tag(dev.uid)
+                                        }
                                     }
                                 }
                                 .pickerStyle(.menu)
                                 .frame(width: 240)
                                 .onChange(of: self.selectedOutputUID) { _, newUID in
+                                    guard !newUID.isEmpty else { return }
                                     SettingsStore.shared.preferredOutputDeviceUID = newUID
                                     _ = AudioDevice.setDefaultOutputDevice(uid: newUID)
+                                }
+                                // Sync selection when devices load or change
+                                .onChange(of: self.outputDevices) { _, newDevices in
+                                    if !newDevices.isEmpty {
+                                        let currentValid = newDevices.contains { $0.uid == self.selectedOutputUID }
+                                        if !currentValid {
+                                            if let prefUID = SettingsStore.shared.preferredOutputDeviceUID,
+                                               newDevices.contains(where: { $0.uid == prefUID })
+                                            {
+                                                self.selectedOutputUID = prefUID
+                                            } else if let defaultUID = AudioDevice.getDefaultOutputDevice()?.uid,
+                                                      newDevices.contains(where: { $0.uid == defaultUID })
+                                            {
+                                                self.selectedOutputUID = defaultUID
+                                            } else {
+                                                self.selectedOutputUID = newDevices.first?.uid ?? ""
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
@@ -567,6 +631,17 @@ struct SettingsView: View {
                             .foregroundStyle(.primary)
 
                         VStack(alignment: .leading, spacing: 8) {
+                            self.settingsToggleRow(
+                                title: "Enable Debug Logs",
+                                description: "Capture and show detailed app activity.",
+                                isOn: Binding(
+                                    get: { SettingsStore.shared.enableDebugLogs },
+                                    set: { SettingsStore.shared.enableDebugLogs = $0 }
+                                )
+                            )
+
+                            Divider().padding(.vertical, 8)
+
                             Button {
                                 let url = FileLogger.shared.currentLogFileURL()
                                 if FileManager.default.fileExists(atPath: url.path) {
@@ -597,6 +672,43 @@ struct SettingsView: View {
                 await AudioStartupGate.shared.waitUntilOpen()
 
                 self.refreshDevices()
+
+                // Sync input device selection after refresh
+                if !self.inputDevices.isEmpty {
+                    let inputValid = self.inputDevices.contains { $0.uid == self.selectedInputUID }
+                    if !inputValid || self.selectedInputUID.isEmpty {
+                        if let prefUID = SettingsStore.shared.preferredInputDeviceUID,
+                           self.inputDevices.contains(where: { $0.uid == prefUID })
+                        {
+                            self.selectedInputUID = prefUID
+                        } else if let defaultUID = AudioDevice.getDefaultInputDevice()?.uid,
+                                  self.inputDevices.contains(where: { $0.uid == defaultUID })
+                        {
+                            self.selectedInputUID = defaultUID
+                        } else {
+                            self.selectedInputUID = self.inputDevices.first?.uid ?? ""
+                        }
+                    }
+                }
+
+                // Sync output device selection after refresh
+                if !self.outputDevices.isEmpty {
+                    let outputValid = self.outputDevices.contains { $0.uid == self.selectedOutputUID }
+                    if !outputValid || self.selectedOutputUID.isEmpty {
+                        if let prefUID = SettingsStore.shared.preferredOutputDeviceUID,
+                           self.outputDevices.contains(where: { $0.uid == prefUID })
+                        {
+                            self.selectedOutputUID = prefUID
+                        } else if let defaultUID = AudioDevice.getDefaultOutputDevice()?.uid,
+                                  self.outputDevices.contains(where: { $0.uid == defaultUID })
+                        {
+                            self.selectedOutputUID = defaultUID
+                        } else {
+                            self.selectedOutputUID = self.outputDevices.first?.uid ?? ""
+                        }
+                    }
+                }
+
                 // CRITICAL FIX: Populate cached default device names after onAppear, not during view body evaluation.
                 // This avoids the CoreAudio/SwiftUI AttributeGraph race condition that causes EXC_BAD_ACCESS.
                 self.cachedDefaultInputName = AudioDevice.getDefaultInputDevice()?.name ?? ""

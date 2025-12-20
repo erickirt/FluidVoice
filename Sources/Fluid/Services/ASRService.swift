@@ -14,6 +14,7 @@ import CoreAudio
 /// This implementation enforces strict serialization (non-reentrant) using a task chain.
 private actor TranscriptionExecutor {
     private var lastTask: Task<Void, Never>?
+    private var currentOperationTask: Task<Any, Error>?
 
     func run<T>(_ operation: @escaping () async throws -> T) async throws -> T {
         let previous = self.lastTask
@@ -21,8 +22,20 @@ private actor TranscriptionExecutor {
             _ = await previous?.result
             return try await operation()
         }
+        self.currentOperationTask = Task<Any, Error> { try await task.value }
         self.lastTask = Task { _ = try? await task.value }
         return try await task.value
+    }
+
+    /// Cancels any pending operations and waits for the current chain to complete.
+    /// This ensures no in-flight transcription tasks can access deallocated memory.
+    func cancelAndAwaitPending() async {
+        // Cancel the current operation if running
+        self.currentOperationTask?.cancel()
+        // Wait for the last task in the chain to complete (or be cancelled)
+        _ = await self.lastTask?.result
+        self.lastTask = nil
+        self.currentOperationTask = nil
     }
 }
 
@@ -348,16 +361,23 @@ final class ASRService: ObservableObject {
 
         DebugLogger.shared.debug("stop(): cancelling streaming and preparing final transcription", source: "ASRService")
 
-        self.stopStreamingTimer()
+        // CRITICAL: Set isRunning to false FIRST to signal any in-flight chunks to abort early
+        self.isRunning = false
+
+        // Stop the audio engine to stop new audio from coming in
         self.removeEngineTap()
         self.engine.stop()
         self.engine.reset() // Reset engine state to fully release Bluetooth mic
-        self.isRunning = false
+
+        // CRITICAL FIX: Await completion of streaming task AND any pending transcriptions
+        // This prevents use-after-free crashes (EXC_BAD_ACCESS) when clearing buffer
+        await self.stopStreamingTimerAndAwait()
 
         self.isProcessingChunk = false
         self.skipNextChunk = false
         self.previousFullTranscription.removeAll()
 
+        // NOW it's safe to access the buffer - all pending tasks have completed
         // Thread-safe copy of recorded audio
         let pcm = self.audioBuffer.getAll()
         self.audioBuffer.clear()
@@ -400,14 +420,21 @@ final class ASRService: ObservableObject {
         }
     }
 
-    func stopWithoutTranscription() {
+    func stopWithoutTranscription() async {
         guard self.isRunning else { return }
 
-        self.stopStreamingTimer()
+        // CRITICAL: Set isRunning to false FIRST to signal any in-flight chunks to abort early
+        self.isRunning = false
+
         self.removeEngineTap()
         self.engine.stop()
         self.engine.reset() // Reset engine state to fully release Bluetooth mic
-        self.isRunning = false
+
+        // CRITICAL FIX: Await completion of streaming task AND any pending transcriptions
+        // This prevents use-after-free crashes (EXC_BAD_ACCESS) when clearing buffer
+        await self.stopStreamingTimerAndAwait()
+
+        // NOW it's safe to clear the buffer
         self.audioBuffer.clear()
         self.isRecordingWholeSession = false
         self.partialTranscription.removeAll()
@@ -772,6 +799,24 @@ final class ASRService: ObservableObject {
         }
     }
 
+    /// Stops the streaming timer and waits for the task to complete.
+    /// This prevents race conditions where the buffer is cleared while
+    /// a transcription task is still running.
+    private func stopStreamingTimerAndAwait() async {
+        guard let task = self.streamingTask else { return }
+        task.cancel()
+        // Wait for the task to actually finish - this is critical!
+        // The task may be in the middle of processStreamingChunk()
+        _ = await task.result
+        self.streamingTask = nil
+
+        // Also cancel and await any pending transcription in the executor
+        // This prevents use-after-free when we clear the buffer
+        await self.transcriptionExecutor.cancelAndAwaitPending()
+    }
+
+    /// Legacy sync version for cases where we can't await (e.g., stopWithoutTranscription)
+    /// WARNING: This can cause crashes if buffer is cleared immediately after!
     private func stopStreamingTimer() {
         self.streamingTask?.cancel()
         self.streamingTask = nil

@@ -55,10 +55,18 @@ enum ThinkingParserFactory {
             return StandardThinkingParser()
         }
 
-        // DeepSeek models: use standard pattern (they also have reasoning_content field handled separately)
+        // DeepSeek models: often use separate reasoning_content field
         if modelLower.contains("deepseek") {
-            DebugLogger.shared.debug("ThinkingParser: Using StandardParser for DeepSeek model '\(model)'", source: "LLMClient")
-            return StandardThinkingParser()
+            DebugLogger.shared.debug("ThinkingParser: Using SeparateFieldParser for DeepSeek model '\(model)'", source: "LLMClient")
+            return SeparateFieldThinkingParser()
+        }
+
+        // OpenAI reasoning models (o1, o3, gpt-5): use SeparateFieldThinkingParser
+        if SettingsStore.shared.isReasoningModel(model) &&
+            (modelLower.contains("gpt-5") || modelLower.contains("o1") || modelLower.contains("o3") || modelLower.contains("gpt-oss"))
+        {
+            DebugLogger.shared.debug("ThinkingParser: Using SeparateFieldParser for reasoning model '\(model)'", source: "LLMClient")
+            return SeparateFieldThinkingParser()
         }
 
         // Default: Standard parser with <think>...</think> pattern
@@ -282,5 +290,27 @@ struct NoThinkingParser: ThinkingParser {
 
     func finalize(thinkingBuffer: [String], contentBuffer: [String], finalState: ThinkingParserState) -> (thinking: String, content: String) {
         return ("", contentBuffer.joined())
+    }
+}
+
+// MARK: - Separate Field Thinking Parser
+
+/// Parser for models that use separate fields (reasoning_content, thought, etc.)
+/// instead of inline tags like <think>.
+/// Used by: OpenAI o1/o3/gpt-5, DeepSeek (official API).
+struct SeparateFieldThinkingParser: ThinkingParser {
+    mutating func processChunk(
+        _ chunk: String,
+        currentState: ThinkingParserState,
+        tagBuffer: inout String
+    ) -> (ThinkingParserState, String, String) {
+        // For separate-field models, receiving any "content" chunk means
+        // we are definitively in the content phase.
+        return (.inContent, "", chunk)
+    }
+
+    func finalize(thinkingBuffer: [String], contentBuffer: [String], finalState: ThinkingParserState) -> (thinking: String, content: String) {
+        // No tag stripping needed for separate fields
+        return (thinkingBuffer.joined(), contentBuffer.joined().trimmingCharacters(in: .whitespacesAndNewlines))
     }
 }

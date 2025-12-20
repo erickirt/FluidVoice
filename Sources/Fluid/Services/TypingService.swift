@@ -10,7 +10,7 @@ final class TypingService {
     }
 
     private func log(_ message: @autoclosure () -> String) {
-        if Self.isLoggingEnabled { print(message()) }
+        DebugLogger.shared.debug(message(), source: "TypingService")
     }
 
     private var isCurrentlyTyping = false

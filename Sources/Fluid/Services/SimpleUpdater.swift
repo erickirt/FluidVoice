@@ -224,8 +224,8 @@ final class SimpleUpdater {
         }()
 
         guard sameIdentity || sameTeam || bothAllowed else {
-            print("SimpleUpdater: Code-sign mismatch. Current=\(curID) New=\(newID)")
-            print("SimpleUpdater: Current Team=\(curTeam ?? "none") New Team=\(newTeam ?? "none")")
+            DebugLogger.shared.error("SimpleUpdater: Code-sign mismatch. Current=\(curID) New=\(newID)", source: "SimpleUpdater")
+            DebugLogger.shared.error("SimpleUpdater: Current Team=\(curTeam ?? "none") New Team=\(newTeam ?? "none")", source: "SimpleUpdater")
             throw SimpleUpdateError.codesignMismatch
         }
         #endif
@@ -313,32 +313,32 @@ final class SimpleUpdater {
         let installedAppName = installedAppURL.lastPathComponent
         let downloadedAppName = downloadedAppURL.lastPathComponent
 
-        print("SimpleUpdater: Installing app - Current: \(installedAppName), New: \(downloadedAppName)")
+        DebugLogger.shared.info("SimpleUpdater: Installing app - Current: \(installedAppName), New: \(downloadedAppName)", source: "SimpleUpdater")
 
         let finalAppURL: URL
         if installedAppName != downloadedAppName {
             // App name changed - use the new name
             finalAppURL = installedAppURL.deletingLastPathComponent().appendingPathComponent(downloadedAppName)
-            print("SimpleUpdater: App name changed, installing to: \(finalAppURL.path)")
+            DebugLogger.shared.info("SimpleUpdater: App name changed, installing to: \(finalAppURL.path)", source: "SimpleUpdater")
 
             // Safety check: ensure we don't overwrite an existing app with the new name
             if FileManager.default.fileExists(atPath: finalAppURL.path) {
-                print("SimpleUpdater: Removing existing app at new location: \(finalAppURL.path)")
+                DebugLogger.shared.info("SimpleUpdater: Removing existing app at new location: \(finalAppURL.path)", source: "SimpleUpdater")
                 try FileManager.default.removeItem(at: finalAppURL)
             }
 
             // Remove old app if it exists
             if FileManager.default.fileExists(atPath: installedAppURL.path) {
-                print("SimpleUpdater: Removing old app: \(installedAppURL.path)")
+                DebugLogger.shared.info("SimpleUpdater: Removing old app: \(installedAppURL.path)", source: "SimpleUpdater")
                 try FileManager.default.removeItem(at: installedAppURL)
             }
 
             // Move new app to Applications with new name
             try FileManager.default.moveItem(at: downloadedAppURL, to: finalAppURL)
-            print("SimpleUpdater: Successfully installed new app at: \(finalAppURL.path)")
+            DebugLogger.shared.info("SimpleUpdater: Successfully installed new app at: \(finalAppURL.path)", source: "SimpleUpdater")
         } else {
             // Same name - normal replacement
-            print("SimpleUpdater: Same app name, performing normal replacement")
+            DebugLogger.shared.info("SimpleUpdater: Same app name, performing normal replacement", source: "SimpleUpdater")
             if FileManager.default.fileExists(atPath: installedAppURL.path) {
                 try FileManager.default.removeItem(at: installedAppURL)
             }
@@ -348,11 +348,11 @@ final class SimpleUpdater {
 
         // Use modern NSWorkspace API for more reliable app launching
         DispatchQueue.main.async {
-            print("SimpleUpdater: Attempting to relaunch app at: \(finalAppURL.path)")
+            DebugLogger.shared.info("SimpleUpdater: Attempting to relaunch app at: \(finalAppURL.path)", source: "SimpleUpdater")
 
             // Verify the app exists before trying to launch
             guard FileManager.default.fileExists(atPath: finalAppURL.path) else {
-                print("SimpleUpdater: ERROR - App not found at expected location: \(finalAppURL.path)")
+                DebugLogger.shared.error("SimpleUpdater: ERROR - App not found at expected location: \(finalAppURL.path)", source: "SimpleUpdater")
                 // Don't terminate if we can't find the new app
                 return
             }
@@ -362,13 +362,13 @@ final class SimpleUpdater {
 
             NSWorkspace.shared.openApplication(at: finalAppURL, configuration: configuration) { _, error in
                 if let error = error {
-                    print("SimpleUpdater: Failed to relaunch app: \(error)")
-                    print("SimpleUpdater: App location: \(finalAppURL.path)")
+                    DebugLogger.shared.error("SimpleUpdater: Failed to relaunch app: \(error)", source: "SimpleUpdater")
+                    DebugLogger.shared.error("SimpleUpdater: App location: \(finalAppURL.path)", source: "SimpleUpdater")
                     // Don't terminate if relaunch failed - let user manually restart
                     return
                 }
 
-                print("SimpleUpdater: Successfully relaunched app, terminating old instance")
+                DebugLogger.shared.info("SimpleUpdater: Successfully relaunched app, terminating old instance", source: "SimpleUpdater")
                 // Give the new instance time to fully start before terminating
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                     NSApp.terminate(nil)

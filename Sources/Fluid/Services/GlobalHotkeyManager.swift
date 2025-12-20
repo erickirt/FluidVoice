@@ -154,9 +154,7 @@ final class GlobalHotkeyManager: NSObject {
         self.cleanupEventTap()
 
         if !AXIsProcessTrusted() {
-            if UserDefaults.standard.bool(forKey: "enableDebugLogs") {
-                print("[GlobalHotkeyManager] Accessibility permissions not granted")
-            }
+            DebugLogger.shared.debug("Accessibility permissions not granted", source: "GlobalHotkeyManager")
             return false
         }
 
@@ -179,17 +177,13 @@ final class GlobalHotkeyManager: NSObject {
         )
 
         guard let tap = eventTap else {
-            if UserDefaults.standard.bool(forKey: "enableDebugLogs") {
-                print("[GlobalHotkeyManager] Failed to create CGEvent tap")
-            }
+            DebugLogger.shared.error("Failed to create CGEvent tap", source: "GlobalHotkeyManager")
             return false
         }
 
         self.runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         guard let source = runLoopSource else {
-            if UserDefaults.standard.bool(forKey: "enableDebugLogs") {
-                print("[GlobalHotkeyManager] Failed to create CFRunLoopSource")
-            }
+            DebugLogger.shared.error("Failed to create CFRunLoopSource", source: "GlobalHotkeyManager")
             return false
         }
 
@@ -197,16 +191,12 @@ final class GlobalHotkeyManager: NSObject {
         CGEvent.tapEnable(tap: tap, enable: true)
 
         if !self.isEventTapEnabled() {
-            if UserDefaults.standard.bool(forKey: "enableDebugLogs") {
-                print("[GlobalHotkeyManager] Event tap could not be enabled")
-            }
+            DebugLogger.shared.error("Event tap could not be enabled", source: "GlobalHotkeyManager")
             self.cleanupEventTap()
             return false
         }
 
-        if UserDefaults.standard.bool(forKey: "enableDebugLogs") {
-            print("[GlobalHotkeyManager] Event tap successfully created and enabled")
-        }
+        DebugLogger.shared.info("Event tap successfully created and enabled", source: "GlobalHotkeyManager")
         return true
     }
 
@@ -243,7 +233,7 @@ final class GlobalHotkeyManager: NSObject {
                 if self.asrService.isRunning {
                     DebugLogger.shared.info("Escape pressed - cancelling recording", source: "GlobalHotkeyManager")
                     Task { @MainActor in
-                        self.asrService.stopWithoutTranscription()
+                        await self.asrService.stopWithoutTranscription()
                     }
                     handled = true
                 }
@@ -542,7 +532,7 @@ final class GlobalHotkeyManager: NSObject {
         if let callback = stopAndProcessCallback {
             await callback()
         } else {
-            self.asrService.stopWithoutTranscription()
+            await self.asrService.stopWithoutTranscription()
         }
     }
 
@@ -580,9 +570,7 @@ final class GlobalHotkeyManager: NSObject {
     }
 
     func reinitialize() {
-        if UserDefaults.standard.bool(forKey: "enableDebugLogs") {
-            print("[GlobalHotkeyManager] Manual reinitialization requested")
-        }
+        DebugLogger.shared.info("Manual reinitialization requested", source: "GlobalHotkeyManager")
 
         self.initializationTask?.cancel()
         self.healthCheckTask?.cancel()
@@ -600,17 +588,13 @@ final class GlobalHotkeyManager: NSObject {
 
                 await MainActor.run {
                     if !self.validateEventTapHealth() {
-                        if UserDefaults.standard.bool(forKey: "enableDebugLogs") {
-                            print("[GlobalHotkeyManager] Health check failed, attempting to recover")
-                        }
+                        DebugLogger.shared.warning("Health check failed, attempting to recover", source: "GlobalHotkeyManager")
 
                         if self.setupGlobalHotkey() {
                             self.isInitialized = true
-                            if UserDefaults.standard.bool(forKey: "enableDebugLogs") {
-                                print("[GlobalHotkeyManager] Health check recovery successful")
-                            }
+                            DebugLogger.shared.info("Health check recovery successful", source: "GlobalHotkeyManager")
                         } else {
-                            print("[GlobalHotkeyManager] Health check recovery failed")
+                            DebugLogger.shared.error("Health check recovery failed", source: "GlobalHotkeyManager")
                             self.isInitialized = false
                         }
                     }
@@ -624,8 +608,6 @@ final class GlobalHotkeyManager: NSObject {
         healthCheckTask?.cancel()
         cleanupEventTap()
 
-        if UserDefaults.standard.bool(forKey: "enableDebugLogs") {
-            print("[GlobalHotkeyManager] Deinitialized and cleaned up")
-        }
+        DebugLogger.shared.info("Deinitialized and cleaned up", source: "GlobalHotkeyManager")
     }
 }

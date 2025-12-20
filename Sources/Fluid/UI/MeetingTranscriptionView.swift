@@ -185,7 +185,7 @@ struct MeetingTranscriptionView: View {
                     self.transcriptionService.reset()
                 }
             case let .failure(error):
-                print("File picker error: \(error)")
+                DebugLogger.shared.error("File picker error: \(error)", source: "MeetingTranscriptionView")
             }
         }
     }
@@ -283,9 +283,9 @@ struct MeetingTranscriptionView: View {
         ) { result in
             switch result {
             case .success:
-                print("File exported successfully")
+                DebugLogger.shared.info("File exported successfully", source: "MeetingTranscriptionView")
             case let .failure(error):
-                print("Export failed: \(error)")
+                DebugLogger.shared.error("Export failed: \(error)", source: "MeetingTranscriptionView")
             }
         }
     }
@@ -320,7 +320,7 @@ struct MeetingTranscriptionView: View {
         do {
             _ = try await self.transcriptionService.transcribeFile(fileURL)
         } catch {
-            print("Transcription error: \(error)")
+            DebugLogger.shared.error("Transcription error: \(error)", source: "MeetingTranscriptionView")
         }
     }
 

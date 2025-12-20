@@ -103,7 +103,7 @@ final class HuggingFaceModelDownloader {
 
         // If nothing to download, say so clearly
         if pendingFiles.isEmpty {
-            print("[ModelDL] All required model files are already present. Nothing to download.")
+            DebugLogger.shared.info("[ModelDL] All required model files are already present. Nothing to download.", source: "ModelDownloader")
             onProgress?(1.0, "")
             return
         }
@@ -118,14 +118,14 @@ final class HuggingFaceModelDownloader {
         }
 
         let totalHuman = Self.formatBytes(totalBytes)
-        print("[ModelDL] Files to download: \(pendingFiles.count), total size: \(totalHuman)")
+        DebugLogger.shared.info("[ModelDL] Files to download: \(pendingFiles.count), total size: \(totalHuman)", source: "ModelDownloader")
 
         var downloadedBytes: Int64 = 0
         let fallbackTotal = pendingFiles.count
         var fallbackCompleted = 0
 
         for (idx, rel) in pendingFiles.enumerated() {
-            print("[ModelDL] (\(idx + 1)/\(pendingFiles.count)) Downloading: \(rel)")
+            DebugLogger.shared.info("[ModelDL] (\(idx + 1)/\(pendingFiles.count)) Downloading: \(rel)", source: "ModelDownloader")
             try await self.downloadFile(relativePath: rel, to: targetRoot.appendingPathComponent(rel)) { perFilePct in
                 if totalBytes > 0 {
                     let expected = sizeByPath[rel] ?? 0
@@ -133,8 +133,8 @@ final class HuggingFaceModelDownloader {
                         let overallBase = Double(downloadedBytes) / Double(totalBytes)
                         let combined = min(1.0, overallBase + (perFilePct * Double(expected)) / Double(totalBytes))
                         onProgress?(combined, rel)
-                        print(String(format: "[ModelDL] File progress: %.1f%% (%@)", perFilePct * 100.0, rel))
-                        print(String(format: "[ModelDL] Overall progress (est.): %.1f%%", combined * 100.0))
+                        DebugLogger.shared.debug(String(format: "[ModelDL] File progress: %.1f%% (%@)", perFilePct * 100.0, rel), source: "ModelDownloader")
+                        DebugLogger.shared.debug(String(format: "[ModelDL] Overall progress (est.): %.1f%%", combined * 100.0), source: "ModelDownloader")
                     }
                 }
             }
@@ -142,11 +142,11 @@ final class HuggingFaceModelDownloader {
                 downloadedBytes += (sizeByPath[rel] ?? 0)
                 let pct = min(1.0, Double(downloadedBytes) / Double(totalBytes))
                 onProgress?(pct, rel)
-                print(String(format: "[ModelDL] Overall progress: %.1f%% (\(Self.formatBytes(downloadedBytes))/\(Self.formatBytes(totalBytes)))", pct * 100.0))
+                DebugLogger.shared.info(String(format: "[ModelDL] Overall progress: %.1f%% (\(Self.formatBytes(downloadedBytes))/\(Self.formatBytes(totalBytes)))", pct * 100.0), source: "ModelDownloader")
             } else if fallbackTotal > 0 {
                 fallbackCompleted += 1
                 onProgress?(Double(fallbackCompleted) / Double(fallbackTotal), rel)
-                print("[ModelDL] Overall progress: \(fallbackCompleted)/\(fallbackTotal)")
+                DebugLogger.shared.info("[ModelDL] Overall progress: \(fallbackCompleted)/\(fallbackTotal)", source: "ModelDownloader")
             }
         }
     }
@@ -289,11 +289,11 @@ extension HuggingFaceModelDownloader {
         let decUrl = repoDirectory.appendingPathComponent("Decoder.mlmodelc")
         let jointUrl = repoDirectory.appendingPathComponent("JointDecision.mlmodelc")
 
-        print("[ModelDL] Loading v3 models from: \(repoDirectory.path)")
-        print("[ModelDL] Preprocessor path: \(preprocessorUrl.path)")
-        print("[ModelDL] Encoder path: \(encoderUrl.path)")
-        print("[ModelDL] Decoder path: \(decUrl.path)")
-        print("[ModelDL] JointDecision path: \(jointUrl.path)")
+        DebugLogger.shared.info("[ModelDL] Loading v3 models from: \(repoDirectory.path)", source: "ModelDownloader")
+        DebugLogger.shared.debug("[ModelDL] Preprocessor path: \(preprocessorUrl.path)", source: "ModelDownloader")
+        DebugLogger.shared.debug("[ModelDL] Encoder path: \(encoderUrl.path)", source: "ModelDownloader")
+        DebugLogger.shared.debug("[ModelDL] Decoder path: \(decUrl.path)", source: "ModelDownloader")
+        DebugLogger.shared.debug("[ModelDL] JointDecision path: \(jointUrl.path)", source: "ModelDownloader")
 
         // Check if new structure exists
         let hasNewStructure = fm.fileExists(atPath: preprocessorUrl.path) && fm.fileExists(atPath: encoderUrl.path)
@@ -303,20 +303,20 @@ extension HuggingFaceModelDownloader {
 
         if hasNewStructure {
             // Load with new structure (separate Preprocessor and Encoder)
-            print("[ModelDL] Loading with new model structure (Preprocessor + Encoder)")
+            DebugLogger.shared.info("[ModelDL] Loading with new model structure (Preprocessor + Encoder)", source: "ModelDownloader")
             preprocessor = try MLModel(contentsOf: preprocessorUrl, configuration: config)
             encoder = try MLModel(contentsOf: encoderUrl, configuration: config)
         } else {
             // Fallback: Try old structure (MelEncoder)
             let melEncUrl = repoDirectory.appendingPathComponent("MelEncoder.mlmodelc")
-            print("[ModelDL] New structure not found, trying legacy MelEncoder")
-            print("[ModelDL] MelEncoder path: \(melEncUrl.path)")
-            print("[ModelDL] MelEncoder exists: \(fm.fileExists(atPath: melEncUrl.path))")
+            DebugLogger.shared.info("[ModelDL] New structure not found, trying legacy MelEncoder", source: "ModelDownloader")
+            DebugLogger.shared.debug("[ModelDL] MelEncoder path: \(melEncUrl.path)", source: "ModelDownloader")
+            DebugLogger.shared.debug("[ModelDL] MelEncoder exists: \(fm.fileExists(atPath: melEncUrl.path))", source: "ModelDownloader")
 
             if fm.fileExists(atPath: melEncUrl.path) {
                 encoder = try MLModel(contentsOf: melEncUrl, configuration: config)
                 preprocessor = nil
-                print("[ModelDL] Using MelEncoder (legacy mode)")
+                DebugLogger.shared.info("[ModelDL] Using MelEncoder (legacy mode)", source: "ModelDownloader")
             } else {
                 throw NSError(domain: "ModelDL", code: -1, userInfo: [
                     NSLocalizedDescriptionKey: "Neither new model structure (Preprocessor + Encoder) nor legacy structure (MelEncoder) found",
@@ -346,7 +346,7 @@ extension HuggingFaceModelDownloader {
             if let idx = Int(k) { vocabulary[idx] = v }
         }
 
-        print("[ModelDL] Creating AsrModels")
+        DebugLogger.shared.debug("[ModelDL] Creating AsrModels", source: "ModelDownloader")
 
         // For v2 models without separate preprocessor, use encoder as preprocessor
         // For v3 models, use the separate preprocessor
