@@ -367,6 +367,17 @@ struct SettingsView: View {
                                     .onChange(of: self.copyToClipboard) { _, newValue in
                                         SettingsStore.shared.copyTranscriptionToClipboard = newValue
                                     }
+
+                                    Divider().padding(.vertical, 8)
+
+                                    self.optionToggleRow(
+                                        title: "Save Transcription History",
+                                        description: "Save transcriptions for stats tracking. Disable for privacy.",
+                                        isOn: Binding(
+                                            get: { SettingsStore.shared.saveTranscriptionHistory },
+                                            set: { SettingsStore.shared.saveTranscriptionHistory = $0 }
+                                        )
+                                    )
                                 }
                                 .padding(12)
                                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -463,8 +474,10 @@ struct SettingsView: View {
                                     SettingsStore.shared.preferredInputDeviceUID = newUID
                                     _ = AudioDevice.setDefaultInputDevice(uid: newUID)
                                     if self.asr.isRunning {
-                                        self.asr.stopWithoutTranscription()
-                                        self.startRecording()
+                                        Task {
+                                            await self.asr.stopWithoutTranscription()
+                                            self.startRecording()
+                                        }
                                     }
                                 }
                                 // Sync selection when devices load or change

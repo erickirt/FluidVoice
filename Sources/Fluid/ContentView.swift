@@ -334,7 +334,7 @@ struct ContentView: View {
 
                             if self.asr.isRunning {
                                 DebugLogger.shared.debug("NSEvent monitor: Escape pressed, cancelling ASR recording", source: "ContentView")
-                                self.asr.stopWithoutTranscription()
+                                Task { await self.asr.stopWithoutTranscription() }
                                 handled = true
                             }
 
@@ -479,7 +479,7 @@ struct ContentView: View {
 
                 if self.isRecordingForCommand {
                     if self.asr.isRunning {
-                        self.asr.stopWithoutTranscription()
+                        Task { await self.asr.stopWithoutTranscription() }
                     }
                     self.isRecordingForCommand = false
                     self.menuBarManager.setOverlayMode(.dictation)
@@ -495,7 +495,7 @@ struct ContentView: View {
 
                 if self.isRecordingForRewrite {
                     if self.asr.isRunning {
-                        self.asr.stopWithoutTranscription()
+                        Task { await self.asr.stopWithoutTranscription() }
                     }
                     self.isRecordingForRewrite = false
                     self.rewriteModeService.clearState()
@@ -531,7 +531,7 @@ struct ContentView: View {
             }
         }
         .onDisappear {
-            self.asr.stopWithoutTranscription()
+            Task { await self.asr.stopWithoutTranscription() }
             // Note: Overlay lifecycle is now managed by MenuBarManager
 
             // Stop accessibility polling
@@ -1383,14 +1383,16 @@ struct ContentView: View {
 
         DebugLogger.shared.info("Transcription finalized (chars: \(finalText.count))", source: "ContentView")
 
-        // Save to transcription history (transcription mode only)
-        let appInfo = self.recordingAppInfo ?? self.getCurrentAppInfo()
-        TranscriptionHistoryStore.shared.addEntry(
-            rawText: transcribedText,
-            processedText: finalText,
-            appName: appInfo.name,
-            windowTitle: appInfo.windowTitle
-        )
+        // Save to transcription history (transcription mode only, if enabled)
+        if SettingsStore.shared.saveTranscriptionHistory {
+            let appInfo = self.recordingAppInfo ?? self.getCurrentAppInfo()
+            TranscriptionHistoryStore.shared.addEntry(
+                rawText: transcribedText,
+                processedText: finalText,
+                appName: appInfo.name,
+                windowTitle: appInfo.windowTitle
+            )
+        }
 
         // Copy to clipboard if enabled (happens before typing as a backup)
         if SettingsStore.shared.copyTranscriptionToClipboard {

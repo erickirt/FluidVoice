@@ -233,7 +233,7 @@ final class GlobalHotkeyManager: NSObject {
                 if self.asrService.isRunning {
                     DebugLogger.shared.info("Escape pressed - cancelling recording", source: "GlobalHotkeyManager")
                     Task { @MainActor in
-                        self.asrService.stopWithoutTranscription()
+                        await self.asrService.stopWithoutTranscription()
                     }
                     handled = true
                 }
@@ -532,7 +532,7 @@ final class GlobalHotkeyManager: NSObject {
         if let callback = stopAndProcessCallback {
             await callback()
         } else {
-            self.asrService.stopWithoutTranscription()
+            await self.asrService.stopWithoutTranscription()
         }
     }
 
