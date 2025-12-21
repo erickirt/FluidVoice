@@ -21,7 +21,7 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>FluidVoice needs microphone access to record your voice for speech-to-text transcription. Your audio is processed locally and never sent to external servers.</string>
 	<key>LSUIElement</key>
-	<false/>
+	<true/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>FluidVoice needs permission to control system events for managing launch at startup settings.</string>
 </dict>

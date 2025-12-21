@@ -285,54 +285,11 @@ final class MenuBarManager: ObservableObject {
     private func updateMenuBarIcon() {
         guard let statusItem = statusItem else { return }
 
-        // Use custom F icon instead of microphone
-        let image = self.createFluidIcon(isRecording: self.isRecording)
-
-        statusItem.button?.image = image
-        statusItem.button?.imagePosition = .imageOnly
-    }
-
-    private func createFluidIcon(isRecording: Bool) -> NSImage {
-        let size = NSSize(width: 16, height: 16)
-        let image = NSImage(size: size)
-
-        image.lockFocus()
-
-        // Create F shape path
-        let path = NSBezierPath()
-        let lineWidth: CGFloat = 2.0
-
-        // F shape coordinates (scaled to 16x16)
-        let leftX: CGFloat = 2
-        let rightX: CGFloat = 12
-        let topY: CGFloat = 14
-        let bottomY: CGFloat = 2
-        let middleY: CGFloat = 8.5
-
-        // Vertical line (left side of F)
-        path.move(to: NSPoint(x: leftX, y: bottomY))
-        path.line(to: NSPoint(x: leftX, y: topY))
-
-        // Top horizontal line (full width)
-        path.line(to: NSPoint(x: rightX, y: topY))
-
-        // Middle horizontal line
-        path.move(to: NSPoint(x: leftX, y: middleY))
-        path.line(to: NSPoint(x: rightX - 2, y: middleY))
-
-        // Set color based on recording state
-        let color = isRecording ? NSColor.systemRed : NSColor.controlAccentColor
-        color.set()
-
-        path.lineWidth = lineWidth
-        path.lineCapStyle = .round
-        path.lineJoinStyle = .round
-        path.stroke()
-
-        image.unlockFocus()
-        image.isTemplate = true
-
-        return image
+        // Use MenuBarIcon asset - vectorized from logo
+        if let image = NSImage(named: "MenuBarIcon") {
+            image.isTemplate = true  // Adapts to light/dark mode and tints red when recording
+            statusItem.button?.image = image
+        }
     }
 
     private func buildMenuStructure() {
@@ -516,6 +473,7 @@ final class MenuBarManager: ObservableObject {
         // Build the SwiftUI root view with required environment
         let rootView = ContentView()
             .environmentObject(self)
+            .environmentObject(AppServices.shared)
             .appTheme(.dark)
             .preferredColorScheme(.dark)
 
