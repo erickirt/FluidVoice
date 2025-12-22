@@ -295,7 +295,7 @@ struct CustomDictionaryView: View {
     /// Returns all existing trigger words for duplicate detection
     private func allExistingTriggers(excluding entryId: UUID? = nil) -> Set<String> {
         var triggers = Set<String>()
-        for entry in entries where entry.id != entryId {
+        for entry in self.entries where entry.id != entryId {
             for trigger in entry.triggers {
                 triggers.insert(trigger.lowercased())
             }
@@ -394,8 +394,8 @@ struct AddDictionaryEntrySheet: View {
 
     private var canSave: Bool {
         !self.parseTriggers().isEmpty &&
-        !self.replacement.trimmingCharacters(in: .whitespaces).isEmpty &&
-        self.duplicateTriggers.isEmpty
+            !self.replacement.trimmingCharacters(in: .whitespaces).isEmpty &&
+            self.duplicateTriggers.isEmpty
     }
 
     var body: some View {
@@ -537,8 +537,8 @@ struct EditDictionaryEntrySheet: View {
 
     private var canSave: Bool {
         !self.parseTriggers().isEmpty &&
-        !self.replacement.trimmingCharacters(in: .whitespaces).isEmpty &&
-        self.duplicateTriggers.isEmpty
+            !self.replacement.trimmingCharacters(in: .whitespaces).isEmpty &&
+            self.duplicateTriggers.isEmpty
     }
 
     var body: some View {

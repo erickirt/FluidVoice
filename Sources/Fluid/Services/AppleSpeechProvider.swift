@@ -32,7 +32,7 @@ final class AppleSpeechProvider: TranscriptionProvider {
     func prepare(progressHandler: ((Double) -> Void)?) async throws {
         // 1. Request Authorization
         let status = await self.requestAuthorization()
-        
+
         switch status {
         case .authorized:
             self.isReady = true
@@ -91,11 +91,11 @@ final class AppleSpeechProvider: TranscriptionProvider {
         // 4. Execute Recognition
         return try await withCheckedThrowingContinuation { continuation in
             var hasResumed = false
-            
+
             recognizer.recognitionTask(with: request) { result, error in
                 // Ensure we only resume once
                 guard !hasResumed else { return }
-                
+
                 if let error = error {
                     hasResumed = true
                     // Ignore "No speech detected" errors often returned for silent chunks
@@ -120,7 +120,7 @@ final class AppleSpeechProvider: TranscriptionProvider {
     /// Converts raw [Float] samples (16kHz mono) to AVAudioPCMBuffer
     private func createPCMBuffer(from samples: [Float]) -> AVAudioPCMBuffer? {
         // Define format: 16kHz, Mono, Float32 (standard for ML/ASR)
-        guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false) else {
+        guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false) else {
             return nil
         }
 
@@ -132,7 +132,7 @@ final class AppleSpeechProvider: TranscriptionProvider {
 
         // Efficient copy
         guard let channelData = buffer.floatChannelData else { return nil }
-        
+
         // Use withUnsafeBufferPointer for safe memory access
         samples.withUnsafeBufferPointer { samplePtr in
             guard let baseAddress = samplePtr.baseAddress else { return }

@@ -63,7 +63,7 @@ final class AppleSpeechAnalyzerProvider: TranscriptionProvider {
                 // Report progress periodically during download
                 let progress = downloader.progress
                 Task {
-                    while !progress.isFinished && !progress.isCancelled {
+                    while !progress.isFinished, !progress.isCancelled {
                         progressHandler?(progress.fractionCompleted)
                         try? await Task.sleep(for: .milliseconds(100))
                     }
@@ -97,7 +97,7 @@ final class AppleSpeechAnalyzerProvider: TranscriptionProvider {
     // MARK: - Transcription
 
     func transcribe(_ samples: [Float]) async throws -> ASRTranscriptionResult {
-        guard isReady, let analyzerFormat = self.analyzerFormat else {
+        guard self.isReady, let analyzerFormat = self.analyzerFormat else {
             throw NSError(
                 domain: "AppleSpeechAnalyzerProvider",
                 code: 2,
@@ -198,7 +198,7 @@ final class AppleSpeechAnalyzerProvider: TranscriptionProvider {
     private func createPCMBuffer(from samples: [Float]) -> AVAudioPCMBuffer? {
         guard let format = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
-            sampleRate: 16000,
+            sampleRate: 16_000,
             channels: 1,
             interleaved: false
         ) else {

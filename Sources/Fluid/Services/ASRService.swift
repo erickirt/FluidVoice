@@ -177,7 +177,6 @@ final class ASRService: ObservableObject {
         return provider
     }
 
-
     /// Returns the user-friendly name of the currently selected speech model
     var activeProviderName: String {
         SettingsStore.shared.selectedSpeechModel.displayName
@@ -187,7 +186,7 @@ final class ASRService: ObservableObject {
     func resetTranscriptionProvider() {
         let newModel = SettingsStore.shared.selectedSpeechModel
         DebugLogger.shared.info("ASRService: Switching to '\(newModel.displayName)', resetting provider state...", source: "ASRService")
-        
+
         self.isAsrReady = false
         self.modelsExistOnDisk = false
         self.ensureReadyTask?.cancel()
@@ -197,7 +196,7 @@ final class ASRService: ObservableObject {
         // CRITICAL FIX: Immediately check if the NEW model's files exist on disk
         // This prevents UI from showing "Download" when model is already downloaded
         self.checkIfModelsExist()
-        
+
         DebugLogger.shared.info("ASRService: Provider reset complete, will initialize '\(newModel.displayName)' on next use", source: "ASRService")
     }
 
@@ -1081,8 +1080,8 @@ final class ASRService: ObservableObject {
     /// Cache for compiled custom dictionary regexes.
     /// Key: trigger word, Value: (compiled regex, replacement text)
     /// Cleared when dictionary entries change.
-    private static var cachedDictionaryPatterns: [(regex: NSRegularExpression, replacement: String)]?
-    private static var cachedDictionaryVersion: Int = 0
+    private static var cachedDictionaryPatterns: [(regex: NSRegularExpression, replacement: String)] = []
+    private static var dictionaryCacheNeedsRebuild: Bool = true
 
     /// Rebuilds the regex cache if dictionary has changed.
     /// Called lazily on first apply after settings change.
@@ -1104,12 +1103,13 @@ final class ASRService: ObservableObject {
             }
         }
 
-        cachedDictionaryPatterns = patterns
+        self.cachedDictionaryPatterns = patterns
+        self.dictionaryCacheNeedsRebuild = false
     }
 
     /// Invalidates the dictionary cache. Called when settings change.
     static func invalidateDictionaryCache() {
-        cachedDictionaryPatterns = nil
+        self.dictionaryCacheNeedsRebuild = true
     }
 
     /// Applies custom dictionary replacements to transcribed text.
@@ -1122,18 +1122,18 @@ final class ASRService: ObservableObject {
         guard !entries.isEmpty else { return text }
 
         // Rebuild cache if needed (lazy initialization)
-        if cachedDictionaryPatterns == nil {
-            rebuildDictionaryCache()
+        if self.dictionaryCacheNeedsRebuild {
+            self.rebuildDictionaryCache()
         }
 
-        guard let patterns = cachedDictionaryPatterns, !patterns.isEmpty else {
+        guard !self.cachedDictionaryPatterns.isEmpty else {
             return text
         }
 
         var result = text
 
         // Apply cached regexes - O(n) where n = number of patterns
-        for pattern in patterns {
+        for pattern in self.cachedDictionaryPatterns {
             result = pattern.regex.stringByReplacingMatches(
                 in: result,
                 range: NSRange(result.startIndex..., in: result),

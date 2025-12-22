@@ -917,12 +917,12 @@ final class SettingsStore: ObservableObject {
         // MARK: - FluidAudio Models (Apple Silicon Only)
 
         case parakeetTDT = "parakeet-tdt"
-        
+
         // MARK: - Apple Native
 
         case appleSpeech = "apple-speech"
         case appleSpeechAnalyzer = "apple-speech-analyzer"
-        
+
         // MARK: - Whisper Models (Universal)
 
         case whisperTiny = "whisper-tiny"
@@ -1028,7 +1028,7 @@ final class SettingsStore: ObservableObject {
         static var availableModels: [SpeechModel] {
             allCases.filter { model in
                 // Filter by Apple Silicon requirement
-                if model.requiresAppleSilicon && !CPUArchitecture.isAppleSilicon {
+                if model.requiresAppleSilicon, !CPUArchitecture.isAppleSilicon {
                     return false
                 }
                 // Filter by macOS 26 requirement
