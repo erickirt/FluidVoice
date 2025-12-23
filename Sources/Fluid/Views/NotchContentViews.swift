@@ -759,7 +759,8 @@ struct NotchCommandOutputExpandedView: View {
                 self.scrollToBottom(proxy, animated: true)
             }
             .onChange(of: self.contentState.commandStreamingText) { _, _ in
-                self.scrollToBottom(proxy, animated: true)
+                // Disable animation for streaming text to prevent scroll bar jitter
+                self.scrollToBottom(proxy, animated: false)
             }
             .onChange(of: self.contentState.isCommandProcessing) { _, _ in
                 // Scroll when processing state changes
