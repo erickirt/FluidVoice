@@ -129,16 +129,23 @@ struct ContentView: View {
     @State private var selectedProviderID: String = SettingsStore.shared.selectedProviderID
 
     var body: some View {
-        let splitView = AnyView(
-            NavigationSplitView {
+        let layout = AnyView(
+            HStack(spacing: 0) {
                 self.sidebarView
-                    .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 300)
-            } detail: {
+                    .frame(width: 250)
+                
+                // Fixed separator to replace the draggable split view divider
+                Rectangle()
+                    .fill(self.theme.palette.separator)
+                    .frame(width: 1)
+                    .ignoresSafeArea()
+                
                 self.detailView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         )
 
-        let tracked = splitView.withMouseTracking(self.mouseTracker)
+        let tracked = layout.withMouseTracking(self.mouseTracker)
         let env = tracked.environmentObject(self.mouseTracker)
         let nav = env.onChange(of: self.menuBarManager.requestedNavigationDestination) { _, destination in
             self.handleMenuBarNavigation(destination)
