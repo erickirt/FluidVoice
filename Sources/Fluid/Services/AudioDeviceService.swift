@@ -165,12 +165,12 @@ enum AudioDevice {
         )
 
         // Use Unmanaged to safely bridge the CFTypeRef-style output parameter.
-        // We use takeUnretainedValue() to avoid over-releasing in case CoreAudio returns +0.
+        // CoreAudio returns a +1 retained CFString - use takeRetainedValue() to transfer ownership
         var value: Unmanaged<CFString>?
         var dataSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
         let status = AudioObjectGetPropertyData(devId, &address, 0, nil, &dataSize, &value)
         guard status == noErr else { return nil }
-        return value?.takeUnretainedValue() as String?
+        return value?.takeRetainedValue() as String?
     }
 
     private static func hasChannels(_ devId: AudioObjectID, scope: AudioObjectPropertyScope) -> Bool {

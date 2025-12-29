@@ -657,8 +657,9 @@ final class ASRService: ObservableObject {
         _ = self.engine.outputNode
         DebugLogger.shared.debug("✅ Output node instantiated", source: "ASRService")
 
-        // NOTE: Device binding moved to startEngine() after engine.prepare()
-        // Binding requires the AudioUnit to exist, which only happens after prepare()
+        // NOTE: Device binding occurs in startEngine() BEFORE engine.prepare()
+        // Per CoreAudio docs, device must be set before AudioUnit initialization (prepare)
+        // Since sync mode is always ON, binding actually no-ops and uses system defaults
 
         DebugLogger.shared.debug("✅ configureSession() - COMPLETED", source: "ASRService")
     }
