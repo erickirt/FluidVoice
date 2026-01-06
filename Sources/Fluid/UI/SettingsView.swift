@@ -428,6 +428,17 @@ struct SettingsView: View {
                                     Divider().padding(.vertical, 8)
 
                                     self.optionToggleRow(
+                                        title: "GAAV Mode",
+                                        description: "Remove first letter capitalization and trailing period. Useful for search queries, form fields, or casual text.\nFeature requested by MaxGaav.",
+                                        isOn: Binding(
+                                            get: { SettingsStore.shared.gaavModeEnabled },
+                                            set: { SettingsStore.shared.gaavModeEnabled = $0 }
+                                        )
+                                    )
+
+                                    Divider().padding(.vertical, 8)
+
+                                    self.optionToggleRow(
                                         title: "Share Anonymous Analytics",
                                         description: "Send anonymous usage and performance metrics to help improve FluidVoice. Never includes transcription text or prompts.",
                                         isOn: self.analyticsToggleBinding

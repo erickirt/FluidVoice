@@ -1428,7 +1428,7 @@ struct ContentView: View {
             return
         }
 
-        let finalText: String
+        var finalText: String
 
         // Check if we should use AI processing
         // IMPORTANT: Derive provider context from SettingsStore so AISettingsView changes take effect immediately.
@@ -1459,6 +1459,10 @@ struct ContentView: View {
         } else {
             finalText = transcribedText
         }
+
+        // Apply GAAV formatting as the FINAL step (after AI post-processing)
+        // This ensures the user's preference for no capitalization/period is respected
+        finalText = ASRService.applyGAAVFormatting(finalText)
 
         DebugLogger.shared.info("Transcription finalized (chars: \(finalText.count))", source: "ContentView")
 

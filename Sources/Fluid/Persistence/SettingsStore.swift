@@ -71,6 +71,9 @@ final class SettingsStore: ObservableObject {
         static let fillerWords = "FillerWords"
         static let removeFillerWordsEnabled = "RemoveFillerWordsEnabled"
 
+        // GAAV Mode (removes capitalization and trailing punctuation)
+        static let gaavModeEnabled = "GAAVModeEnabled"
+
         // Custom Dictionary
         static let customDictionaryEntries = "CustomDictionaryEntries"
 
@@ -1032,6 +1035,19 @@ final class SettingsStore: ObservableObject {
         set {
             objectWillChange.send()
             self.defaults.set(newValue, forKey: Keys.removeFillerWordsEnabled)
+        }
+    }
+
+    // MARK: - GAAV Mode
+
+    /// GAAV Mode: Removes first letter capitalization and trailing period from transcriptions.
+    /// Useful for search queries, form fields, or casual text input where sentence formatting is unwanted.
+    /// Feature requested by maxgaav – thank you for the suggestion!
+    var gaavModeEnabled: Bool {
+        get { self.defaults.object(forKey: Keys.gaavModeEnabled) as? Bool ?? false }
+        set {
+            objectWillChange.send()
+            self.defaults.set(newValue, forKey: Keys.gaavModeEnabled)
         }
     }
 

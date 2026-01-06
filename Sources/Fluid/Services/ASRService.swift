@@ -1908,6 +1908,31 @@ final class ASRService: ObservableObject {
 
         return result
     }
+
+    // MARK: - GAAV Mode Formatting
+
+    /// Applies GAAV mode formatting: removes first letter capitalization and trailing period.
+    /// This is useful for search queries, form fields, or casual text input.
+    ///
+    /// Feature requested by maxgaav – thank you for the suggestion!
+    static func applyGAAVFormatting(_ text: String) -> String {
+        guard SettingsStore.shared.gaavModeEnabled else { return text }
+        guard !text.isEmpty else { return text }
+
+        var result = text
+
+        // Remove trailing period (if present)
+        if result.hasSuffix(".") {
+            result.removeLast()
+        }
+
+        // Lowercase the first character (if it's uppercase)
+        if let first = result.first, first.isUppercase {
+            result = first.lowercased() + result.dropFirst()
+        }
+
+        return result
+    }
 }
 
 // MARK: - Audio capture pipeline
