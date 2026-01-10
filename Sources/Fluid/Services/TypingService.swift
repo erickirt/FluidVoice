@@ -82,21 +82,26 @@ final class TypingService {
         // Check if we have permission to create events
         self.log("[TypingService] Accessibility trusted: \(AXIsProcessTrusted())")
 
-        // Primary: Try Accessibility insertion into the actual focused element (best for floating/launcher UIs)
-        self.log("[TypingService] Trying Accessibility focused-element insertion")
-        if self.insertTextViaAccessibility(text) {
-            self.log("[TypingService] SUCCESS: Accessibility insertion completed")
-            return
-        }
-
-        // Secondary: Try CGEvent unicode insertion, targeting the focused PID when available
+        // Primary: Try CGEvent unicode insertion, targeting the focused PID when available
+        // This is the most reliable method for Terminals, Electron apps (Discord, VSCode), etc.
         if let focusedPID = focusInfo?.pid {
             self.log("[TypingService] Trying CGEvent insertion targeting focused PID \(focusedPID)")
             if self.insertTextBulkInstant(text, targetPID: focusedPID) {
                 self.log("[TypingService] SUCCESS: CGEvent focused-PID insertion completed")
                 return
             }
-        } else {
+        }
+
+        // Secondary: Try Accessibility insertion into the actual focused element
+        // This is useful for some native apps or when direct event posting fails
+        self.log("[TypingService] Trying Accessibility focused-element insertion")
+        if self.insertTextViaAccessibility(text) {
+            self.log("[TypingService] SUCCESS: Accessibility insertion completed")
+            return
+        }
+
+        // HID Fallback if PID targeting failed
+        if focusInfo?.pid == nil {
             self.log("[TypingService] No focused PID available, trying HID CGEvent insertion")
             if self.insertTextBulkHIDInstant(text) {
                 self.log("[TypingService] SUCCESS: CGEvent HID insertion completed")
@@ -498,63 +503,6 @@ final class TypingService {
             self.log("[TypingService] FAILED: Insertion point method - error: \(result.rawValue)")
             return false
         }
-    }
-
-    private func insertTextBulk(_ text: String) -> Bool {
-        self.log("[TypingService] Starting bulk CGEvent insertion")
-
-        // Get the frontmost application's PID for targeted event posting
-        guard let frontApp = NSWorkspace.shared.frontmostApplication else {
-            self.log("[TypingService] ERROR: Could not get frontmost application for bulk insertion")
-            return false
-        }
-
-        let targetPID = frontApp.processIdentifier
-        self.log("[TypingService] Targeting PID \(targetPID) for bulk insertion")
-
-        // Try word-by-word insertion instead of entire text at once (faster than char-by-char but more reliable than bulk)
-        let words = text.components(separatedBy: " ")
-        self.log("[TypingService] Splitting text into \(words.count) words for bulk insertion")
-
-        for (index, word) in words.enumerated() {
-            let wordToType = word + (index < words.count - 1 ? " " : "") // Add space except for last word
-
-            if !self.insertWordViaCGEvent(wordToType, targetPID: targetPID) {
-                self.log("[TypingService] Failed to insert word \(index + 1): '\(word)', falling back to character method")
-                return false
-            }
-
-            if index % 5 == 0 && index > 0 {
-                self.log("[TypingService] Bulk insertion progress: \(index + 1)/\(words.count) words")
-            }
-        }
-
-        self.log("[TypingService] Successfully completed bulk word-by-word insertion")
-        return true
-    }
-
-    private func insertWordViaCGEvent(_ word: String, targetPID: pid_t) -> Bool {
-        // Convert word to UTF16 for CGEvent
-        let utf16Array = Array(word.utf16)
-
-        // Create keyboard event for this word
-        guard let keyDownEvent = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
-              let keyUpEvent = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false)
-        else {
-            self.log("[TypingService] ERROR: Failed to create CGEvents for word: '\(word)'")
-            return false
-        }
-
-        // Set the unicode string for both events
-        keyDownEvent.keyboardSetUnicodeString(stringLength: utf16Array.count, unicodeString: utf16Array)
-        keyUpEvent.keyboardSetUnicodeString(stringLength: utf16Array.count, unicodeString: utf16Array)
-
-        // Post events to specific PID
-        keyDownEvent.postToPid(targetPID)
-        usleep(2000) // 2ms delay between keyDown and keyUp
-        keyUpEvent.postToPid(targetPID)
-
-        return true
     }
 
     private func typeCharacter(_ char: Character) {
