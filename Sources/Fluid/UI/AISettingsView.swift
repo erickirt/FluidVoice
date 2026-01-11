@@ -212,12 +212,12 @@ struct AISettingsView: View {
             self.openAIBaseURL = saved.baseURL // Set this FIRST
         } else if self.selectedProviderID == "openai" {
             self.openAIBaseURL = "https://api.openai.com/v1"
-            self.availableModels = self.availableModelsByProvider["openai"] ?? self.defaultModels(for: "openai")
+            self.availableModels = self.availableModelsByProvider["openai"] ?? ModelRepository.shared.defaultModels(for: "openai")
         } else if self.selectedProviderID == "groq" {
             self.openAIBaseURL = "https://api.groq.com/openai/v1"
-            self.availableModels = self.availableModelsByProvider["groq"] ?? self.defaultModels(for: "groq")
+            self.availableModels = self.availableModelsByProvider["groq"] ?? ModelRepository.shared.defaultModels(for: "groq")
         } else {
-            self.availableModels = self.defaultModels(for: self.providerKey(for: self.selectedProviderID))
+            self.availableModels = ModelRepository.shared.defaultModels(for: self.providerKey(for: self.selectedProviderID))
         }
 
         // NOW update currentProvider after openAIBaseURL is set correctly
@@ -453,13 +453,7 @@ struct AISettingsView: View {
         }
     }
 
-    private func defaultModels(for providerKey: String) -> [String] {
-        switch providerKey {
-        case "openai": return ["gpt-4.1"]
-        case "groq": return ["openai/gpt-oss-120b"]
-        default: return []
-        }
-    }
+
 
     private func saveProviderAPIKeys() {
         SettingsStore.shared.providerAPIKeys = self.providerAPIKeys
@@ -1065,13 +1059,13 @@ struct AISettingsView: View {
             self.openAIBaseURL = "https://api.openai.com/v1"
             self.updateCurrentProvider()
             let key = "openai"
-            self.availableModels = self.availableModelsByProvider[key] ?? self.defaultModels(for: key)
+            self.availableModels = self.availableModelsByProvider[key] ?? ModelRepository.shared.defaultModels(for: key)
             self.selectedModel = self.selectedModelByProvider[key] ?? self.availableModels.first ?? self.selectedModel
         case "groq":
             self.openAIBaseURL = "https://api.groq.com/openai/v1"
             self.updateCurrentProvider()
             let key = "groq"
-            self.availableModels = self.availableModelsByProvider[key] ?? self.defaultModels(for: key)
+            self.availableModels = self.availableModelsByProvider[key] ?? ModelRepository.shared.defaultModels(for: key)
             self.selectedModel = self.selectedModelByProvider[key] ?? self.availableModels.first ?? self.selectedModel
         case "apple-intelligence":
             self.openAIBaseURL = ""
@@ -1110,7 +1104,7 @@ struct AISettingsView: View {
         self.selectedProviderID = "openai"
         self.openAIBaseURL = "https://api.openai.com/v1"
         self.updateCurrentProvider()
-        self.availableModels = self.defaultModels(for: "openai")
+        self.availableModels = ModelRepository.shared.defaultModels(for: "openai")
         self.selectedModel = self.availableModels.first ?? self.selectedModel
     }
 
@@ -1227,7 +1221,7 @@ struct AISettingsView: View {
         let key = self.providerKey(for: self.selectedProviderID)
         var list = self.availableModelsByProvider[key] ?? self.availableModels
         list.removeAll { $0 == self.selectedModel }
-        if list.isEmpty { list = self.defaultModels(for: key) }
+        if list.isEmpty { list = ModelRepository.shared.defaultModels(for: key) }
         self.availableModelsByProvider[key] = list
         SettingsStore.shared.availableModelsByProvider = self.availableModelsByProvider
 
@@ -1466,7 +1460,7 @@ struct AISettingsView: View {
         guard !name.isEmpty, !base.isEmpty else { return }
 
         let modelsList = self.newProviderModels.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        let models = modelsList.isEmpty ? self.defaultModels(for: "openai") : modelsList
+        let models = modelsList.isEmpty ? ModelRepository.shared.defaultModels(for: "openai") : modelsList
 
         let newProvider = SettingsStore.SavedProvider(name: name, baseURL: base, models: models)
         self.savedProviders.removeAll { $0.name.lowercased() == name.lowercased() }

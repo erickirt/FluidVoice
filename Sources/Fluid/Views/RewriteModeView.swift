@@ -178,7 +178,7 @@ struct RewriteModeView: View {
                 // Model Selector (hidden for Apple Intelligence)
                 if self.settings.rewriteModeSelectedProviderID != "apple-intelligence" {
                     Picker("", selection: Binding(
-                        get: { self.settings.rewriteModeSelectedModel ?? self.availableModels.first ?? "gpt-4o" },
+                        get: { self.settings.rewriteModeSelectedModel ?? self.availableModels.first ?? "gpt-4.1" },
                         set: { self.settings.rewriteModeSelectedModel = $0 }
                     )) {
                         ForEach(self.availableModels, id: \.self) { model in
@@ -264,7 +264,7 @@ struct RewriteModeView: View {
 
     private func updateAvailableModels() {
         let currentProviderID = self.settings.rewriteModeSelectedProviderID
-        let currentModel = self.settings.rewriteModeSelectedModel ?? "gpt-4o"
+        let currentModel = self.settings.rewriteModeSelectedModel ?? "gpt-4.1"
 
         // Apple Intelligence has only one model
         if currentProviderID == "apple-intelligence" {
@@ -281,12 +281,12 @@ struct RewriteModeView: View {
         if let stored = storedList {
             self.availableModels = stored
         } else {
-            self.availableModels = self.defaultModels(for: currentProviderID)
+            self.availableModels = ModelRepository.shared.defaultModels(for: currentProviderID)
         }
 
         // If current model not in list, select first available
         if !self.availableModels.contains(currentModel) {
-            self.settings.rewriteModeSelectedModel = self.availableModels.first ?? "gpt-4o"
+            self.settings.rewriteModeSelectedModel = self.availableModels.first ?? "gpt-4.1"
         }
     }
 
@@ -313,14 +313,7 @@ struct RewriteModeView: View {
         return Array(Set(keys))
     }
 
-    private func defaultModels(for provider: String) -> [String] {
-        switch provider {
-        case "openai": return ["gpt-4.1"]
-        case "groq": return ["llama-3.3-70b-versatile", "llama3-70b-8192", "mixtral-8x7b-32768"]
-        case "apple-intelligence": return ["System Model"]
-        default: return ["gpt-4.1"]
-        }
-    }
+
 
     // MARK: - How To Section
 

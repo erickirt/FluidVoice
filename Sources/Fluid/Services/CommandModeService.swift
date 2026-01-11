@@ -695,7 +695,7 @@ final class CommandModeService: ObservableObject {
         let settings = SettingsStore.shared
         // Use Command Mode's independent provider/model settings
         let providerID = settings.commandModeSelectedProviderID
-        let model = settings.commandModeSelectedModel ?? "gpt-4o"
+        let model = settings.commandModeSelectedModel ?? "gpt-4.1"
         let apiKey = settings.getAPIKey(for: providerID) ?? ""
 
         let baseURL: String

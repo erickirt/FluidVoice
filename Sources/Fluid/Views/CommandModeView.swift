@@ -521,7 +521,7 @@ struct CommandModeView: View {
 
             // Model Selector (compact)
             Picker("", selection: Binding(
-                get: { self.settings.commandModeSelectedModel ?? self.availableModels.first ?? "gpt-4o" },
+                get: { self.settings.commandModeSelectedModel ?? self.availableModels.first ?? "gpt-4.1" },
                 set: { self.settings.commandModeSelectedModel = $0 }
             )) {
                 ForEach(self.availableModels, id: \.self) { model in
@@ -577,7 +577,7 @@ struct CommandModeView: View {
 
     private func updateAvailableModels() {
         let currentProviderID = self.settings.commandModeSelectedProviderID
-        let currentModel = self.settings.commandModeSelectedModel ?? "gpt-4o"
+        let currentModel = self.settings.commandModeSelectedModel ?? "gpt-4.1"
 
         // Pull models from the shared pool configured in AI Settings
         let possibleKeys = self.providerKeys(for: currentProviderID)
@@ -588,12 +588,12 @@ struct CommandModeView: View {
         if let stored = storedList {
             self.availableModels = stored
         } else {
-            self.availableModels = self.defaultModels(for: currentProviderID)
+            self.availableModels = ModelRepository.shared.defaultModels(for: currentProviderID)
         }
 
         // If current model not in list, select first available
         if !self.availableModels.contains(currentModel) {
-            self.settings.commandModeSelectedModel = self.availableModels.first ?? "gpt-4o"
+            self.settings.commandModeSelectedModel = self.availableModels.first ?? "gpt-4.1"
         }
     }
 
@@ -624,13 +624,7 @@ struct CommandModeView: View {
         return Array(Set(keys))
     }
 
-    private func defaultModels(for provider: String) -> [String] {
-        switch provider {
-        case "openai": return ["gpt-4.1"]
-        case "groq": return ["llama-3.3-70b-versatile", "llama3-70b-8192", "mixtral-8x7b-32768"]
-        default: return ["gpt-4.1"]
-        }
-    }
+
 }
 
 // MARK: - Shimmer Effect (Cursor-style)

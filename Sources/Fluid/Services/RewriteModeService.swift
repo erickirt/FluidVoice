@@ -163,7 +163,7 @@ final class RewriteModeService: ObservableObject {
             )
         }
 
-        let model = settings.rewriteModeSelectedModel ?? "gpt-4o"
+        let model = settings.rewriteModeSelectedModel ?? "gpt-4.1"
         let apiKey = settings.getAPIKey(for: providerID) ?? ""
 
         let baseURL: String

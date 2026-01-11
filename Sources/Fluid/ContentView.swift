@@ -311,7 +311,7 @@ struct ContentView: View {
                 self.availableModels = stored
             } else {
                 // Built-in defaults
-                self.availableModels = self.defaultModels(for: self.providerKey(for: self.selectedProviderID))
+                self.availableModels = ModelRepository.shared.defaultModels(for: self.providerKey(for: self.selectedProviderID))
             }
 
             // Restore previously selected model if valid
@@ -983,13 +983,7 @@ struct ContentView: View {
         return providerID.isEmpty ? self.currentProvider : "custom:\(providerID)"
     }
 
-    private func defaultModels(for providerKey: String) -> [String] {
-        switch providerKey {
-        case "openai": return ["gpt-4.1"]
-        case "groq": return ["openai/gpt-oss-120b"]
-        default: return []
-        }
-    }
+
 
     private func updateCurrentProvider() {
         // Map baseURL to canonical key for built-ins; else keep existing
@@ -1234,7 +1228,7 @@ struct ContentView: View {
         } else if currentSelectedProviderID == "groq" {
             derivedCurrentProvider = "groq"
             derivedBaseURL = "https://api.groq.com/openai/v1"
-            derivedSelectedModel = storedSelectedModelByProvider["groq"] ?? "llama-3.3-70b-versatile"
+            derivedSelectedModel = storedSelectedModelByProvider["groq"] ?? "openai/gpt-oss-120b"
         } else {
             derivedCurrentProvider = currentSelectedProviderID
             derivedBaseURL = "https://api.openai.com/v1"
@@ -1972,7 +1966,7 @@ struct ContentView: View {
 
     private func isCustomModel(_ model: String) -> Bool {
         // Non-removable defaults are the provider's default models
-        return !self.defaultModels(for: self.currentProvider).contains(model)
+        return !ModelRepository.shared.defaultModels(for: self.currentProvider).contains(model)
     }
 
     /// Check if the current model has a reasoning config (either custom or auto-detected)
