@@ -70,7 +70,6 @@ final class TranscriptionHistoryStore: ObservableObject {
     static let shared = TranscriptionHistoryStore()
 
     private let defaults = UserDefaults.standard
-    private let maxEntries = 1000
 
     private enum Keys {
         static let transcriptionHistory = "TranscriptionHistoryEntries"
@@ -111,8 +110,6 @@ final class TranscriptionHistoryStore: ObservableObject {
         // Insert at beginning (newest first)
         self.entries.insert(entry, at: 0)
 
-        // Trim old entries if over limit
-        self.trimOldEntries()
         self.saveEntries()
 
         DebugLogger.shared.debug("Added transcription to history (total: \(self.entries.count))", source: "TranscriptionHistoryStore")
@@ -199,12 +196,6 @@ final class TranscriptionHistoryStore: ObservableObject {
         objectWillChange.send()
     }
 
-    private func trimOldEntries() {
-        if self.entries.count > self.maxEntries {
-            // Keep most recent entries
-            self.entries = Array(self.entries.prefix(self.maxEntries))
-        }
-    }
 }
 
 // MARK: - Stats Computation Extension
