@@ -278,7 +278,7 @@ extension AIEnhancementSettingsView {
                             self.providerCard(item)
                                 .id(item.id)
                         }
-                        if filteredItems.isEmpty {
+                        if filteredItems.isEmpty, !query.isEmpty {
                             Text("No providers match \"\(query)\"")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -608,7 +608,7 @@ extension AIEnhancementSettingsView {
             self.fluid1InterestErrorMessage = "Enter your email to join early access."
             return
         }
-        guard email.contains("@"), email.contains(".") else {
+        guard self.isValidEmail(email) else {
             self.fluid1InterestErrorMessage = "Enter a valid email address."
             return
         }
@@ -669,6 +669,27 @@ extension AIEnhancementSettingsView {
             )
             return false
         }
+    }
+
+    private func isValidEmail(_ email: String) -> Bool {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.contains("@") else { return false }
+        let parts = trimmed.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 2 else { return false }
+
+        let local = String(parts[0])
+        let domain = String(parts[1])
+        guard !local.isEmpty, !domain.isEmpty else { return false }
+        guard !local.hasPrefix("."), !local.hasSuffix(".") else { return false }
+        guard !domain.hasPrefix("."), !domain.hasSuffix(".") else { return false }
+        guard !local.contains(".."), !domain.contains("..") else { return false }
+
+        let domainParts = domain.split(separator: ".", omittingEmptySubsequences: false)
+        guard domainParts.count >= 2 else { return false }
+        guard domainParts.allSatisfy({ !$0.isEmpty }) else { return false }
+        guard let tld = domainParts.last, tld.count >= 2 else { return false }
+
+        return true
     }
 
     private func providerDetailsSection(for item: ProviderItem) -> AnyView {
