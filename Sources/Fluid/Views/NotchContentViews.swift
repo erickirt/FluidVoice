@@ -341,10 +341,11 @@ struct NotchExpandedView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
+        .background(Color.black)
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.white.opacity(0.00), lineWidth: 1)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
         .onHover { hovering in
             self.handlePromptHover(hovering)
