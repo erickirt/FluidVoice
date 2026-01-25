@@ -777,10 +777,7 @@ struct ContentView: View {
     }
 
     private func sidebarRowBackground(for item: SidebarItem) -> some View {
-        let isSelected = self.selectedSidebarItem == item
-        return RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(isSelected ? self.settings.accentColor.opacity(0.15) : .clear)
-            .padding(.vertical, 2)
+        return Color.clear
     }
 
     private var detailView: some View {

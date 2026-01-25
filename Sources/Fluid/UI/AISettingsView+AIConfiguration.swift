@@ -570,9 +570,32 @@ extension AIEnhancementSettingsView {
                     Text("API Key")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
-                    SecureField("Enter API key", text: apiKeyBinding)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 13))
+                    HStack(alignment: .center, spacing: 8) {
+                        SecureField("Enter API key", text: apiKeyBinding)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 13))
+                            .frame(maxWidth: 200)
+                        if let websiteInfo = ModelRepository.shared.providerWebsiteURL(for: item.id),
+                           let url = URL(string: websiteInfo.url)
+                        {
+                            Button(action: { NSWorkspace.shared.open(url) }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: websiteInfo.label.contains("Guide") ? "book.fill" : "key.fill")
+                                        .font(.system(size: 10))
+                                    Text(websiteInfo.label)
+                                        .font(.system(size: 11, weight: .medium))
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(self.theme.palette.accent)
+                                )
+                                .foregroundStyle(.white)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
 
                 HStack(spacing: 10) {
@@ -1100,10 +1123,32 @@ extension AIEnhancementSettingsView {
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
-                    SecureField("Enter API key", text: apiKeyBinding)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 13))
-                        .frame(maxWidth: 300)
+                    HStack(alignment: .center, spacing: 8) {
+                        SecureField("Enter API key", text: apiKeyBinding)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 13))
+                            .frame(maxWidth: 200)
+                        if let websiteInfo = ModelRepository.shared.providerWebsiteURL(for: self.viewModel.selectedProviderID),
+                           let url = URL(string: websiteInfo.url)
+                        {
+                            Button(action: { NSWorkspace.shared.open(url) }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: websiteInfo.label.contains("Guide") ? "book.fill" : "key.fill")
+                                        .font(.system(size: 10))
+                                    Text(websiteInfo.label)
+                                        .font(.system(size: 11, weight: .medium))
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(self.theme.palette.accent)
+                                )
+                                .foregroundStyle(.white)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
             }
 
