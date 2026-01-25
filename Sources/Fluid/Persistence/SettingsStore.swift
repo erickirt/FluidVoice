@@ -1453,7 +1453,7 @@ final class SettingsStore: ObservableObject {
         case whisperBase = "whisper-base"
         case whisperSmall = "whisper-small"
         case whisperMedium = "whisper-medium"
-        case whisperLargeTurbo = "whisper-large-turbo"
+        // case whisperLargeTurbo = "whisper-large-turbo" // buggy - so removed temporarily
         case whisperLarge = "whisper-large"
 
         var id: String { rawValue }
@@ -1470,7 +1470,7 @@ final class SettingsStore: ObservableObject {
             case .whisperBase: return "Whisper Base"
             case .whisperSmall: return "Whisper Small"
             case .whisperMedium: return "Whisper Medium"
-            case .whisperLargeTurbo: return "Whisper Large Turbo"
+            // case .whisperLargeTurbo: return "Whisper Large Turbo" // buggy - so removed temporarily
             case .whisperLarge: return "Whisper Large"
             }
         }
@@ -1481,7 +1481,7 @@ final class SettingsStore: ObservableObject {
             case .parakeetTDTv2: return "English Only (Higher Accuracy)"
             case .appleSpeech: return "System Languages"
             case .appleSpeechAnalyzer: return "EN, ES, FR, DE, IT, JA, KO, PT, ZH"
-            case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
+            case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, /* .whisperLargeTurbo, */ .whisperLarge: // buggy - so removed temporarily
                 return "99 Languages"
             }
         }
@@ -1496,7 +1496,7 @@ final class SettingsStore: ObservableObject {
             case .whisperBase: return "~142 MB"
             case .whisperSmall: return "~466 MB"
             case .whisperMedium: return "~1.5 GB"
-            case .whisperLargeTurbo: return "~1.6 GB"
+            // case .whisperLargeTurbo: return "~1.6 GB" // buggy - so removed temporarily
             case .whisperLarge: return "~2.9 GB"
             }
         }
@@ -1522,7 +1522,7 @@ final class SettingsStore: ObservableObject {
             case .whisperBase: return "ggml-base.bin"
             case .whisperSmall: return "ggml-small.bin"
             case .whisperMedium: return "ggml-medium.bin"
-            case .whisperLargeTurbo: return "ggml-large-v3-turbo.bin"
+            // case .whisperLargeTurbo: return "ggml-large-v3-turbo.bin" // buggy - so removed temporarily
             case .whisperLarge: return "ggml-large-v3.bin"
             default: return nil
             }
@@ -1535,7 +1535,7 @@ final class SettingsStore: ObservableObject {
             case .whisperBase: return "base"
             case .whisperSmall: return "small"
             case .whisperMedium: return "medium"
-            case .whisperLargeTurbo: return "large-v3-turbo"
+            // case .whisperLargeTurbo: return "large-v3-turbo" // buggy - so removed temporarily
             case .whisperLarge: return "large-v3"
             default: return nil
             }
@@ -1588,7 +1588,7 @@ final class SettingsStore: ObservableObject {
             case .whisperBase: return "Standard Choice"
             case .whisperSmall: return "Balanced Speed & Accuracy"
             case .whisperMedium: return "Medium Quality"
-            case .whisperLargeTurbo: return "Higher Quality but Faster"
+            // case .whisperLargeTurbo: return "Higher Quality but Faster" // buggy - so removed temporarily
             case .whisperLarge: return "Maximum Accuracy"
             }
         }
@@ -1612,8 +1612,8 @@ final class SettingsStore: ObservableObject {
                 return "Better accuracy than Base. Moderate resource usage."
             case .whisperMedium:
                 return "High accuracy for demanding tasks. Requires more memory."
-            case .whisperLargeTurbo:
-                return "Near-maximum accuracy with optimized speed."
+            // case .whisperLargeTurbo: // buggy - so removed temporarily
+            //     return "Near-maximum accuracy with optimized speed."
             case .whisperLarge:
                 return "Best possible accuracy. Large download and memory usage."
             }
@@ -1630,7 +1630,7 @@ final class SettingsStore: ObservableObject {
             case .whisperBase: return 4
             case .whisperSmall: return 3
             case .whisperMedium: return 2
-            case .whisperLargeTurbo: return 3
+            // case .whisperLargeTurbo: return 3 // buggy - so removed temporarily
             case .whisperLarge: return 1
             }
         }
@@ -1646,7 +1646,7 @@ final class SettingsStore: ObservableObject {
             case .whisperBase: return 3
             case .whisperSmall: return 4
             case .whisperMedium: return 4
-            case .whisperLargeTurbo: return 5
+            // case .whisperLargeTurbo: return 5 // buggy - so removed temporarily
             case .whisperLarge: return 5
             }
         }
@@ -1662,7 +1662,7 @@ final class SettingsStore: ObservableObject {
             case .whisperBase: return 0.80
             case .whisperSmall: return 0.60
             case .whisperMedium: return 0.40
-            case .whisperLargeTurbo: return 0.65
+            // case .whisperLargeTurbo: return 0.65 // buggy - so removed temporarily
             case .whisperLarge: return 0.20
             }
         }
@@ -1678,7 +1678,7 @@ final class SettingsStore: ObservableObject {
             case .whisperBase: return 0.60
             case .whisperSmall: return 0.70
             case .whisperMedium: return 0.80
-            case .whisperLargeTurbo: return 0.95
+            // case .whisperLargeTurbo: return 0.95 // buggy - so removed temporarily
             case .whisperLarge: return 1.00
             }
         }
@@ -1707,7 +1707,7 @@ final class SettingsStore: ObservableObject {
         /// Large Whisper models are too slow for streaming, so they only do final transcription on stop.
         var supportsStreaming: Bool {
             switch self {
-            case .whisperMedium, .whisperLarge, .whisperLargeTurbo:
+            case .whisperMedium, .whisperLarge: // .whisperLargeTurbo - buggy - so removed temporarily
                 return false // Too slow for real-time chunk processing
             default:
                 return true // All other models support streaming
@@ -1728,7 +1728,7 @@ final class SettingsStore: ObservableObject {
                 return .nvidia
             case .appleSpeech, .appleSpeechAnalyzer:
                 return .apple
-            case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
+            case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, /* .whisperLargeTurbo, */ .whisperLarge: // buggy - so removed temporarily
                 return .openai
             }
         }
@@ -1778,7 +1778,7 @@ final class SettingsStore: ObservableObject {
                 return "NVIDIA"
             case .appleSpeech, .appleSpeechAnalyzer:
                 return "Apple"
-            case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
+            case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, /* .whisperLargeTurbo, */ .whisperLarge: // buggy - so removed temporarily
                 return "OpenAI"
             }
         }
@@ -1798,7 +1798,7 @@ final class SettingsStore: ObservableObject {
                 return "#76B900"
             case .appleSpeech, .appleSpeechAnalyzer:
                 return "#A2AAAD" // Apple Gray
-            case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
+            case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, /* .whisperLargeTurbo, */ .whisperLarge: // buggy - so removed temporarily
                 return "#10A37F" // OpenAI Teal
             }
         }

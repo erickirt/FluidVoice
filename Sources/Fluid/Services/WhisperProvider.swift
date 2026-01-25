@@ -19,15 +19,21 @@ final class WhisperProvider: TranscriptionProvider {
     private let overriddenModelDirectory: URL?
     private let urlSession: URLSession
 
-    init(modelDirectory: URL? = nil, urlSession: URLSession = .shared) {
+    /// Optional model override - if set, uses this model instead of the global setting.
+    /// Used for downloading specific models without changing the active selection.
+    var modelOverride: SettingsStore.SpeechModel?
+
+    init(modelDirectory: URL? = nil, urlSession: URLSession = .shared, modelOverride: SettingsStore.SpeechModel? = nil) {
         self.overriddenModelDirectory = modelDirectory
         self.urlSession = urlSession
+        self.modelOverride = modelOverride
     }
 
-    /// Model filename to use - reads from the unified SpeechModel setting
+    /// Model filename to use - reads from override first, then unified SpeechModel setting
     /// Models: tiny (~75MB), base (~142MB), small (~466MB), medium (~1.5GB), large (~2.9GB)
     private var modelName: String {
-        let configured = SettingsStore.shared.selectedSpeechModel.whisperModelFile?
+        let model = self.modelOverride ?? SettingsStore.shared.selectedSpeechModel
+        let configured = model.whisperModelFile?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if let configured, !configured.isEmpty {
             return configured
@@ -63,8 +69,8 @@ final class WhisperProvider: TranscriptionProvider {
             return 300 * 1024 * 1024
         case "ggml-medium.bin":
             return 1000 * 1024 * 1024
-        case "ggml-large-v3-turbo.bin":
-            return 1200 * 1024 * 1024
+        // case "ggml-large-v3-turbo.bin": // buggy - so removed temporarily
+        //     return 1200 * 1024 * 1024
         case "ggml-large-v3.bin":
             return 2000 * 1024 * 1024
         default:

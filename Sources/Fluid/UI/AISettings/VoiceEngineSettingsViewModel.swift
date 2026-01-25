@@ -20,6 +20,11 @@ final class VoiceEngineSettingsViewModel: ObservableObject {
     @Published var suppressSpeechProviderSync: Bool = false
     @Published var skipNextSpeechModelSync: Bool = false
 
+    /// The model currently being downloaded (nil if no download in progress)
+    @Published var downloadingModel: SettingsStore.SpeechModel?
+    /// Download progress for the current model (0.0 to 1.0)
+    @Published var downloadProgress: Double = 0.0
+
     @Published var removeFillerWordsEnabled: Bool
 
     init(settings: SettingsStore, appServices: AppServices) {
@@ -107,34 +112,29 @@ final class VoiceEngineSettingsViewModel: ObservableObject {
 
     func downloadSpeechModel(_ model: SettingsStore.SpeechModel) {
         guard !self.asr.isRunning else { return }
-        let previousActive = self.settings.selectedSpeechModel
+        guard self.downloadingModel == nil else { return } // Prevent concurrent downloads
 
         Task {
-            let shouldRestore = previousActive != model
-            await MainActor.run {
-                if shouldRestore {
-                    self.suppressSpeechProviderSync = true
-                }
-                self.settings.selectedSpeechModel = model
-                self.asr.resetTranscriptionProvider()
+            // Mark this model as downloading
+            self.downloadingModel = model
+            self.downloadProgress = 0.0
+
+            do {
+                // Download the model WITHOUT changing the active selection
+                try await self.asr.downloadModel(model, progressHandler: { [weak self] progress in
+                    Task { @MainActor in
+                        self?.downloadProgress = progress
+                    }
+                })
+
+                DebugLogger.shared.info("Model download completed: \(model.displayName)", source: "VoiceEngineVM")
+            } catch {
+                DebugLogger.shared.error("Failed to download model \(model.displayName): \(error)", source: "VoiceEngineVM")
             }
 
-            defer {
-                Task { @MainActor in
-                    guard shouldRestore else { return }
-                    if self.settings.selectedSpeechModel == model {
-                        self.skipNextSpeechModelSync = true
-                        self.settings.selectedSpeechModel = previousActive
-                        self.asr.resetTranscriptionProvider()
-                    }
-                    if self.previewSpeechModel == model {
-                        self.previewSpeechModel = model
-                    }
-                    self.suppressSpeechProviderSync = false
-                }
-            }
-
-            await self.downloadModels()
+            // Clear downloading state
+            self.downloadingModel = nil
+            self.downloadProgress = 0.0
         }
     }
 

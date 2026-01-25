@@ -16,10 +16,18 @@ final class FluidAudioProvider: TranscriptionProvider {
     private var asrManager: AsrManager?
     private(set) var isReady: Bool = false
 
+    /// Optional model override - if set, uses this model instead of the global setting.
+    /// Used for downloading specific models without changing the active selection.
+    var modelOverride: SettingsStore.SpeechModel?
+
+    init(modelOverride: SettingsStore.SpeechModel? = nil) {
+        self.modelOverride = modelOverride
+    }
+
     func prepare(progressHandler: ((Double) -> Void)? = nil) async throws {
         guard self.isReady == false else { return }
 
-        let selectedModel = SettingsStore.shared.selectedSpeechModel
+        let selectedModel = self.modelOverride ?? SettingsStore.shared.selectedSpeechModel
         DebugLogger.shared.info("FluidAudioProvider: Starting model preparation for \(selectedModel.displayName)", source: "FluidAudioProvider")
 
         // Download and load models

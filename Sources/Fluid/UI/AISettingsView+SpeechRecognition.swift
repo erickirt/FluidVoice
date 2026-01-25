@@ -276,7 +276,19 @@ extension VoiceEngineSettingsView {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if (self.viewModel.asr.isDownloadingModel || self.viewModel.asr.isLoadingModel) && isActive && !self.viewModel.asr.isAsrReady {
+            // Action area: Show progress if THIS model is being downloaded
+            if self.viewModel.downloadingModel == model {
+                // This specific model is currently being downloaded
+                VStack(alignment: .trailing, spacing: 4) {
+                    ProgressView(value: self.viewModel.downloadProgress)
+                        .progressViewStyle(.linear)
+                        .frame(width: 90)
+                    Text("\(Int(self.viewModel.downloadProgress * 100))%")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            } else if (self.viewModel.asr.isDownloadingModel || self.viewModel.asr.isLoadingModel) && isActive && !self.viewModel.asr.isAsrReady {
+                // Active model is loading/downloading (for Activate flow)
                 VStack(alignment: .trailing, spacing: 4) {
                     if let progress = self.viewModel.asr.downloadProgress, self.viewModel.asr.isDownloadingModel {
                         ProgressView(value: progress)
@@ -313,7 +325,7 @@ extension VoiceEngineSettingsView {
                         .tint(Color.fluidGreen)
                         .fontWeight(.semibold)
                         .shadow(color: Color.fluidGreen.opacity(0.35), radius: 4, x: 0, y: 1)
-                        .disabled(self.viewModel.asr.isRunning)
+                        .disabled(self.viewModel.asr.isRunning || self.viewModel.downloadingModel != nil)
                     }
 
                     if !model.usesAppleLogo {
@@ -326,7 +338,7 @@ extension VoiceEngineSettingsView {
                                     .foregroundStyle(.red.opacity(0.7))
                             }
                             .buttonStyle(.plain)
-                            .disabled(self.viewModel.asr.isRunning)
+                            .disabled(self.viewModel.asr.isRunning || self.viewModel.downloadingModel != nil)
                             .offset(x: isSelected ? 0 : 12)
                             .opacity(isSelected ? 1 : 0)
                         }
@@ -346,7 +358,7 @@ extension VoiceEngineSettingsView {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .tint(.blue)
-                    .disabled(self.viewModel.asr.isRunning)
+                    .disabled(self.viewModel.asr.isRunning || self.viewModel.downloadingModel != nil)
                     .offset(x: isSelected ? 0 : 16)
                     .opacity(isSelected ? 1 : 0)
                 }

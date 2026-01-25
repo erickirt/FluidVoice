@@ -89,6 +89,7 @@ final class ASRService: ObservableObject {
     @Published var isLoadingModel: Bool = false // True when loading cached model into memory (not downloading)
     @Published var modelsExistOnDisk: Bool = false
     @Published var downloadProgress: Double? = nil
+    @Published var downloadingModelId: String? = nil // Tracks which model is currently being downloaded
 
     private var downloadProgressTask: Task<Void, Never>?
     private var hasCompletedFirstTranscription: Bool = false // Track if model has warmed up with first transcription
@@ -188,6 +189,54 @@ final class ASRService: ObservableObject {
     /// Returns the user-friendly name of the currently selected speech model
     var activeProviderName: String {
         SettingsStore.shared.selectedSpeechModel.displayName
+    }
+
+    /// Exposes the transcription provider for file transcription (MeetingTranscriptionService)
+    /// This allows file transcription to work with any provider (Parakeet, Whisper, etc.)
+    var fileTranscriptionProvider: TranscriptionProvider {
+        self.transcriptionProvider
+    }
+
+    /// Gets a provider for a specific model (without changing the active selection)
+    /// Used for downloading models without switching the active model.
+    private func getProvider(for model: SettingsStore.SpeechModel) -> TranscriptionProvider {
+        switch model {
+        case .appleSpeechAnalyzer:
+            if #available(macOS 26.0, *) {
+                return AppleSpeechAnalyzerProvider()
+            } else {
+                return AppleSpeechProvider()
+            }
+        case .appleSpeech:
+            return AppleSpeechProvider()
+        case .parakeetTDT, .parakeetTDTv2:
+            // Create a new provider configured for the specific model
+            let provider = FluidAudioProvider(modelOverride: model)
+            return provider
+        default:
+            // Whisper models - create provider with specific model override
+            let provider = WhisperProvider(modelOverride: model)
+            return provider
+        }
+    }
+
+    /// Downloads a specific model without changing the active selection.
+    /// - Parameters:
+    ///   - model: The model to download
+    ///   - progressHandler: Optional callback for download progress (0.0 to 1.0)
+    func downloadModel(_ model: SettingsStore.SpeechModel, progressHandler: ((Double) -> Void)?) async throws {
+        DebugLogger.shared.info("Downloading model: \(model.displayName) (without changing active selection)", source: "ASRService")
+
+        // Get a fresh provider for this specific model (uses modelOverride for Whisper)
+        let provider = self.getProvider(for: model)
+
+        // Prepare (download) the model
+        try await provider.prepare(progressHandler: { progress in
+            let clamped = max(0.0, min(1.0, progress))
+            progressHandler?(clamped)
+        })
+
+        DebugLogger.shared.info("Model download completed: \(model.displayName)", source: "ASRService")
     }
 
     /// Call this when the transcription provider setting changes to reset state
@@ -1588,6 +1637,12 @@ final class ASRService: ObservableObject {
     /// - Network connectivity issues
     /// - Insufficient disk space
     func ensureAsrReady() async throws {
+        try await self.ensureAsrReady(progressHandler: nil)
+    }
+
+    /// Ensures ASR models are ready, with an optional external progress handler.
+    /// - Parameter progressHandler: Optional callback for download progress (0.0 to 1.0)
+    func ensureAsrReady(progressHandler: ((Double) -> Void)?) async throws {
         let provider = self.transcriptionProvider
         let providerKey = "\(type(of: provider)):\(provider.name)"
 
@@ -1598,7 +1653,7 @@ final class ASRService: ObservableObject {
         }
 
         let task = Task { @MainActor in
-            try await self.performEnsureAsrReady(provider: provider)
+            try await self.performEnsureAsrReady(provider: provider, externalProgressHandler: progressHandler)
         }
         self.ensureReadyTask = task
         self.ensureReadyProviderKey = providerKey
@@ -1613,7 +1668,7 @@ final class ASRService: ObservableObject {
         try await task.value
     }
 
-    private func performEnsureAsrReady(provider: TranscriptionProvider) async throws {
+    private func performEnsureAsrReady(provider: TranscriptionProvider, externalProgressHandler: ((Double) -> Void)? = nil) async throws {
         // Check if already ready
         if self.isAsrReady, provider.isReady {
             DebugLogger.shared.debug("ASR already ready with loaded models, skipping initialization", source: "ASRService")
@@ -1681,6 +1736,8 @@ final class ASRService: ObservableObject {
                 DispatchQueue.main.async {
                     let clamped = max(0.0, min(1.0, progress))
                     self?.downloadProgress = clamped
+                    // Also call external progress handler if provided
+                    externalProgressHandler?(clamped)
                 }
             })
             let downloadDuration = Date().timeIntervalSince(downloadStartTime)
