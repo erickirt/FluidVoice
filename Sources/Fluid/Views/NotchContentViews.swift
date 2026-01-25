@@ -399,7 +399,7 @@ struct NotchExpandedView: View {
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.04))
+                    .background(Color.white.opacity(0.00))
                     .cornerRadius(6)
                     .onHover { hovering in
                         self.handlePromptHover(hovering)
@@ -429,7 +429,7 @@ struct NotchExpandedView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color.black)
+        .background(Color.black) // Must be pure black to blend with macOS notch
         .contentShape(Rectangle()) // Make entire area tappable
         .onTapGesture {
             // If in command mode with history, clicking expands the conversation

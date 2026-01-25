@@ -17,9 +17,27 @@ final class GlobalHotkeyManager: NSObject {
     private var rewriteModeCallback: (() async -> Void)?
     private var cancelCallback: (() -> Bool)? // Returns true if handled
     private var pressAndHoldMode: Bool = SettingsStore.shared.pressAndHoldMode
-    private var isKeyPressed = false
-    private var isCommandModeKeyPressed = false
-    private var isRewriteKeyPressed = false
+    // These state flags are accessed from CGEvent tap callback (may run off main thread)
+    // and @MainActor tasks. Marked nonisolated(unsafe) since they're simple booleans
+    // with effectively atomic reads/writes, and the event tap runs on main run loop.
+    private nonisolated(unsafe) var isKeyPressed = false
+    private nonisolated(unsafe) var isCommandModeKeyPressed = false
+    private nonisolated(unsafe) var isRewriteKeyPressed = false
+
+    // Modifier-only shortcut tracking: detect if another key was pressed during modifier hold
+    private nonisolated(unsafe) var modifierOnlyKeyDown = false
+    private nonisolated(unsafe) var otherKeyPressedDuringModifier = false
+    // Reserved for future tap-vs-hold timing detection (e.g., quick tap to toggle vs long hold)
+    private var modifierPressStartTime: Date?
+    private nonisolated(unsafe) var pendingHoldModeStart: Task<Void, Never>?
+    // Tracks which mode's pending start is active (for cancellation on key combos)
+    private var pendingHoldModeType: HoldModeType?
+
+    private enum HoldModeType {
+        case transcription
+        case commandMode
+        case rewriteMode
+    }
 
     // Busy flag to prevent race conditions during stop processing
     private var isProcessingStop = false
@@ -249,6 +267,18 @@ final class GlobalHotkeyManager: NSObject {
 
         switch type {
         case .keyDown:
+            // If a modifier-only shortcut key is being held and this is a different key, mark it
+            if self.modifierOnlyKeyDown {
+                self.otherKeyPressedDuringModifier = true
+                // Cancel any pending hold mode start (user is doing a key combo, not just modifier)
+                if let pending = self.pendingHoldModeStart {
+                    pending.cancel()
+                    self.pendingHoldModeStart = nil
+                    self.pendingHoldModeType = nil
+                    DebugLogger.shared.info("Another key pressed - cancelled pending hold mode start", source: "GlobalHotkeyManager")
+                }
+            }
+
             // Observe post-transcription edits (do not consume the event).
             Task {
                 await PostTranscriptionEditTracker.shared.handleKeyDown(keyCode: keyCode, modifiers: eventModifiers)
@@ -338,7 +368,8 @@ final class GlobalHotkeyManager: NSObject {
 
         case .keyUp:
             // Command mode key up (press and hold mode)
-            if self.commandModeShortcutEnabled, self.pressAndHoldMode, self.isCommandModeKeyPressed, self.matchesCommandModeShortcut(keyCode: keyCode, modifiers: eventModifiers) {
+            // Note: Only check keyCode, not modifiers - user may release modifier before/with main key
+            if self.commandModeShortcutEnabled, self.pressAndHoldMode, self.isCommandModeKeyPressed, keyCode == self.commandModeShortcut.keyCode {
                 self.isCommandModeKeyPressed = false
                 DebugLogger.shared.info("Command mode shortcut released (hold mode) - stopping", source: "GlobalHotkeyManager")
                 self.stopRecordingIfNeeded()
@@ -346,7 +377,8 @@ final class GlobalHotkeyManager: NSObject {
             }
 
             // Rewrite mode key up (press and hold mode)
-            if self.rewriteModeShortcutEnabled, self.pressAndHoldMode, self.isRewriteKeyPressed, self.matchesRewriteModeShortcut(keyCode: keyCode, modifiers: eventModifiers) {
+            // Note: Only check keyCode, not modifiers - user may release modifier before/with main key
+            if self.rewriteModeShortcutEnabled, self.pressAndHoldMode, self.isRewriteKeyPressed, keyCode == self.rewriteModeShortcut.keyCode {
                 self.isRewriteKeyPressed = false
                 DebugLogger.shared.info("Rewrite mode shortcut released (hold mode) - stopping", source: "GlobalHotkeyManager")
                 self.stopRecordingIfNeeded()
@@ -354,7 +386,8 @@ final class GlobalHotkeyManager: NSObject {
             }
 
             // Transcription key up
-            if self.pressAndHoldMode, self.isKeyPressed, self.matchesShortcut(keyCode: keyCode, modifiers: eventModifiers) {
+            // Note: Only check keyCode, not modifiers - user may release modifier before/with main key
+            if self.pressAndHoldMode, self.isKeyPressed, keyCode == self.shortcut.keyCode {
                 self.isKeyPressed = false
                 self.stopRecordingIfNeeded()
                 return nil
@@ -370,27 +403,63 @@ final class GlobalHotkeyManager: NSObject {
             // Check command mode shortcut (if it's a modifier-only shortcut)
             if self.commandModeShortcutEnabled, self.commandModeShortcut.modifierFlags.isEmpty, keyCode == self.commandModeShortcut.keyCode {
                 if isModifierPressed {
+                    // Modifier pressed down
+                    self.modifierOnlyKeyDown = true
+                    self.otherKeyPressedDuringModifier = false
+                    self.modifierPressStartTime = Date()
+
                     if self.pressAndHoldMode {
                         if !self.isCommandModeKeyPressed {
                             self.isCommandModeKeyPressed = true
-                            DebugLogger.shared.info("Command mode modifier pressed (hold mode) - starting", source: "GlobalHotkeyManager")
+                            // Delay start by 150ms to detect if this is a key combo
+                            self.pendingHoldModeStart?.cancel()
+                            self.pendingHoldModeType = .commandMode
+                            self.pendingHoldModeStart = Task { @MainActor [weak self] in
+                                try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
+                                guard let self = self, !Task.isCancelled else { return }
+                                guard self.isCommandModeKeyPressed, !self.otherKeyPressedDuringModifier else {
+                                    DebugLogger.shared.debug("Command mode hold start cancelled - key combo detected", source: "GlobalHotkeyManager")
+                                    return
+                                }
+                                DebugLogger.shared.info("Command mode modifier held (hold mode) - starting after delay", source: "GlobalHotkeyManager")
+                                self.triggerCommandMode()
+                            }
+                        }
+                    }
+                    // Toggle mode: do NOT trigger yet, wait for release
+                } else {
+                    // Modifier released
+                    let wasCleanPress = !self.otherKeyPressedDuringModifier
+                    self.modifierOnlyKeyDown = false
+                    self.otherKeyPressedDuringModifier = false
+                    self.modifierPressStartTime = nil
+
+                    if self.pressAndHoldMode {
+                        // Cancel pending start if not yet triggered
+                        self.pendingHoldModeStart?.cancel()
+                        self.pendingHoldModeStart = nil
+                        self.pendingHoldModeType = nil
+
+                        if self.isCommandModeKeyPressed {
+                            self.isCommandModeKeyPressed = false
+                            // Only stop if recording actually started
+                            if self.asrService.isRunning {
+                                DebugLogger.shared.info("Command mode modifier released (hold mode) - stopping", source: "GlobalHotkeyManager")
+                                self.stopRecordingIfNeeded()
+                            }
+                        }
+                    } else if wasCleanPress {
+                        // Toggle mode: only trigger on release if no other key was pressed
+                        if self.asrService.isRunning {
+                            DebugLogger.shared.info("Command mode modifier released (toggle) - stopping", source: "GlobalHotkeyManager")
+                            self.stopRecordingIfNeeded()
+                        } else {
+                            DebugLogger.shared.info("Command mode modifier released (toggle) - starting", source: "GlobalHotkeyManager")
                             self.triggerCommandMode()
                         }
                     } else {
-                        // Toggle mode
-                        if self.asrService.isRunning {
-                            DebugLogger.shared.info("Command mode modifier pressed while recording - stopping", source: "GlobalHotkeyManager")
-                            self.stopRecordingIfNeeded()
-                        } else {
-                            DebugLogger.shared.info("Command mode modifier pressed - starting", source: "GlobalHotkeyManager")
-                            self.triggerCommandMode()
-                        }
+                        DebugLogger.shared.debug("Command mode modifier released but another key was pressed - ignoring", source: "GlobalHotkeyManager")
                     }
-                } else if self.pressAndHoldMode, self.isCommandModeKeyPressed {
-                    // Key released in press-and-hold mode
-                    self.isCommandModeKeyPressed = false
-                    DebugLogger.shared.info("Command mode modifier released (hold mode) - stopping", source: "GlobalHotkeyManager")
-                    self.stopRecordingIfNeeded()
                 }
                 return nil
             }
@@ -408,27 +477,63 @@ final class GlobalHotkeyManager: NSObject {
 
                 if isModifierKey, keyCode == self.rewriteModeShortcut.keyCode {
                     if isModifierPressed {
+                        // Modifier pressed down
+                        self.modifierOnlyKeyDown = true
+                        self.otherKeyPressedDuringModifier = false
+                        self.modifierPressStartTime = Date()
+
                         if self.pressAndHoldMode {
                             if !self.isRewriteKeyPressed {
                                 self.isRewriteKeyPressed = true
-                                DebugLogger.shared.info("Rewrite mode modifier pressed (hold mode) - starting", source: "GlobalHotkeyManager")
+                                // Delay start by 150ms to detect if this is a key combo
+                                self.pendingHoldModeStart?.cancel()
+                                self.pendingHoldModeType = .rewriteMode
+                                self.pendingHoldModeStart = Task { @MainActor [weak self] in
+                                    try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
+                                    guard let self = self, !Task.isCancelled else { return }
+                                    guard self.isRewriteKeyPressed, !self.otherKeyPressedDuringModifier else {
+                                        DebugLogger.shared.debug("Rewrite mode hold start cancelled - key combo detected", source: "GlobalHotkeyManager")
+                                        return
+                                    }
+                                    DebugLogger.shared.info("Rewrite mode modifier held (hold mode) - starting after delay", source: "GlobalHotkeyManager")
+                                    self.triggerRewriteMode()
+                                }
+                            }
+                        }
+                        // Toggle mode: do NOT trigger yet, wait for release
+                    } else {
+                        // Modifier released
+                        let wasCleanPress = !self.otherKeyPressedDuringModifier
+                        self.modifierOnlyKeyDown = false
+                        self.otherKeyPressedDuringModifier = false
+                        self.modifierPressStartTime = nil
+
+                        if self.pressAndHoldMode {
+                            // Cancel pending start if not yet triggered
+                            self.pendingHoldModeStart?.cancel()
+                            self.pendingHoldModeStart = nil
+                            self.pendingHoldModeType = nil
+
+                            if self.isRewriteKeyPressed {
+                                self.isRewriteKeyPressed = false
+                                // Only stop if recording actually started
+                                if self.asrService.isRunning {
+                                    DebugLogger.shared.info("Rewrite mode modifier released (hold mode) - stopping", source: "GlobalHotkeyManager")
+                                    self.stopRecordingIfNeeded()
+                                }
+                            }
+                        } else if wasCleanPress {
+                            // Toggle mode: only trigger on release if no other key was pressed
+                            if self.asrService.isRunning {
+                                DebugLogger.shared.info("Rewrite mode modifier released (toggle) - stopping", source: "GlobalHotkeyManager")
+                                self.stopRecordingIfNeeded()
+                            } else {
+                                DebugLogger.shared.info("Rewrite mode modifier released (toggle) - starting", source: "GlobalHotkeyManager")
                                 self.triggerRewriteMode()
                             }
                         } else {
-                            // Toggle mode
-                            if self.asrService.isRunning {
-                                DebugLogger.shared.info("Rewrite mode modifier pressed while recording - stopping", source: "GlobalHotkeyManager")
-                                self.stopRecordingIfNeeded()
-                            } else {
-                                DebugLogger.shared.info("Rewrite mode modifier pressed - starting", source: "GlobalHotkeyManager")
-                                self.triggerRewriteMode()
-                            }
+                            DebugLogger.shared.debug("Rewrite mode modifier released but another key was pressed - ignoring", source: "GlobalHotkeyManager")
                         }
-                    } else if self.pressAndHoldMode, self.isRewriteKeyPressed {
-                        // Key released in press-and-hold mode
-                        self.isRewriteKeyPressed = false
-                        DebugLogger.shared.info("Rewrite mode modifier released (hold mode) - stopping", source: "GlobalHotkeyManager")
-                        self.stopRecordingIfNeeded()
                     }
                     return nil
                 }
@@ -438,18 +543,57 @@ final class GlobalHotkeyManager: NSObject {
             guard self.shortcut.modifierFlags.isEmpty else { break }
 
             if keyCode == self.shortcut.keyCode {
-                if self.pressAndHoldMode {
-                    if isModifierPressed {
+                if isModifierPressed {
+                    // Modifier pressed down
+                    self.modifierOnlyKeyDown = true
+                    self.otherKeyPressedDuringModifier = false
+                    self.modifierPressStartTime = Date()
+
+                    if self.pressAndHoldMode {
                         if !self.isKeyPressed {
                             self.isKeyPressed = true
-                            self.startRecordingIfNeeded()
+                            // Delay start by 150ms to detect if this is a key combo
+                            self.pendingHoldModeStart?.cancel()
+                            self.pendingHoldModeType = .transcription
+                            self.pendingHoldModeStart = Task { @MainActor [weak self] in
+                                try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
+                                guard let self = self, !Task.isCancelled else { return }
+                                guard self.isKeyPressed, !self.otherKeyPressedDuringModifier else {
+                                    DebugLogger.shared.debug("Transcription hold start cancelled - key combo detected", source: "GlobalHotkeyManager")
+                                    return
+                                }
+                                DebugLogger.shared.info("Transcription modifier held (hold mode) - starting after delay", source: "GlobalHotkeyManager")
+                                self.startRecordingIfNeeded()
+                            }
                         }
-                    } else if self.isKeyPressed {
-                        self.isKeyPressed = false
-                        self.stopRecordingIfNeeded()
                     }
-                } else if isModifierPressed {
-                    self.toggleRecording()
+                    // Toggle mode: do NOT trigger yet, wait for release
+                } else {
+                    // Modifier released
+                    let wasCleanPress = !self.otherKeyPressedDuringModifier
+                    self.modifierOnlyKeyDown = false
+                    self.otherKeyPressedDuringModifier = false
+                    self.modifierPressStartTime = nil
+
+                    if self.pressAndHoldMode {
+                        // Cancel pending start if not yet triggered
+                        self.pendingHoldModeStart?.cancel()
+                        self.pendingHoldModeStart = nil
+                        self.pendingHoldModeType = nil
+
+                        if self.isKeyPressed {
+                            self.isKeyPressed = false
+                            // Only stop if recording actually started
+                            if self.asrService.isRunning {
+                                self.stopRecordingIfNeeded()
+                            }
+                        }
+                    } else if wasCleanPress {
+                        // Toggle mode: only trigger on release if no other key was pressed
+                        self.toggleRecording()
+                    } else {
+                        DebugLogger.shared.debug("Transcription modifier released but another key was pressed - ignoring", source: "GlobalHotkeyManager")
+                    }
                 }
                 return nil
             }
