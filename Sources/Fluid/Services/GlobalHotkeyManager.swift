@@ -80,6 +80,7 @@ final class GlobalHotkeyManager: NSObject {
         set { self.state.withLock { self.state.pendingHoldModeType = newValue } }
     }
 
+
     private enum HoldModeType {
         case transcription
         case commandMode
