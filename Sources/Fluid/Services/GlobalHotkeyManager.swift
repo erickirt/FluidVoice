@@ -17,15 +17,20 @@ final class GlobalHotkeyManager: NSObject {
     private var rewriteModeCallback: (() async -> Void)?
     private var cancelCallback: (() -> Bool)? // Returns true if handled
     private var pressAndHoldMode: Bool = SettingsStore.shared.pressAndHoldMode
-    private var isKeyPressed = false
-    private var isCommandModeKeyPressed = false
-    private var isRewriteKeyPressed = false
+    // These state flags are accessed from CGEvent tap callback (may run off main thread)
+    // and @MainActor tasks. Marked nonisolated(unsafe) since they're simple booleans
+    // with effectively atomic reads/writes, and the event tap runs on main run loop.
+    private nonisolated(unsafe) var isKeyPressed = false
+    private nonisolated(unsafe) var isCommandModeKeyPressed = false
+    private nonisolated(unsafe) var isRewriteKeyPressed = false
 
     // Modifier-only shortcut tracking: detect if another key was pressed during modifier hold
-    private var modifierOnlyKeyDown = false
-    private var otherKeyPressedDuringModifier = false
+    private nonisolated(unsafe) var modifierOnlyKeyDown = false
+    private nonisolated(unsafe) var otherKeyPressedDuringModifier = false
+    // Reserved for future tap-vs-hold timing detection (e.g., quick tap to toggle vs long hold)
     private var modifierPressStartTime: Date?
-    private var pendingHoldModeStart: Task<Void, Never>?
+    private nonisolated(unsafe) var pendingHoldModeStart: Task<Void, Never>?
+    // Tracks which mode's pending start is active (for cancellation on key combos)
     private var pendingHoldModeType: HoldModeType?
 
     private enum HoldModeType {
