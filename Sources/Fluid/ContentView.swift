@@ -72,7 +72,7 @@ struct ContentView: View {
     @State private var pendingModifierOnly = false
     @FocusState private var isTranscriptionFocused: Bool
 
-    @State private var selectedSidebarItem: SidebarItem? = .welcome
+    @State private var selectedSidebarItem: SidebarItem?
     @State private var previousSidebarItem: SidebarItem? = nil // Track previous for mode transitions
     @State private var playgroundUsed: Bool = SettingsStore.shared.playgroundUsed
     @State private var recordingAppInfo: (name: String, bundleId: String, windowTitle: String)? = nil
@@ -162,6 +162,13 @@ struct ContentView: View {
             }
             // Ensure no restart UI shows if we already have trust
             if self.accessibilityEnabled { self.showRestartPrompt = false }
+
+            // Set default selection if none exists (from menu bar navigation)
+            // Show Preferences as default once voice model is ready (AI enhancement is optional)
+            if self.selectedSidebarItem == nil {
+                let isOnboarded = self.asr.isAsrReady || self.asr.modelsExistOnDisk
+                self.selectedSidebarItem = isOnboarded ? .preferences : .welcome
+            }
 
             // Reset auto-restart flag if permission was revoked (allows re-triggering if user re-grants)
             if !self.accessibilityEnabled {
@@ -363,7 +370,8 @@ struct ContentView: View {
                             // Close mode views if active
                             if self.selectedSidebarItem == .commandMode || self.selectedSidebarItem == .rewriteMode {
                                 DebugLogger.shared.debug("NSEvent monitor: Escape pressed, closing mode view", source: "ContentView")
-                                self.selectedSidebarItem = .welcome
+                                let isOnboarded = self.asr.isAsrReady || self.asr.modelsExistOnDisk
+                                self.selectedSidebarItem = isOnboarded ? .preferences : .welcome
                                 handled = true
                             }
 
@@ -710,11 +718,22 @@ struct ContentView: View {
 
     private var sidebarView: some View {
         List(selection: self.$selectedSidebarItem) {
-            NavigationLink(value: SidebarItem.welcome) {
-                Label("Welcome", systemImage: "house.fill")
-                    .font(.system(size: 15, weight: .medium))
+            // Priority section: Welcome (if not onboarded) or Preferences (if voice model ready)
+            // Voice model readiness is the key onboarding milestone; AI enhancement is optional
+            let isOnboarded = self.asr.isAsrReady || self.asr.modelsExistOnDisk
+            if !isOnboarded {
+                NavigationLink(value: SidebarItem.welcome) {
+                    Label("Welcome", systemImage: "house.fill")
+                        .font(.system(size: 15, weight: .medium))
+                }
+                .listRowBackground(self.sidebarRowBackground(for: .welcome))
+            } else {
+                NavigationLink(value: SidebarItem.preferences) {
+                    Label("Preferences", systemImage: "gearshape.fill")
+                        .font(.system(size: 15, weight: .medium))
+                }
+                .listRowBackground(self.sidebarRowBackground(for: .preferences))
             }
-            .listRowBackground(self.sidebarRowBackground(for: .welcome))
 
             Button(action: {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -750,11 +769,14 @@ struct ContentView: View {
                 .listRowBackground(self.sidebarRowBackground(for: .aiEnhancements))
             }
 
-            NavigationLink(value: SidebarItem.preferences) {
-                Label("Preferences", systemImage: "gearshape.fill")
-                    .font(.system(size: 15, weight: .medium))
+            // If NOT onboarded, Preferences comes here (below AI Settings)
+            if !isOnboarded {
+                NavigationLink(value: SidebarItem.preferences) {
+                    Label("Preferences", systemImage: "gearshape.fill")
+                        .font(.system(size: 15, weight: .medium))
+                }
+                .listRowBackground(self.sidebarRowBackground(for: .preferences))
             }
-            .listRowBackground(self.sidebarRowBackground(for: .preferences))
 
             NavigationLink(value: SidebarItem.commandMode) {
                 Label("Command Mode", systemImage: "terminal.fill")
@@ -797,6 +819,15 @@ struct ContentView: View {
                     .font(.system(size: 15, weight: .medium))
             }
             .listRowBackground(self.sidebarRowBackground(for: .feedback))
+
+            // If onboarded, "Getting Started" comes at the bottom
+            if isOnboarded {
+                NavigationLink(value: SidebarItem.welcome) {
+                    Label("Getting Started", systemImage: "house.fill")
+                        .font(.system(size: 15, weight: .medium))
+                }
+                .listRowBackground(self.sidebarRowBackground(for: .welcome))
+            }
         }
         .listStyle(.sidebar)
         .animation(nil, value: self.selectedSidebarItem)
@@ -1030,13 +1061,15 @@ struct ContentView: View {
 
     private var commandModeView: some View {
         CommandModeView(service: self.commandModeService, onClose: {
-            self.selectedSidebarItem = .welcome
+            let isOnboarded = self.asr.isAsrReady || self.asr.modelsExistOnDisk
+            self.selectedSidebarItem = isOnboarded ? .preferences : .welcome
         })
     }
 
     private var rewriteModeView: some View {
         RewriteModeView(service: self.rewriteModeService, onClose: {
-            self.selectedSidebarItem = .welcome
+            let isOnboarded = self.asr.isAsrReady || self.asr.modelsExistOnDisk
+            self.selectedSidebarItem = isOnboarded ? .preferences : .welcome
         })
     }
 

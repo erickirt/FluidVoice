@@ -235,6 +235,23 @@ final class NotchOverlayManager {
             // Only update state if we're still the active generation
             guard let self = self, self.generation == currentGeneration else { return }
             self.state = .visible
+            self.disableNotchShadows()
+        }
+    }
+
+    /// Disable system window shadows for notch windows to prevent "gray traces" during animations
+    private func disableNotchShadows() {
+        // Notch is pure black and matches the bezel, so system shadows look like artifacts.
+        // We do this matching what's done in BottomOverlayWindowController.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            for window in NSApplication.shared.windows where window.styleMask.contains(.borderless) {
+                // Identify candidates: near top of screen or contains Notch in class name
+                let isNearTop = (window.screen ?? NSScreen.main)?.frame.maxY ?? 0
+                if window.frame.maxY >= isNearTop - 50 || window.className.contains("Notch") {
+                    window.hasShadow = false
+                    window.invalidateShadow()
+                }
+            }
         }
     }
 
@@ -403,6 +420,7 @@ final class NotchOverlayManager {
 
         guard self.commandOutputGeneration == currentGeneration else { return }
         self.commandOutputState = .visible
+        self.disableNotchShadows()
     }
 
     /// Hide expanded command output notch - force close regardless of hover state

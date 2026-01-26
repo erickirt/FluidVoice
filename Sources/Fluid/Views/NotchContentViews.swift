@@ -464,15 +464,15 @@ struct NotchWaveformView: View {
 
     // Computed glow values based on phase (sine wave for smooth pulsing)
     private var currentGlowIntensity: CGFloat {
-        self.contentState.isProcessing ? 0.4 + 0.4 * sin(self.glowPhase * .pi * 2) : 0.4
+        self.contentState.isProcessing ? 0.35 + 0.25 * sin(self.glowPhase * .pi * 2) : 0.35
     }
 
     private var currentGlowRadius: CGFloat {
-        self.contentState.isProcessing ? 2 + 4 * sin(self.glowPhase * .pi * 2) : 2
+        self.contentState.isProcessing ? 1 + 3 * sin(self.glowPhase * .pi * 2) : 1.5
     }
 
     private var currentOuterGlowRadius: CGFloat {
-        self.contentState.isProcessing ? 6 * sin(self.glowPhase * .pi * 2) : 0
+        self.contentState.isProcessing ? 4 * sin(self.glowPhase * .pi * 2) : 0
     }
 
     init(audioPublisher: AnyPublisher<CGFloat, Never>, color: Color, isProcessing: Bool = false) {

@@ -39,7 +39,7 @@ struct WelcomeView: View {
                     Image(systemName: "book.fill")
                         .font(.title2)
                         .foregroundStyle(self.theme.palette.accent)
-                    Text("Welcome to FluidVoice")
+                    Text((self.asr.isAsrReady || self.asr.modelsExistOnDisk) ? "Getting Started" : "Welcome to FluidVoice")
                         .font(.title2.weight(.bold))
                 }
                 .padding(.bottom, 4)
