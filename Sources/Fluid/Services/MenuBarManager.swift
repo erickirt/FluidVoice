@@ -105,7 +105,7 @@ final class MenuBarManager: ObservableObject {
         // Prevent rapid state changes that could cause cycles
         guard self.overlayVisible != isRunning else { return }
 
-        let delay: DispatchTimeInterval = .milliseconds(150)
+        let delay: DispatchTimeInterval = .milliseconds(30)
         if isRunning {
             // Cancel any pending hide operation
             self.pendingHideOperation?.cancel()
