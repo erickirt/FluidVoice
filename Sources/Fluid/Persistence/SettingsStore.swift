@@ -42,6 +42,8 @@ final class SettingsStore: ObservableObject {
         static let launchAtStartup = "LaunchAtStartup"
         static let showInDock = "ShowInDock"
         static let accentColorOption = "AccentColorOption"
+        static let enableTranscriptionSounds = "EnableTranscriptionSounds"
+        static let transcriptionStartSound = "TranscriptionStartSound"
         static let pressAndHoldMode = "PressAndHoldMode"
         static let enableStreamingPreview = "EnableStreamingPreview"
         static let enableAIStreaming = "EnableAIStreaming"
@@ -699,6 +701,27 @@ final class SettingsStore: ObservableObject {
         }
     }
 
+    enum TranscriptionStartSound: String, CaseIterable, Identifiable {
+        case fluidSfx1 = "fluid_sfx_1"
+        case fluidSfx2 = "fluid_sfx_2"
+
+        var id: String { self.rawValue }
+
+        var displayName: String {
+            switch self {
+            case .fluidSfx1: return "Fluid SFX 1"
+            case .fluidSfx2: return "Fluid SFX 2"
+            }
+        }
+
+        var soundFileName: String {
+            switch self {
+            case .fluidSfx1: return "FV_start"
+            case .fluidSfx2: return "FV_start_2"
+            }
+        }
+    }
+
     var accentColorOption: AccentColorOption {
         get {
             guard let raw = self.defaults.string(forKey: Keys.accentColorOption),
@@ -716,6 +739,32 @@ final class SettingsStore: ObservableObject {
 
     var accentColor: Color {
         Color(hex: self.accentColorOption.hex) ?? Color(red: 0.227, green: 0.784, blue: 0.776)
+    }
+
+    var enableTranscriptionSounds: Bool {
+        get {
+            let value = self.defaults.object(forKey: Keys.enableTranscriptionSounds)
+            return value as? Bool ?? true
+        }
+        set {
+            objectWillChange.send()
+            self.defaults.set(newValue, forKey: Keys.enableTranscriptionSounds)
+        }
+    }
+
+    var transcriptionStartSound: TranscriptionStartSound {
+        get {
+            guard let raw = self.defaults.string(forKey: Keys.transcriptionStartSound),
+                  let option = TranscriptionStartSound(rawValue: raw)
+            else {
+                return .fluidSfx2
+            }
+            return option
+        }
+        set {
+            objectWillChange.send()
+            self.defaults.set(newValue.rawValue, forKey: Keys.transcriptionStartSound)
+        }
     }
 
     var launchAtStartup: Bool {
