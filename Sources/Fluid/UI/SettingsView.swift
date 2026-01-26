@@ -180,6 +180,42 @@ struct SettingsView: View {
                             }
                             Divider().opacity(0.2)
 
+                            self.settingsToggleRow(
+                                title: "Transcription Sounds",
+                                description: "Play a short sound when dictation or command recording starts.",
+                                isOn: Binding(
+                                    get: { SettingsStore.shared.enableTranscriptionSounds },
+                                    set: { SettingsStore.shared.enableTranscriptionSounds = $0 }
+                                )
+                            )
+
+                            if SettingsStore.shared.enableTranscriptionSounds {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Start Sound")
+                                            .font(.body)
+                                        Text("Choose which sound plays when recording starts.")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    Picker("", selection: Binding(
+                                        get: { SettingsStore.shared.transcriptionStartSound },
+                                        set: { SettingsStore.shared.transcriptionStartSound = $0 }
+                                    )) {
+                                        ForEach(SettingsStore.TranscriptionStartSound.allCases) { option in
+                                            Text(option.displayName).tag(option)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .frame(width: 170, alignment: .trailing)
+                                }
+                            }
+
+                            Divider().opacity(0.2)
+
                             // Automatic Updates
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack(alignment: .center) {

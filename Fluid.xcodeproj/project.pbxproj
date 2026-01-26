@@ -17,6 +17,8 @@
 		7CDB0A2F2F3C4D5600FB7CAD /* dictation_fixture.wav in Resources */ = {isa = PBXBuildFile; fileRef = 7CDB0A2B2F3C4D5600FB7CAD /* dictation_fixture.wav */; };
 		7CDB0A302F3C4D5600FB7CAD /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7CDB0A2C2F3C4D5600FB7CAD /* XCTest.framework */; };
 		7CE006BD2E80EBE600DDCCD6 /* AppUpdater in Frameworks */ = {isa = PBXBuildFile; productRef = 7CE006BC2E80EBE600DDCCD6 /* AppUpdater */; };
+		7CF7A1A530AA000100F00001 /* FV_start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7CF7A1A730AA000100F00001 /* FV_start.m4a */; };
+		7CF7A1A630AA000100F00001 /* FV_start_2.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7CF7A1A830AA000100F00001 /* FV_start_2.m4a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,6 +38,8 @@
 		7CDB0A2A2F3C4D5600FB7CAD /* AudioFixtureLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFixtureLoader.swift; sourceTree = "<group>"; };
 		7CDB0A2B2F3C4D5600FB7CAD /* dictation_fixture.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = dictation_fixture.wav; sourceTree = "<group>"; };
 		7CDB0A2C2F3C4D5600FB7CAD /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = Platforms/MacOSX.platform/Developer/Library/Frameworks/XCTest.framework; sourceTree = DEVELOPER_DIR; };
+		7CF7A1A730AA000100F00001 /* FV_start.m4a */ = {isa = PBXFileReference; lastKnownFileType = audio.m4a; path = Sources/Fluid/Resources/FV_start.m4a; sourceTree = "<group>"; };
+		7CF7A1A830AA000100F00001 /* FV_start_2.m4a */ = {isa = PBXFileReference; lastKnownFileType = audio.m4a; path = Sources/Fluid/Resources/FV_start_2.m4a; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -231,6 +235,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7CF7A1A530AA000100F00001 /* FV_start.m4a in Resources */,
+				7CF7A1A630AA000100F00001 /* FV_start_2.m4a in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

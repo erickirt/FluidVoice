@@ -202,5 +202,6 @@ docs/
 .agent/
 create_dmg_only.sh
 **.m4a
+!Sources/Fluid/Resources/*.m4a
 # Scratch directory
 scratch/

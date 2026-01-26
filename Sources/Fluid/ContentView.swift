@@ -1438,6 +1438,7 @@ struct ContentView: View {
         // Check if we're in rewrite or command mode
         let wasRewriteMode = self.isRecordingForRewrite
         let wasCommandMode = self.isRecordingForCommand
+
         if wasRewriteMode {
             self.isRecordingForRewrite = false
             // Don't reset overlay mode here - let it stay colored until it hides
@@ -1731,6 +1732,10 @@ struct ContentView: View {
             self.menuBarManager.setOverlayMode(.dictation)
         }
 
+        if SettingsStore.shared.enableTranscriptionSounds, !self.isRecordingForCommand, !self.isRecordingForRewrite {
+            TranscriptionSoundPlayer.shared.playStartSound()
+        }
+
         // Capture the focused target PID BEFORE any overlay/UI changes.
         // Used to restore focus when the user interacts with overlay dropdowns (e.g. prompt selection).
         let focusedPID = TypingService.captureSystemFocusedPID()
@@ -1977,6 +1982,9 @@ struct ContentView: View {
                     "Starting voice recording for command",
                     source: "ContentView"
                 )
+                if SettingsStore.shared.enableTranscriptionSounds {
+                    TranscriptionSoundPlayer.shared.playStartSound()
+                }
                 Task {
                     await self.asr.start()
                 }
@@ -2007,6 +2015,9 @@ struct ContentView: View {
 
                 // Start recording immediately for the rewrite instruction (or text to improve)
                 DebugLogger.shared.info("Starting voice recording for rewrite/write mode", source: "ContentView")
+                if SettingsStore.shared.enableTranscriptionSounds {
+                    TranscriptionSoundPlayer.shared.playStartSound()
+                }
                 Task {
                     await self.asr.start()
                 }
