@@ -8,6 +8,7 @@ enum LLMError: Error, LocalizedError {
     case httpError(Int, String)
     case networkError(Error)
     case encodingError
+    case timeout(TimeInterval)
 
     var errorDescription: String? {
         switch self {
@@ -21,6 +22,8 @@ enum LLMError: Error, LocalizedError {
             return "Network error: \(error.localizedDescription)"
         case .encodingError:
             return "Failed to encode request"
+        case let .timeout(seconds):
+            return "Request timed out after \(Int(seconds)) seconds"
         }
     }
 }
@@ -33,7 +36,18 @@ enum LLMError: Error, LocalizedError {
 final class LLMClient {
     static let shared = LLMClient()
 
-    private init() {}
+    /// Default timeout for LLM requests (30 seconds)
+    static let defaultTimeoutSeconds: TimeInterval = 30
+
+    /// URLSession configured with appropriate timeouts
+    private let session: URLSession
+
+    private init() {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = Self.defaultTimeoutSeconds
+        config.timeoutIntervalForResource = Self.defaultTimeoutSeconds * 2 // Allow extra time for resource loading
+        self.session = URLSession(configuration: config)
+    }
 
     // MARK: - Response Types
 
@@ -85,6 +99,9 @@ final class LLMClient {
         var maxRetries: Int = 3
         var retryDelayMs: Int = 200
 
+        // Timeout configuration (nil = use default)
+        var timeoutSeconds: TimeInterval?
+
         // Optional real-time callbacks (for streaming UI updates)
         var onThinkingStart: (() -> Void)?
         var onThinkingChunk: ((String) -> Void)?
@@ -121,10 +138,41 @@ final class LLMClient {
     /// Supports both streaming and non-streaming modes.
     /// Handles thinking token extraction, tool call parsing, and retries.
     func call(_ config: Config) async throws -> Response {
-        let request = try buildRequest(config)
+        var request = try buildRequest(config)
+
+        // Apply timeout to the request itself
+        let timeout = config.timeoutSeconds ?? Self.defaultTimeoutSeconds
+        request.timeoutInterval = timeout
+
         self.logRequest(request)
 
-        // Retry logic for transient network errors
+        // Wrap the entire operation in a timeout
+        return try await withThrowingTaskGroup(of: Response.self) { group in
+            // Add the actual request task
+            group.addTask {
+                try await self.executeWithRetry(request: request, config: config)
+            }
+
+            // Add a timeout task
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                throw LLMError.timeout(timeout)
+            }
+
+            // Return the first result (success or error)
+            // Cancel remaining tasks when one completes
+            guard let result = try await group.next() else {
+                throw LLMError.networkError(
+                    NSError(domain: "LLMClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "No response"])
+                )
+            }
+            group.cancelAll()
+            return result
+        }
+    }
+
+    /// Execute request with retry logic (extracted for timeout wrapper)
+    private func executeWithRetry(request: URLRequest, config: Config) async throws -> Response {
         var lastError: Error?
         for attempt in 1...config.maxRetries {
             do {
@@ -135,6 +183,7 @@ final class LLMClient {
                 }
             } catch let error as URLError where self.isRetryableError(error) {
                 lastError = error
+                DebugLogger.shared.warning("LLMClient: Retry \(attempt)/\(config.maxRetries) due to \(error.code.rawValue)", source: "LLMClient")
                 if attempt < config.maxRetries {
                     // Exponential backoff
                     let delayNs = UInt64(config.retryDelayMs * 1_000_000 * attempt)
@@ -251,7 +300,7 @@ final class LLMClient {
     private func processNonStreaming(request: URLRequest) async throws -> Response {
         DebugLogger.shared.debug("LLMClient: Making non-streaming request to \(request.url?.absoluteString ?? "unknown")", source: "LLMClient")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await self.session.data(for: request)
 
         if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
             let errText = String(data: data, encoding: .utf8) ?? "Unknown error"
@@ -275,7 +324,7 @@ final class LLMClient {
     private func processStreaming(request: URLRequest, config: Config) async throws -> Response {
         DebugLogger.shared.debug("LLMClient: Starting streaming request to \(request.url?.absoluteString ?? "unknown")", source: "LLMClient")
 
-        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        let (bytes, response) = try await self.session.bytes(for: request)
 
         // Check for HTTP errors
         if let http = response as? HTTPURLResponse, http.statusCode >= 400 {

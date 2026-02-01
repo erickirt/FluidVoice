@@ -981,7 +981,8 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
     private func fingerprint(baseURL: String, apiKey: String) -> String? {
         let trimmedBase = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedBase.isEmpty, !trimmedKey.isEmpty else { return nil }
+        // Only require baseURL - API key can be empty for local providers (Ollama, LM Studio, etc.)
+        guard !trimmedBase.isEmpty else { return nil }
         let input = "\(trimmedBase)|\(trimmedKey)"
         let digest = SHA256.hash(data: Data(input.utf8))
         return digest.map { String(format: "%02x", $0) }.joined()
