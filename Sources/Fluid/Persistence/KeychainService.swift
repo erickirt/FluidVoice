@@ -11,9 +11,9 @@ enum KeychainServiceError: Error, LocalizedError {
             return "Failed to convert key data."
         case let .unhandled(status):
             if let message = SecCopyErrorMessageString(status, nil) as String? {
-                return message
+                return "\(message) (OSStatus: \(status))"
             }
-            return "Unhandled Keychain status: \(status)"
+            return "Unhandled Keychain error (OSStatus: \(status))"
         }
     }
 }
@@ -159,9 +159,12 @@ final class KeychainService {
             try self.removeLegacyEntries()
             return
         case errSecDuplicateItem:
+            let updateAttributes: [String: Any] = [
+                kSecValueData as String: data,
+            ]
             let updateStatus = SecItemUpdate(
                 aggregatedQuery() as CFDictionary,
-                [kSecValueData as String: data] as CFDictionary
+                updateAttributes as CFDictionary
             )
             guard updateStatus == errSecSuccess else {
                 throw KeychainServiceError.unhandled(updateStatus)
