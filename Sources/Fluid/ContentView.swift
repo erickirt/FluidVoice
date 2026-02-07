@@ -1088,8 +1088,16 @@ struct ContentView: View {
     // Audio settings merged into SettingsView
 
     private func refreshDevices() {
-        self.inputDevices = AudioDevice.listInputDevices()
-        self.outputDevices = AudioDevice.listOutputDevices()
+        // Query CoreAudio off the main thread — during device topology changes, synchronous
+        // CoreAudio calls on main can deadlock while the HAL is still settling.
+        DispatchQueue.global(qos: .userInitiated).async {
+            let inputs = AudioDevice.listInputDevices()
+            let outputs = AudioDevice.listOutputDevices()
+            DispatchQueue.main.async {
+                self.inputDevices = inputs
+                self.outputDevices = outputs
+            }
+        }
     }
 
     // MARK: - Model Management Functions
