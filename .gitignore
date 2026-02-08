@@ -177,6 +177,9 @@ SettingsStore.xcuserstate
 **/tmp/
 **/temp/
 
+# Asset backups (generated, not needed in repo)
+**/*.appiconset.backup/
+
 
 **/.vscode/
 
