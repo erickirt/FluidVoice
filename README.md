@@ -98,7 +98,7 @@ https://discord.gg/VUPHaKSvYV
 ```bash
 git clone https://github.com/altic-dev/Fluid-oss.git
 cd Fluid-oss
-open FluidVoice.xcodeproj
+open Fluid.xcodeproj
 ```
 
 Build and run in Xcode. All dependencies are managed via Swift Package Manager.
@@ -120,13 +120,18 @@ Contributions are welcome! Please create an issue first to discuss any major cha
    open Fluid.xcodeproj
    ```
 
-3. **Configure your Team ID:**
-   - Select the project in Xcode's navigator
-   - Go to "Signing & Capabilities" tab
-   - Select your Apple Developer Team from the dropdown
-   - Xcode will save this locally in `xcuserdata/` (which is gitignored)
+3. **Run from Xcode (one-time signing setup):**
+   - Target: `FluidVoice` → `Signing & Capabilities`
+   - Enable `Automatically manage signing`
+   - Pick your `Team` (Personal Team is fine)
+   - This is stored in `xcuserdata/` (gitignored), so it won’t affect your PR
 
 4. **Build and run** - All dependencies are managed via Swift Package Manager
+
+5. **Build only (no signing):**
+   ```bash
+   xcodebuild -project Fluid.xcodeproj -scheme Fluid -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO
+   ```
 
 5. **(Optional) Install pre-commit hook** to prevent accidental team ID commits:
    ```bash
