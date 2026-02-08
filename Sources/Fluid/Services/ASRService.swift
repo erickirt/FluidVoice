@@ -109,6 +109,7 @@ final class ASRService: ObservableObject {
     @Published var downloadProgress: Double? = nil
     @Published var downloadingModelId: String? = nil // Tracks which model is currently being downloaded
 
+    private var isStarting: Bool = false // Guard against re-entrant start() calls
     private var downloadProgressTask: Task<Void, Never>?
     private var hasCompletedFirstTranscription: Bool = false // Track if model has warmed up with first transcription
     private let downloadRegistry = ModelDownloadRegistry()
@@ -507,8 +508,8 @@ final class ASRService: ObservableObject {
             DebugLogger.shared.error("❌ START() blocked - mic not authorized", source: "ASRService")
             return
         }
-        guard self.isRunning == false else {
-            DebugLogger.shared.warning("⚠️ START() blocked - already running", source: "ASRService")
+        guard self.isRunning == false, self.isStarting == false else {
+            DebugLogger.shared.warning("⚠️ START() blocked - already running (started: \(self.isRunning), starting: \(self.isStarting))", source: "ASRService")
             return
         }
 
@@ -525,6 +526,9 @@ final class ASRService: ObservableObject {
         self.skipNextChunk = false
         self.audioCapturePipeline.setRecordingEnabled(true)
         DebugLogger.shared.debug("✅ Buffers cleared", source: "ASRService")
+
+        self.isStarting = true
+        defer { self.isStarting = false }
 
         do {
             DebugLogger.shared.debug("⚙️ Calling configureSession()...", source: "ASRService")

@@ -510,6 +510,16 @@ struct SettingsView: View {
                                     Divider().opacity(0.2)
 
                                     self.optionToggleRow(
+                                        title: "Weekends Don't Break Streak",
+                                        description: "Skip Saturday and Sunday when calculating usage streaks. Perfect for weekday-only users.",
+                                        isOn: Binding(
+                                            get: { SettingsStore.shared.weekendsDontBreakStreak },
+                                            set: { SettingsStore.shared.weekendsDontBreakStreak = $0 }
+                                        )
+                                    )
+                                    Divider().opacity(0.2)
+
+                                    self.optionToggleRow(
                                         title: "GAAV Mode",
                                         description: "Remove first letter capitalization and trailing period. Useful for search queries, form fields, or casual text.\nFeature requested by MaxGaav.",
                                         isOn: Binding(

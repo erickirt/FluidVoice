@@ -114,6 +114,9 @@ final class SettingsStore: ObservableObject {
         // ""    => use empty system prompt
         // other => use custom default prompt text
         static let defaultDictationPromptOverride = "DefaultDictationPromptOverride"
+
+        // Streak Settings
+        static let weekendsDontBreakStreak = "WeekendsDontBreakStreak"
     }
 
     // MARK: - Dictation Prompt Profiles (Multi-prompt)
@@ -1155,6 +1158,18 @@ final class SettingsStore: ObservableObject {
         set {
             objectWillChange.send()
             self.defaults.set(max(1, min(200, newValue)), forKey: Keys.userTypingWPM) // Clamp 1-200
+        }
+    }
+
+    /// When enabled, weekends (Saturday/Sunday) don't break the usage streak
+    var weekendsDontBreakStreak: Bool {
+        get {
+            let value = self.defaults.object(forKey: Keys.weekendsDontBreakStreak)
+            return value as? Bool ?? true // Default to true (weekends don't break streak)
+        }
+        set {
+            objectWillChange.send()
+            self.defaults.set(newValue, forKey: Keys.weekendsDontBreakStreak)
         }
     }
 

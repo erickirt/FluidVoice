@@ -281,6 +281,13 @@ struct BottomOverlayView: View {
         }
     }
 
+    // ContentView writes transient status strings into transcriptionText while processing
+    // (e.g. "Transcribing...", "Refining..."). Prefer that when present.
+    private var processingStatusText: String {
+        let t = self.contentState.transcriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? self.processingLabel : t
+    }
+
     private var hasTranscription: Bool {
         !self.contentState.transcriptionText.isEmpty
     }
@@ -386,9 +393,11 @@ struct BottomOverlayView: View {
                         .lineLimit(1)
                         .truncationMode(.head)
                 } else if self.contentState.isProcessing {
-                    Text(self.processingLabel)
-                        .font(.system(size: self.layout.transFontSize, weight: .medium))
-                        .foregroundStyle(self.modeColor.opacity(0.8))
+                    ShimmerText(
+                        text: self.processingStatusText,
+                        color: self.modeColor,
+                        font: .system(size: self.layout.transFontSize, weight: .medium)
+                    )
                 }
             }
             .frame(maxWidth: self.layout.waveformWidth * 2.2, minHeight: self.hasTranscription || self.contentState.isProcessing ? self.layout.transFontSize * 1.5 : 0)
@@ -514,8 +523,6 @@ struct BottomWaveformView: View {
     @ObservedObject private var contentState = NotchContentState.shared
     // Initialize with max possible bar count (11 for large) to prevent index-out-of-range before onAppear
     @State private var barHeights: [CGFloat] = Array(repeating: 6, count: 11)
-    @State private var glowPhase: CGFloat = 0
-    @State private var glowTimer: Timer? = nil
     @State private var noiseThreshold: CGFloat = .init(SettingsStore.shared.visualizerNoiseThreshold)
 
     private var barCount: Int { self.layout.barCount }
@@ -525,11 +532,11 @@ struct BottomWaveformView: View {
     private var maxHeight: CGFloat { self.layout.maxBarHeight }
 
     private var currentGlowIntensity: CGFloat {
-        self.contentState.isProcessing ? 0.6 + 0.3 * sin(self.glowPhase * .pi * 2) : 0.5
+        self.contentState.isProcessing ? 0.0 : 0.5
     }
 
     private var currentGlowRadius: CGFloat {
-        self.contentState.isProcessing ? 5 + 7 * sin(self.glowPhase * .pi * 2) : 4
+        self.contentState.isProcessing ? 0.0 : 4
     }
 
     /// Safe accessor for bar heights to prevent index-out-of-range crashes
@@ -556,10 +563,10 @@ struct BottomWaveformView: View {
         }
         .onChange(of: self.contentState.isProcessing) { _, processing in
             if processing {
-                self.setStaticProcessingBars()
-                self.startGlowAnimation()
+                self.setFlatProcessingBars()
             } else {
-                self.stopGlowAnimation()
+                // Resume from silence; next audio tick will animate up.
+                self.updateBars(level: 0)
             }
         }
         .onChange(of: self.layout.barCount) { _, newCount in
@@ -571,14 +578,13 @@ struct BottomWaveformView: View {
                 self.barHeights = Array(repeating: self.minHeight, count: self.barCount)
             }
             if self.contentState.isProcessing {
-                self.setStaticProcessingBars()
-                self.startGlowAnimation()
+                self.setFlatProcessingBars()
             } else {
                 self.updateBars(level: 0)
             }
         }
         .onDisappear {
-            self.stopGlowAnimation()
+            // No timers to clean up.
         }
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             // Update threshold when user changes sensitivity setting
@@ -589,35 +595,14 @@ struct BottomWaveformView: View {
         }
     }
 
-    private func startGlowAnimation() {
-        self.stopGlowAnimation()
-        self.glowPhase = 0
-
-        self.glowTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { _ in
-            withAnimation(.linear(duration: 1.0 / 30.0)) {
-                self.glowPhase += 1.0 / 30.0 / 1.5
-                if self.glowPhase >= 1.0 {
-                    self.glowPhase = 0
-                }
-            }
-        }
-    }
-
-    private func stopGlowAnimation() {
-        self.glowTimer?.invalidate()
-        self.glowTimer = nil
-        self.glowPhase = 0
-    }
-
-    private func setStaticProcessingBars() {
+    private func setFlatProcessingBars() {
         // Ensure array is properly sized before modifying
         guard self.barHeights.count >= self.barCount else { return }
 
-        withAnimation(.easeInOut(duration: 0.3)) {
+        // During AI processing we want the visualizer to settle to silence (flat).
+        withAnimation(.easeOut(duration: 0.18)) {
             for i in 0..<self.barCount {
-                let centerDistance = abs(CGFloat(i) - CGFloat(self.barCount - 1) / 2)
-                let centerFactor = 1.0 - (centerDistance / CGFloat(self.barCount / 2)) * 0.35
-                self.barHeights[i] = self.minHeight + (self.maxHeight - self.minHeight) * 0.5 * centerFactor
+                self.barHeights[i] = self.minHeight
             }
         }
     }

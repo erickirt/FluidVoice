@@ -25,6 +25,11 @@ final class MenuBarManager: ObservableObject {
     // Overlay management (persistent, independent of window lifecycle)
     private var overlayVisible: Bool = false
 
+    // Track when AI processing is active.
+    // When recording stops, ASRService flips `isRunning` to false, which would normally hide the
+    // overlay. During post-processing we want the overlay to stay visible until processing ends.
+    private var isProcessingActive: Bool = false
+
     @Published var isRecording: Bool = false
     @Published var aiProcessingEnabled: Bool = false
 
@@ -102,6 +107,13 @@ final class MenuBarManager: ObservableObject {
     }
 
     private func handleOverlayState(isRunning: Bool, asrService: ASRService) {
+        // Don't hide the overlay while AI processing is active.
+        // Without this, the notch can disappear during the short "Refining..." phase because
+        // `isRunning` becomes false before post-processing completes.
+        if !isRunning, self.isProcessingActive {
+            return
+        }
+
         // Prevent rapid state changes that could cause cycles
         guard self.overlayVisible != isRunning else { return }
 
@@ -205,6 +217,9 @@ final class MenuBarManager: ObservableObject {
     }
 
     func setProcessing(_ processing: Bool) {
+        // Track processing state to prevent hide during AI refinement
+        self.isProcessingActive = processing
+
         if processing {
             // Cancel any pending hide - we want to keep the overlay visible for AI processing
             self.pendingHideOperation?.cancel()

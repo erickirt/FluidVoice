@@ -1488,6 +1488,10 @@ struct ContentView: View {
         self.menuBarManager.setProcessing(true)
         NotchOverlayManager.shared.updateTranscriptionText("Transcribing...")
 
+        // Give SwiftUI a chance to render the processing state before we do heavier work
+        // (ASR finalization + optional AI post-processing).
+        await Task.yield()
+
         // Stop the ASR service and wait for transcription to complete
         // The processing indicator will stay visible during this phase
         let transcribedText = await asr.stop()
@@ -1568,6 +1572,9 @@ struct ContentView: View {
 
             // Update overlay text to show we're now refining (processing already true)
             NotchOverlayManager.shared.updateTranscriptionText("Refining...")
+
+            // Ensure the status label becomes visible immediately.
+            await Task.yield()
 
             finalText = await self.processTextWithAI(transcribedText)
 

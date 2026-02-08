@@ -284,7 +284,15 @@ extension TranscriptionHistoryStore {
     /// Current streak (consecutive days including today or yesterday)
     var currentStreak: Int {
         let calendar = Calendar.current
-        let days = self.activeDays
+        let skipWeekends = SettingsStore.shared.weekendsDontBreakStreak
+
+        // Filter out weekend days if setting is enabled (so weekend usage doesn't interfere)
+        let days: [Date]
+        if skipWeekends {
+            days = self.activeDays.filter { !calendar.isDateInWeekend($0) }
+        } else {
+            days = self.activeDays
+        }
 
         guard !days.isEmpty else { return 0 }
 
@@ -293,22 +301,54 @@ extension TranscriptionHistoryStore {
             return 0
         }
 
-        // Must have activity today or yesterday to have an active streak
-        guard let firstActiveDay = days.first,
-              firstActiveDay == today || firstActiveDay == yesterday
-        else {
-            return 0
+        // Find the most recent "valid" day (skip weekends if setting enabled)
+        var checkDay = today
+        if skipWeekends {
+            // Find the last weekday (today or before)
+            while calendar.isDateInWeekend(checkDay) {
+                guard let prev = calendar.date(byAdding: .day, value: -1, to: checkDay) else { break }
+                checkDay = prev
+            }
         }
+
+        // Must have activity on a recent valid day to have an active streak
+        guard let firstActiveDay = days.first else { return 0 }
+
+        // Check if the first active day is recent enough (today, yesterday, or last valid weekday)
+        let isRecent: Bool
+        if skipWeekends {
+            // Find previous weekday from today
+            var lastValidDay = today
+            while calendar.isDateInWeekend(lastValidDay) {
+                guard let prev = calendar.date(byAdding: .day, value: -1, to: lastValidDay) else { break }
+                lastValidDay = prev
+            }
+            // Allow one weekday gap (the previous weekday before lastValidDay)
+            guard let prevWeekday = self.previousWeekday(before: lastValidDay, calendar: calendar) else {
+                isRecent = firstActiveDay == lastValidDay
+                return isRecent ? 1 : 0
+            }
+            isRecent = firstActiveDay == lastValidDay || firstActiveDay == prevWeekday
+        } else {
+            isRecent = firstActiveDay == today || firstActiveDay == yesterday
+        }
+
+        guard isRecent else { return 0 }
 
         var streak = 1
         var previousDay = firstActiveDay
 
         for day in days.dropFirst() {
-            guard let expectedPrevious = calendar.date(byAdding: .day, value: -1, to: previousDay) else {
-                break
+            let expectedPrevious: Date?
+            if skipWeekends {
+                expectedPrevious = self.previousWeekday(before: previousDay, calendar: calendar)
+            } else {
+                expectedPrevious = calendar.date(byAdding: .day, value: -1, to: previousDay)
             }
 
-            if day == expectedPrevious {
+            guard let expected = expectedPrevious else { break }
+
+            if day == expected {
                 streak += 1
                 previousDay = day
             } else {
@@ -319,10 +359,27 @@ extension TranscriptionHistoryStore {
         return streak
     }
 
+    /// Helper: get the previous weekday (skipping weekends)
+    private func previousWeekday(before date: Date, calendar: Calendar) -> Date? {
+        var candidate = calendar.date(byAdding: .day, value: -1, to: date)
+        while let c = candidate, calendar.isDateInWeekend(c) {
+            candidate = calendar.date(byAdding: .day, value: -1, to: c)
+        }
+        return candidate
+    }
+
     /// Best streak ever achieved
     var bestStreak: Int {
         let calendar = Calendar.current
-        let days = self.activeDays.sorted() // oldest first for this calculation
+        let skipWeekends = SettingsStore.shared.weekendsDontBreakStreak
+
+        // Filter out weekend days if setting is enabled (so weekend usage doesn't interfere)
+        let days: [Date]
+        if skipWeekends {
+            days = self.activeDays.filter { !calendar.isDateInWeekend($0) }.sorted()
+        } else {
+            days = self.activeDays.sorted() // oldest first for this calculation
+        }
 
         guard !days.isEmpty else { return 0 }
 
@@ -331,11 +388,14 @@ extension TranscriptionHistoryStore {
         var previousDay = days[0]
 
         for day in days.dropFirst() {
-            guard let expectedNext = calendar.date(byAdding: .day, value: 1, to: previousDay) else {
-                break
+            let expectedNext: Date?
+            if skipWeekends {
+                expectedNext = self.nextWeekday(after: previousDay, calendar: calendar)
+            } else {
+                expectedNext = calendar.date(byAdding: .day, value: 1, to: previousDay)
             }
 
-            if day == expectedNext {
+            if let expected = expectedNext, day == expected {
                 currentStreakCount += 1
                 maxStreak = max(maxStreak, currentStreakCount)
             } else {
@@ -345,6 +405,15 @@ extension TranscriptionHistoryStore {
         }
 
         return maxStreak
+    }
+
+    /// Helper: get the next weekday (skipping weekends)
+    private func nextWeekday(after date: Date, calendar: Calendar) -> Date? {
+        var candidate = calendar.date(byAdding: .day, value: 1, to: date)
+        while let c = candidate, calendar.isDateInWeekend(c) {
+            candidate = calendar.date(byAdding: .day, value: 1, to: c)
+        }
+        return candidate
     }
 
     // MARK: - Daily Activity Data (for charts)

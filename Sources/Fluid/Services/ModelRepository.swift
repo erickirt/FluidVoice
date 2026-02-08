@@ -229,36 +229,84 @@ final class ModelRepository {
     ///   - apiKey: Optional API key for authentication
     /// - Returns: Array of model IDs sorted alphabetically
     func fetchModels(for providerID: String, baseURL: String, apiKey: String?) async throws -> [String] {
+        let isAnthropic = providerID == "anthropic" || baseURL.contains("anthropic.com")
+
         // Construct the models endpoint URL
         let urlString = baseURL.hasSuffix("/") ? "\(baseURL)models" : "\(baseURL)/models"
         guard let url = URL(string: urlString) else {
-            throw FetchError.invalidURL
+            DebugLogger.shared.error(
+                "fetchModels: Invalid URL constructed from baseURL='\(baseURL)' -> '\(urlString)'",
+                source: "ModelRepository"
+            )
+            throw FetchError.invalidURL(details: "Could not construct valid URL from base: \(baseURL)")
         }
+
+        DebugLogger.shared.debug(
+            "fetchModels: Fetching models for '\(providerID)' from \(urlString) (isAnthropic=\(isAnthropic))",
+            source: "ModelRepository"
+        )
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 15
 
-        // Add authorization header if API key is provided
+        // Add authentication headers (different for Anthropic)
         if let key = apiKey, !key.isEmpty {
-            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+            if isAnthropic {
+                // Anthropic uses x-api-key header and requires anthropic-version
+                request.setValue(key, forHTTPHeaderField: "x-api-key")
+                request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+            } else {
+                request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+            }
         }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            let errorDetails = self.detailedNetworkError(error)
+            DebugLogger.shared.error(
+                "fetchModels: Network error for '\(providerID)': \(errorDetails)",
+                source: "ModelRepository"
+            )
+            throw FetchError.networkError(details: errorDetails)
+        }
 
-        // Check for HTTP errors
+        // Check for HTTP errors with detailed messages
         if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
-            throw FetchError.httpError(statusCode: httpResponse.statusCode)
+            let bodyString = String(data: data, encoding: .utf8) ?? "<unable to decode response body>"
+            let errorDetails = self.interpretHTTPError(
+                statusCode: httpResponse.statusCode,
+                providerID: providerID,
+                responseBody: bodyString,
+                endpoint: urlString
+            )
+            DebugLogger.shared.error(
+                "fetchModels: HTTP \(httpResponse.statusCode) for '\(providerID)': \(errorDetails)\nResponse body: \(bodyString.prefix(500))",
+                source: "ModelRepository"
+            )
+            throw FetchError.httpError(statusCode: httpResponse.statusCode, details: errorDetails)
         }
 
         // Parse the response - OpenAI format: { "data": [{ "id": "model-name" }, ...] }
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw FetchError.invalidResponse
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            let bodyPreview = String(data: data, encoding: .utf8)?.prefix(300) ?? "<binary data>"
+            DebugLogger.shared.error(
+                "fetchModels: Failed to parse JSON for '\(providerID)'. Response preview: \(bodyPreview)",
+                source: "ModelRepository"
+            )
+            throw FetchError.invalidResponse(details: "Response is not valid JSON. Check if the base URL '\(baseURL)' is correct.")
         }
 
         // Try OpenAI/Groq/Cerebras format first
         if let dataArray = json["data"] as? [[String: Any]] {
             let models = dataArray.compactMap { $0["id"] as? String }
+            DebugLogger.shared.debug(
+                "fetchModels: Found \(models.count) models for '\(providerID)' (OpenAI format)",
+                source: "ModelRepository"
+            )
             return models.sorted()
         }
 
@@ -271,25 +319,87 @@ final class ModelRepository {
                 }
                 return nil
             }
+            DebugLogger.shared.debug(
+                "fetchModels: Found \(models.count) models for '\(providerID)' (Google format)",
+                source: "ModelRepository"
+            )
             return models.sorted()
         }
 
-        throw FetchError.invalidResponse
+        // Log what we actually received
+        let topLevelKeys = json.keys.joined(separator: ", ")
+        DebugLogger.shared.error(
+            "fetchModels: Unknown response format for '\(providerID)'. Top-level keys: [\(topLevelKeys)]. Expected 'data' or 'models' array.",
+            source: "ModelRepository"
+        )
+        throw FetchError.invalidResponse(details: "Unknown response format. Top-level keys: [\(topLevelKeys)]. Expected 'data' or 'models'.")
+    }
+
+    /// Provides detailed interpretation of HTTP errors
+    private func interpretHTTPError(statusCode: Int, providerID: String, responseBody: String, endpoint: String) -> String {
+        let providerName = self.displayName(for: providerID)
+
+        switch statusCode {
+        case 400:
+            return "Bad Request - The request format was invalid. Check if the base URL '\(endpoint)' is correct for \(providerName)."
+        case 401:
+            if responseBody.lowercased().contains("invalid") || responseBody.lowercased().contains("api key") || responseBody.lowercased().contains("authentication") {
+                return "Invalid API Key - The API key for \(providerName) appears to be incorrect or expired. Please verify your API key."
+            }
+            return "Unauthorized - API key is missing or invalid for \(providerName). Double-check your API key."
+        case 403:
+            if responseBody.lowercased().contains("permission") || responseBody.lowercased().contains("access") {
+                return "Forbidden - Your API key doesn't have permission to list models for \(providerName). Check your account permissions."
+            }
+            return "Forbidden - Access denied for \(providerName). Your API key may lack the required permissions."
+        case 404:
+            return "Not Found - The /models endpoint doesn't exist at '\(endpoint)'. This provider may not support model listing, or the base URL is incorrect."
+        case 429:
+            return "Rate Limited - Too many requests to \(providerName). Wait a moment and try again."
+        case 500, 502, 503:
+            return "\(providerName) server error (HTTP \(statusCode)). The service may be temporarily unavailable."
+        default:
+            return "HTTP \(statusCode) from \(providerName). Check your API key and base URL configuration."
+        }
+    }
+
+    /// Provides detailed network error messages
+    private func detailedNetworkError(_ error: Error) -> String {
+        let nsError = error as NSError
+        switch nsError.code {
+        case NSURLErrorTimedOut:
+            return "Connection timed out - The server didn't respond in time. Check if the base URL is correct and the service is running."
+        case NSURLErrorCannotConnectToHost:
+            return "Cannot connect to host - Check if the base URL is correct. For local providers (Ollama, LM Studio), ensure the server is running."
+        case NSURLErrorNetworkConnectionLost:
+            return "Network connection lost - Check your internet connection."
+        case NSURLErrorNotConnectedToInternet:
+            return "No internet connection - Check your network settings."
+        case NSURLErrorSecureConnectionFailed:
+            return "SSL/TLS error - The server's security certificate may be invalid or expired."
+        case NSURLErrorCannotFindHost:
+            return "Cannot find host - The domain name doesn't exist. Check if the base URL is spelled correctly."
+        default:
+            return "\(error.localizedDescription) (Error code: \(nsError.code))"
+        }
     }
 
     enum FetchError: LocalizedError {
-        case invalidURL
-        case httpError(statusCode: Int)
-        case invalidResponse
+        case invalidURL(details: String)
+        case httpError(statusCode: Int, details: String)
+        case invalidResponse(details: String)
+        case networkError(details: String)
 
         var errorDescription: String? {
             switch self {
-            case .invalidURL:
-                return "Invalid API URL"
-            case let .httpError(code):
-                return "API returned error \(code)"
-            case .invalidResponse:
-                return "Could not parse API response"
+            case let .invalidURL(details):
+                return "Invalid API URL: \(details)"
+            case let .httpError(code, details):
+                return "API error (HTTP \(code)): \(details)"
+            case let .invalidResponse(details):
+                return "Invalid response: \(details)"
+            case let .networkError(details):
+                return "Network error: \(details)"
             }
         }
     }

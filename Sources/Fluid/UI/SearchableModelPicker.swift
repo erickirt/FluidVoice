@@ -117,63 +117,68 @@ struct SearchableModelPicker: View {
 
                     Divider()
 
-                    // Model list
-                    if self.models.isEmpty {
-                        VStack(spacing: 8) {
-                            Image(systemName: "tray")
-                                .font(.title2)
-                                .foregroundStyle(.secondary)
-                            Text("No models")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("Click refresh to fetch from API")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .frame(height: 100)
-                        .frame(maxWidth: .infinity)
-                    } else if self.filteredModels.isEmpty {
-                        Text("No models match '\(self.searchText)'")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding()
-                    } else {
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 0) {
-                                ForEach(self.filteredModels.prefix(100), id: \.self) { model in
-                                    Button(action: {
-                                        self.selectedModel = model
-                                        self.searchText = ""
-                                        self.isShowingPopover = false
-                                    }) {
-                                        HStack {
-                                            Text(model)
-                                                .lineLimit(1)
-                                            Spacer()
-                                            if model == self.selectedModel {
-                                                Image(systemName: "checkmark")
-                                                    .foregroundStyle(self.theme.palette.accent)
+                    VStack(spacing: 0) {
+                        if self.models.isEmpty {
+                            VStack(spacing: 8) {
+                                Image(systemName: "tray")
+                                    .font(.title2)
+                                    .foregroundStyle(.secondary)
+                                Text("No models")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("Click refresh to fetch from API")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .frame(height: 100)
+                            .frame(maxWidth: .infinity)
+                        } else {
+                            ScrollView {
+                                LazyVStack(alignment: .leading, spacing: 0) {
+                                    if self.filteredModels.isEmpty {
+                                        Text("No models match '\(self.searchText)'")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .padding()
+                                            .frame(maxWidth: .infinity, alignment: .center)
+                                    } else {
+                                        ForEach(self.filteredModels.prefix(100), id: \.self) { model in
+                                            Button(action: {
+                                                self.selectedModel = model
+                                                self.searchText = ""
+                                                self.isShowingPopover = false
+                                            }) {
+                                                HStack {
+                                                    Text(model)
+                                                        .lineLimit(1)
+                                                    Spacer()
+                                                    if model == self.selectedModel {
+                                                        Image(systemName: "checkmark")
+                                                            .foregroundStyle(self.theme.palette.accent)
+                                                    }
+                                                }
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 6)
+                                                .contentShape(Rectangle())
                                             }
+                                            .buttonStyle(.plain)
+                                            .background(model == self.selectedModel ? self.theme.palette.accent.opacity(0.15) : Color.clear)
                                         }
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .contentShape(Rectangle())
                                     }
-                                    .buttonStyle(.plain)
-                                    .background(model == self.selectedModel ? self.theme.palette.accent.opacity(0.15) : Color.clear)
                                 }
                             }
-                        }
-                        .frame(maxHeight: 250)
+                            .frame(maxHeight: 250)
 
-                        if self.filteredModels.count > 100 {
-                            Divider()
-                            Text("\(self.filteredModels.count - 100) more (use search)")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .padding(6)
+                            if self.filteredModels.count > 100 {
+                                Divider()
+                                Text("\(self.filteredModels.count - 100) more (use search)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .padding(6)
+                            }
                         }
                     }
+                    .id(self.searchText.isEmpty)
                 }
                 .frame(width: 280)
             }

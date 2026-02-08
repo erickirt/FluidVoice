@@ -201,30 +201,36 @@ extension OverlayMode {
 struct ShimmerText: View {
     let text: String
     let color: Color
+    var font: Font = .system(size: 9, weight: .medium)
 
-    @State private var shimmerPhase: CGFloat = 0
+    /// Seconds per shimmer sweep.
+    /// Lower is faster.
+    private let periodSeconds: Double = 0.85
+    private let bandHalfWidth: CGFloat = 0.32
 
     var body: some View {
-        Text(self.text)
-            .font(.system(size: 9, weight: .medium))
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [
-                        self.color.opacity(0.4),
-                        self.color.opacity(0.4),
-                        self.color.opacity(1.0),
-                        self.color.opacity(0.4),
-                        self.color.opacity(0.4),
-                    ],
-                    startPoint: UnitPoint(x: self.shimmerPhase - 0.3, y: 0.5),
-                    endPoint: UnitPoint(x: self.shimmerPhase + 0.3, y: 0.5)
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let progress = (t / self.periodSeconds).truncatingRemainder(dividingBy: 1.0)
+            // Sweep from slightly before to slightly after to avoid hard edges.
+            let centerX = CGFloat(-0.25 + progress * 1.5) // -0.25 -> 1.25
+
+            Text(self.text)
+                .font(self.font)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            self.color.opacity(0.35),
+                            self.color.opacity(0.35),
+                            self.color.opacity(1.0),
+                            self.color.opacity(0.35),
+                            self.color.opacity(0.35),
+                        ],
+                        startPoint: UnitPoint(x: centerX - self.bandHalfWidth, y: 0.5),
+                        endPoint: UnitPoint(x: centerX + self.bandHalfWidth, y: 0.5)
+                    )
                 )
-            )
-            .onAppear {
-                withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
-                    self.shimmerPhase = 1.3
-                }
-            }
+        }
     }
 }
 
@@ -258,6 +264,13 @@ struct NotchExpandedView: View {
         case .write: return "Thinking..."
         case .command: return "Working..."
         }
+    }
+
+    // ContentView writes transient status strings into transcriptionText while processing
+    // (e.g. "Transcribing...", "Refining..."). Prefer that when present.
+    private var processingStatusText: String {
+        let t = self.contentState.transcriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? self.processingLabel : t
     }
 
     private var hasTranscription: Bool {
@@ -373,7 +386,7 @@ struct NotchExpandedView: View {
 
                 // Mode label - shimmer effect when processing
                 if self.contentState.isProcessing {
-                    ShimmerText(text: self.processingLabel, color: self.modeColor)
+                    ShimmerText(text: self.processingStatusText, color: self.modeColor)
                 } else {
                     Text(self.modeLabel)
                         .font(.system(size: 9, weight: .medium))
@@ -452,8 +465,6 @@ struct NotchWaveformView: View {
     @StateObject private var data: AudioVisualizationData
     @ObservedObject private var contentState = NotchContentState.shared
     @State private var barHeights: [CGFloat] = Array(repeating: 3, count: 7)
-    @State private var glowPhase: CGFloat = 0 // 0 to 1, controls glow intensity
-    @State private var glowTimer: Timer? = nil
     @State private var noiseThreshold: CGFloat = .init(SettingsStore.shared.visualizerNoiseThreshold)
 
     private let barCount = 7
@@ -462,17 +473,16 @@ struct NotchWaveformView: View {
     private let minHeight: CGFloat = 3
     private let maxHeight: CGFloat = 20
 
-    // Computed glow values based on phase (sine wave for smooth pulsing)
     private var currentGlowIntensity: CGFloat {
-        self.contentState.isProcessing ? 0.35 + 0.25 * sin(self.glowPhase * .pi * 2) : 0.35
+        self.contentState.isProcessing ? 0.0 : 0.35
     }
 
     private var currentGlowRadius: CGFloat {
-        self.contentState.isProcessing ? 1 + 3 * sin(self.glowPhase * .pi * 2) : 1.5
+        self.contentState.isProcessing ? 0.0 : 1.5
     }
 
     private var currentOuterGlowRadius: CGFloat {
-        self.contentState.isProcessing ? 4 * sin(self.glowPhase * .pi * 2) : 0
+        0
     }
 
     init(audioPublisher: AnyPublisher<CGFloat, Never>, color: Color, isProcessing: Bool = false) {
@@ -498,22 +508,21 @@ struct NotchWaveformView: View {
         }
         .onChange(of: self.contentState.isProcessing) { _, processing in
             if processing {
-                self.setStaticProcessingBars()
-                self.startGlowAnimation()
+                self.setFlatProcessingBars()
             } else {
-                self.stopGlowAnimation()
+                // Resume from silence; next audio tick will animate up.
+                self.updateBars(level: 0)
             }
         }
         .onAppear {
             if self.contentState.isProcessing {
-                self.setStaticProcessingBars()
-                self.startGlowAnimation()
+                self.setFlatProcessingBars()
             } else {
                 self.updateBars(level: 0)
             }
         }
         .onDisappear {
-            self.stopGlowAnimation()
+            // No timers to clean up.
         }
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
             // Update threshold when user changes sensitivity setting
@@ -524,34 +533,11 @@ struct NotchWaveformView: View {
         }
     }
 
-    private func startGlowAnimation() {
-        self.stopGlowAnimation() // Clean up any existing timer
-        self.glowPhase = 0
-
-        // Timer-based animation for explicit control
-        self.glowTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { _ in
-            withAnimation(.linear(duration: 1.0 / 30.0)) {
-                self.glowPhase += 1.0 / 30.0 / 1.5 // Complete cycle in 1.5 seconds
-                if self.glowPhase >= 1.0 {
-                    self.glowPhase = 0
-                }
-            }
-        }
-    }
-
-    private func stopGlowAnimation() {
-        self.glowTimer?.invalidate()
-        self.glowTimer = nil
-        self.glowPhase = 0
-    }
-
-    private func setStaticProcessingBars() {
-        // Set bars to a nice static shape (taller in center)
-        withAnimation(.easeInOut(duration: 0.3)) {
+    private func setFlatProcessingBars() {
+        // During AI processing we want the visualizer to settle to silence (flat).
+        withAnimation(.easeOut(duration: 0.18)) {
             for i in 0..<self.barCount {
-                let centerDistance = abs(CGFloat(i) - CGFloat(self.barCount - 1) / 2)
-                let centerFactor = 1.0 - (centerDistance / CGFloat(self.barCount / 2)) * 0.4
-                self.barHeights[i] = self.minHeight + (self.maxHeight - self.minHeight) * 0.5 * centerFactor
+                self.barHeights[i] = self.minHeight
             }
         }
     }
