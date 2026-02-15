@@ -813,10 +813,14 @@ final class ASRService: ObservableObject {
         self.engine.stop()
         DebugLogger.shared.debug("Engine stopped", source: "ASRService")
 
-        // Recreate engine instance to release resources (same as stop())
-        DebugLogger.shared.debug("🗑️ Deallocating old engine and creating fresh instance...", source: "ASRService")
+        // Release old engine on a background thread — if the underlying device just died,
+        // AVAudioEngine deallocation can block in CoreAudio's internal teardown.
+        // No new engine is created here (it's lazy on next start()), so no overlap risk.
+        let oldEngine = self.engineStorage
         self.engineStorage = nil
-        DebugLogger.shared.debug("✅ Engine instance recreated", source: "ASRService")
+        if let oldEngine {
+            DispatchQueue.global(qos: .utility).async { _ = oldEngine }
+        }
 
         // CRITICAL FIX: Await completion of streaming task AND any pending transcriptions
         // This prevents use-after-free crashes (EXC_BAD_ACCESS) when clearing buffer
@@ -1361,7 +1365,10 @@ final class ASRService: ObservableObject {
             mElement: kAudioObjectPropertyElementMain
         )
         let token: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-            self?.handleDefaultInputChanged()
+            // Defer to next runloop pass — CoreAudio may hold an internal lock during
+            // this callback, and our handler makes synchronous CoreAudio queries that
+            // would deadlock waiting for the same lock.
+            DispatchQueue.main.async { self?.handleDefaultInputChanged() }
         }
         let status = AudioObjectAddPropertyListenerBlock(
             AudioObjectID(kAudioObjectSystemObject),
@@ -1396,7 +1403,10 @@ final class ASRService: ObservableObject {
         )
 
         let token: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-            self?.handleDeviceListChanged()
+            // Defer to next runloop pass — CoreAudio may hold an internal lock during
+            // this callback, and our handler makes synchronous CoreAudio queries that
+            // would deadlock waiting for the same lock.
+            DispatchQueue.main.async { self?.handleDeviceListChanged() }
         }
         let status = AudioObjectAddPropertyListenerBlock(
             AudioObjectID(kAudioObjectSystemObject),
@@ -1428,7 +1438,7 @@ final class ASRService: ObservableObject {
         )
 
         let token: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-            self?.handleDeviceAvailabilityChanged(deviceID: deviceID)
+            DispatchQueue.main.async { self?.handleDeviceAvailabilityChanged(deviceID: deviceID) }
         }
         let status = AudioObjectAddPropertyListenerBlock(
             deviceID,
@@ -1470,71 +1480,73 @@ final class ASRService: ObservableObject {
     private func handleDeviceListChanged() {
         DebugLogger.shared.info("🔄 Device list changed - checking for new/removed devices", source: "ASRService")
 
-        // Get current device list
-        let currentDevices = AudioDevice.listInputDevices()
-        DebugLogger.shared.debug("Current input devices: \(currentDevices.map { $0.name }.joined(separator: ", "))", source: "ASRService")
-
-        // Check if preferred device is now available (for auto-switch)
-        if let preferredUID = SettingsStore.shared.preferredInputDeviceUID,
-           let preferredDevice = currentDevices.first(where: { $0.uid == preferredUID })
-        {
-            // If we're currently using a fallback (system default), switch to preferred device
+        // Perform CoreAudio queries off the main thread — during a device topology change
+        // the HAL may still be settling, and synchronous queries on main can deadlock.
+        let preferredUID = SettingsStore.shared.preferredInputDeviceUID
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let currentDevices = AudioDevice.listInputDevices()
             let systemDefault = AudioDevice.getDefaultInputDevice()
-            if let currentDevice = getCurrentlyBoundInputDevice(),
-               currentDevice.uid != preferredUID,
-               currentDevice.uid == systemDefault?.uid
-            {
-                DebugLogger.shared.info(
-                    "🔌 Preferred device '\(preferredDevice.name)' reconnected. Auto-switching...",
-                    source: "ASRService"
-                )
 
-                // If recording, restart with new device
-                if self.isRunning {
-                    DebugLogger.shared.info("Recording in progress - restarting engine with preferred device", source: "ASRService")
-                    self.restartEngineWithDevice(preferredDevice)
-                } else {
-                    // Just update the binding for next recording
-                    DebugLogger.shared.info("Not recording - updating binding for next session", source: "ASRService")
-                    _ = self.setEngineInputDevice(
-                        deviceID: preferredDevice.id,
-                        deviceUID: preferredDevice.uid,
-                        deviceName: preferredDevice.name
-                    )
-                }
-            }
-        }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                let cachedUIDs = self.cachedDeviceUIDs
 
-        // Check for newly connected Bluetooth devices (auto-switch)
-        for device in currentDevices {
-            if device.name.localizedCaseInsensitiveContains("airpods") ||
-                device.name.localizedCaseInsensitiveContains("bluetooth")
-            {
-                // Check if this is a newly appeared device
-                let wasAvailable = self.checkDeviceWasAvailable(device.uid)
-                if !wasAvailable {
-                    DebugLogger.shared.info(
-                        "🎧 New Bluetooth device detected: '\(device.name)'. Auto-switching...",
-                        source: "ASRService"
-                    )
+                DebugLogger.shared.debug("Current input devices: \(currentDevices.map { $0.name }.joined(separator: ", "))", source: "ASRService")
 
-                    // Update preferred device setting
-                    SettingsStore.shared.preferredInputDeviceUID = device.uid
-                    DebugLogger.shared.debug("Updated preferred input device to: \(device.uid)", source: "ASRService")
+                // Check if preferred device is now available (for auto-switch)
+                if let preferredUID,
+                   let preferredDevice = currentDevices.first(where: { $0.uid == preferredUID })
+                {
+                    if let currentDevice = self.getCurrentlyBoundInputDevice(),
+                       currentDevice.uid != preferredUID,
+                       currentDevice.uid == systemDefault?.uid
+                    {
+                        DebugLogger.shared.info(
+                            "🔌 Preferred device '\(preferredDevice.name)' reconnected. Auto-switching...",
+                            source: "ASRService"
+                        )
 
-                    // If recording, restart with new device
-                    if self.isRunning {
-                        DebugLogger.shared.info("Recording in progress - restarting engine with new Bluetooth device", source: "ASRService")
-                        self.restartEngineWithDevice(device)
-                    } else {
-                        DebugLogger.shared.info("Not recording - Bluetooth device will be used on next recording", source: "ASRService")
+                        if self.isRunning {
+                            DebugLogger.shared.info("Recording in progress - restarting engine with preferred device", source: "ASRService")
+                            self.restartEngineWithDevice(preferredDevice)
+                        } else {
+                            DebugLogger.shared.info("Not recording - updating binding for next session", source: "ASRService")
+                            _ = self.setEngineInputDevice(
+                                deviceID: preferredDevice.id,
+                                deviceUID: preferredDevice.uid,
+                                deviceName: preferredDevice.name
+                            )
+                        }
                     }
                 }
+
+                // Check for newly connected Bluetooth devices (auto-switch)
+                for device in currentDevices {
+                    if device.name.localizedCaseInsensitiveContains("airpods") ||
+                        device.name.localizedCaseInsensitiveContains("bluetooth")
+                    {
+                        if !cachedUIDs.contains(device.uid) {
+                            DebugLogger.shared.info(
+                                "🎧 New Bluetooth device detected: '\(device.name)'. Auto-switching...",
+                                source: "ASRService"
+                            )
+
+                            SettingsStore.shared.preferredInputDeviceUID = device.uid
+                            DebugLogger.shared.debug("Updated preferred input device to: \(device.uid)", source: "ASRService")
+
+                            if self.isRunning {
+                                DebugLogger.shared.info("Recording in progress - restarting engine with new Bluetooth device", source: "ASRService")
+                                self.restartEngineWithDevice(device)
+                            } else {
+                                DebugLogger.shared.info("Not recording - Bluetooth device will be used on next recording", source: "ASRService")
+                            }
+                        }
+                    }
+                }
+
+                self.cacheCurrentDeviceList(currentDevices)
             }
         }
-
-        // Cache device list for next comparison
-        self.cacheCurrentDeviceList(currentDevices)
     }
 
     /// Handles device availability changes (device disconnected or reconnected)
@@ -1557,29 +1569,65 @@ final class ASRService: ObservableObject {
         if status == noErr, isAlive == 0 {
             // Device disconnected
             DebugLogger.shared.warning("❌ Monitored device (ID: \(deviceID)) DISCONNECTED", source: "ASRService")
+            self.stopMonitoringDevice()
 
             if self.isRunning {
-                // Cancel recording if device disconnects during recording
-                DebugLogger.shared.error(
-                    "🛑 Recording CANCELLED: Audio device disconnected during recording",
+                // Instead of cancelling, try to hot-swap to another available device
+                // so the recording continues seamlessly.
+                DebugLogger.shared.info(
+                    "🔄 Device died during recording — attempting hot-swap to fallback device",
                     source: "ASRService"
                 )
 
-                Task { @MainActor in
-                    await self.stopWithoutTranscription()
+                self.removeEngineTap()
+                self.engine.stop()
+                // Release dead engine on background thread (dealloc can block in CoreAudio)
+                let oldEngine = self.engineStorage
+                self.engineStorage = nil
+                if let oldEngine {
+                    DispatchQueue.global(qos: .utility).async { _ = oldEngine }
+                }
 
-                    // Notify user
-                    NotificationCenter.default.post(
-                        name: NSNotification.Name("ASRServiceDeviceDisconnected"),
-                        object: nil,
-                        userInfo: ["errorMessage": "Recording cancelled: Audio device disconnected"]
-                    )
+                // Query available devices off-main after a short delay for CoreAudio to settle
+                DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                    Thread.sleep(forTimeInterval: 0.3)
+                    let availableInputs = AudioDevice.listInputDevices()
+                    let defaultDevice = AudioDevice.getDefaultInputDevice()
+
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self, self.isRunning else { return }
+
+                        guard let fallback = defaultDevice ?? availableInputs.first else {
+                            DebugLogger.shared.error("🛑 No fallback device — cancelling recording", source: "ASRService")
+                            Task { @MainActor in
+                                await self.stopWithoutTranscription()
+                                NotificationCenter.default.post(
+                                    name: NSNotification.Name("ASRServiceDeviceDisconnected"),
+                                    object: nil,
+                                    userInfo: ["errorMessage": "Recording cancelled: No audio device available"]
+                                )
+                            }
+                            return
+                        }
+
+                        DebugLogger.shared.info("🔄 Hot-swapping to: '\(fallback.name)'", source: "ASRService")
+                        do {
+                            try self.configureSession()
+                            _ = self.setEngineInputDevice(
+                                deviceID: fallback.id, deviceUID: fallback.uid, deviceName: fallback.name
+                            )
+                            try self.startEngine()
+                            try self.setupEngineTap()
+                            self.startMonitoringDevice(fallback.id)
+                            DebugLogger.shared.info("✅ Hot-swap successful — recording continues with '\(fallback.name)'", source: "ASRService")
+                        } catch {
+                            DebugLogger.shared.error("❌ Hot-swap failed: \(error)", source: "ASRService")
+                            Task { @MainActor in await self.stopWithoutTranscription() }
+                        }
+                    }
                 }
             } else {
                 DebugLogger.shared.info("Not recording - device disconnect handled gracefully", source: "ASRService")
-                // Just stop monitoring - don't try to set engine device when engine may not exist
-                self.stopMonitoringDevice()
-                DebugLogger.shared.info("✅ Stopped monitoring disconnected device", source: "ASRService")
             }
         } else if status == noErr, isAlive != 0 {
             DebugLogger.shared.info("✅ Device (ID: \(deviceID)) is still alive", source: "ASRService")
@@ -1658,10 +1706,6 @@ final class ASRService: ObservableObject {
 
     // Device caching for change detection
     private var cachedDeviceUIDs: Set<String> = []
-
-    private func checkDeviceWasAvailable(_ uid: String) -> Bool {
-        return self.cachedDeviceUIDs.contains(uid)
-    }
 
     private func cacheCurrentDeviceList(_ devices: [AudioDevice.Device]) {
         self.cachedDeviceUIDs = Set(devices.map { $0.uid })
