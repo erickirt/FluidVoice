@@ -37,9 +37,13 @@ final class GlobalHotkeyManager: NSObject {
     private var commandModeShortcutEnabled: Bool
     private var rewriteModeShortcutEnabled: Bool
     private var startRecordingCallback: (() async -> Void)?
+    private var dictationModeCallback: (() async -> Void)?
     private var stopAndProcessCallback: (() async -> Void)?
     private var commandModeCallback: (() async -> Void)?
     private var rewriteModeCallback: (() async -> Void)?
+    private var isDictateRecordingProvider: (() -> Bool)?
+    private var isCommandRecordingProvider: (() -> Bool)?
+    private var isRewriteRecordingProvider: (() -> Bool)?
     private var cancelCallback: (() -> Bool)? // Returns true if handled
     private var pressAndHoldMode: Bool = SettingsStore.shared.pressAndHoldMode
 
@@ -104,9 +108,13 @@ final class GlobalHotkeyManager: NSObject {
         commandModeShortcutEnabled: Bool,
         rewriteModeShortcutEnabled: Bool,
         startRecordingCallback: (() async -> Void)? = nil,
+        dictationModeCallback: (() async -> Void)? = nil,
         stopAndProcessCallback: (() async -> Void)? = nil,
         commandModeCallback: (() async -> Void)? = nil,
-        rewriteModeCallback: (() async -> Void)? = nil
+        rewriteModeCallback: (() async -> Void)? = nil,
+        isDictateRecordingProvider: (() -> Bool)? = nil,
+        isCommandRecordingProvider: (() -> Bool)? = nil,
+        isRewriteRecordingProvider: (() -> Bool)? = nil
     ) {
         self.asrService = asrService
         self.shortcut = shortcut
@@ -115,9 +123,13 @@ final class GlobalHotkeyManager: NSObject {
         self.commandModeShortcutEnabled = commandModeShortcutEnabled
         self.rewriteModeShortcutEnabled = rewriteModeShortcutEnabled
         self.startRecordingCallback = startRecordingCallback
+        self.dictationModeCallback = dictationModeCallback
         self.stopAndProcessCallback = stopAndProcessCallback
         self.commandModeCallback = commandModeCallback
         self.rewriteModeCallback = rewriteModeCallback
+        self.isDictateRecordingProvider = isDictateRecordingProvider
+        self.isCommandRecordingProvider = isCommandRecordingProvider
+        self.isRewriteRecordingProvider = isRewriteRecordingProvider
         super.init()
 
         self.initializeWithDelay()
@@ -366,8 +378,13 @@ final class GlobalHotkeyManager: NSObject {
                 } else {
                     // Toggle mode: press to start, press again to stop
                     if self.asrService.isRunning {
-                        DebugLogger.shared.info("Command mode shortcut pressed while recording - stopping", source: "GlobalHotkeyManager")
-                        self.stopRecordingIfNeeded()
+                        if self.isCommandRecordingProvider?() ?? false {
+                            DebugLogger.shared.info("Command mode shortcut pressed in Command mode - stopping", source: "GlobalHotkeyManager")
+                            self.stopRecordingIfNeeded()
+                        } else {
+                            DebugLogger.shared.info("Command mode shortcut pressed while recording - switching mode", source: "GlobalHotkeyManager")
+                            self.triggerCommandMode()
+                        }
                     } else {
                         DebugLogger.shared.info("Command mode shortcut triggered - starting", source: "GlobalHotkeyManager")
                         self.triggerCommandMode()
@@ -389,8 +406,13 @@ final class GlobalHotkeyManager: NSObject {
                     } else {
                         // Toggle mode: press to start, press again to stop
                         if self.asrService.isRunning {
-                            DebugLogger.shared.info("Rewrite mode shortcut pressed while recording - stopping", source: "GlobalHotkeyManager")
-                            self.stopRecordingIfNeeded()
+                            if self.isRewriteRecordingProvider?() ?? false {
+                                DebugLogger.shared.info("Rewrite mode shortcut pressed in Edit mode - stopping", source: "GlobalHotkeyManager")
+                                self.stopRecordingIfNeeded()
+                            } else {
+                                DebugLogger.shared.info("Rewrite mode shortcut pressed while recording - switching mode", source: "GlobalHotkeyManager")
+                                self.triggerRewriteMode()
+                            }
                         } else {
                             DebugLogger.shared.info("Rewrite mode shortcut triggered - starting", source: "GlobalHotkeyManager")
                             self.triggerRewriteMode()
@@ -405,10 +427,42 @@ final class GlobalHotkeyManager: NSObject {
                 if self.pressAndHoldMode {
                     if !self.isKeyPressed {
                         self.isKeyPressed = true
-                        self.startRecordingIfNeeded()
+                        if self.asrService.isRunning {
+                            let isSameMode = self.isDictateRecordingProvider?() ?? false
+                            DebugLogger.shared.info(
+                                "Hotkey route | pressed=dictate | active=\(isSameMode ? "dictate" : "other") | asrRunning=true | action=\(isSameMode ? "stop" : "switch")",
+                                source: "GlobalHotkeyManager"
+                            )
+                            if !isSameMode {
+                                self.triggerDictationMode()
+                            }
+                        } else {
+                            DebugLogger.shared.info(
+                                "Hotkey route | pressed=dictate | active=none | asrRunning=false | action=start",
+                                source: "GlobalHotkeyManager"
+                            )
+                            self.startRecordingIfNeeded()
+                        }
                     }
                 } else {
-                    self.toggleRecording()
+                    if self.asrService.isRunning {
+                        let isSameMode = self.isDictateRecordingProvider?() ?? false
+                        DebugLogger.shared.info(
+                            "Hotkey route | pressed=dictate | active=\(isSameMode ? "dictate" : "other") | asrRunning=true | action=\(isSameMode ? "stop" : "switch")",
+                            source: "GlobalHotkeyManager"
+                        )
+                        if isSameMode {
+                            self.stopRecordingIfNeeded()
+                        } else {
+                            self.triggerDictationMode()
+                        }
+                    } else {
+                        DebugLogger.shared.info(
+                            "Hotkey route | pressed=dictate | active=none | asrRunning=false | action=start",
+                            source: "GlobalHotkeyManager"
+                        )
+                        self.triggerDictationMode()
+                    }
                 }
                 return nil
             }
@@ -498,8 +552,13 @@ final class GlobalHotkeyManager: NSObject {
                     } else if wasCleanPress {
                         // Toggle mode: only trigger on release if no other key was pressed
                         if self.asrService.isRunning {
-                            DebugLogger.shared.info("Command mode modifier released (toggle) - stopping", source: "GlobalHotkeyManager")
-                            self.stopRecordingIfNeeded()
+                            if self.isCommandRecordingProvider?() ?? false {
+                                DebugLogger.shared.info("Command mode modifier released (toggle, same mode) - stopping", source: "GlobalHotkeyManager")
+                                self.stopRecordingIfNeeded()
+                            } else {
+                                DebugLogger.shared.info("Command mode modifier released (toggle, switch mode) - switching", source: "GlobalHotkeyManager")
+                                self.triggerCommandMode()
+                            }
                         } else {
                             DebugLogger.shared.info("Command mode modifier released (toggle) - starting", source: "GlobalHotkeyManager")
                             self.triggerCommandMode()
@@ -572,8 +631,13 @@ final class GlobalHotkeyManager: NSObject {
                         } else if wasCleanPress {
                             // Toggle mode: only trigger on release if no other key was pressed
                             if self.asrService.isRunning {
-                                DebugLogger.shared.info("Rewrite mode modifier released (toggle) - stopping", source: "GlobalHotkeyManager")
-                                self.stopRecordingIfNeeded()
+                                if self.isRewriteRecordingProvider?() ?? false {
+                                    DebugLogger.shared.info("Rewrite mode modifier released (toggle, same mode) - stopping", source: "GlobalHotkeyManager")
+                                    self.stopRecordingIfNeeded()
+                                } else {
+                                    DebugLogger.shared.info("Rewrite mode modifier released (toggle, switch mode) - switching", source: "GlobalHotkeyManager")
+                                    self.triggerRewriteMode()
+                                }
                             } else {
                                 DebugLogger.shared.info("Rewrite mode modifier released (toggle) - starting", source: "GlobalHotkeyManager")
                                 self.triggerRewriteMode()
@@ -637,7 +701,24 @@ final class GlobalHotkeyManager: NSObject {
                         }
                     } else if wasCleanPress {
                         // Toggle mode: only trigger on release if no other key was pressed
-                        self.toggleRecording()
+                        if self.asrService.isRunning {
+                            let isSameMode = self.isDictateRecordingProvider?() ?? false
+                            DebugLogger.shared.info(
+                                "Hotkey route | pressed=dictate(mod) | active=\(isSameMode ? "dictate" : "other") | asrRunning=true | action=\(isSameMode ? "stop" : "switch")",
+                                source: "GlobalHotkeyManager"
+                            )
+                            if isSameMode {
+                                self.stopRecordingIfNeeded()
+                            } else {
+                                self.triggerDictationMode()
+                            }
+                        } else {
+                            DebugLogger.shared.info(
+                                "Hotkey route | pressed=dictate(mod) | active=none | asrRunning=false | action=start",
+                                source: "GlobalHotkeyManager"
+                            )
+                            self.triggerDictationMode()
+                        }
                     } else {
                         DebugLogger.shared.debug("Transcription modifier released but another key was pressed - ignoring", source: "GlobalHotkeyManager")
                     }
@@ -665,6 +746,20 @@ final class GlobalHotkeyManager: NSObject {
             guard let self = self else { return }
             DebugLogger.shared.info("Rewrite mode hotkey triggered", source: "GlobalHotkeyManager")
             await self.rewriteModeCallback?()
+        }
+    }
+
+    private func triggerDictationMode() {
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            DebugLogger.shared.info("Dictate mode hotkey triggered", source: "GlobalHotkeyManager")
+            if let callback = self.dictationModeCallback {
+                await callback()
+            } else if let startCallback = self.startRecordingCallback {
+                await startCallback()
+            } else {
+                await self.asrService.start()
+            }
         }
     }
 

@@ -9,6 +9,19 @@ import AppKit
 import Combine
 import SwiftUI
 
+private enum OverlayShortcutResolver {
+    static func shortcutDisplay(for mode: OverlayMode, settings: SettingsStore = .shared) -> String {
+        switch mode {
+        case .dictation:
+            return settings.hotkeyShortcut.displayString
+        case .edit, .write, .rewrite:
+            return settings.rewriteModeHotkeyShortcut.displayString
+        case .command:
+            return settings.commandModeHotkeyShortcut.displayString
+        }
+    }
+}
+
 // MARK: - Bottom Overlay Window Controller
 
 @MainActor
@@ -29,7 +42,7 @@ final class BottomOverlayWindowController {
         }
         NotificationCenter.default.addObserver(forName: NSNotification.Name("OverlaySizeChanged"), object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.updateSizeAndPosition()
+                self?.scheduleSizeAndPositionUpdate(after: 0)
             }
         }
     }
@@ -109,6 +122,10 @@ final class BottomOverlayWindowController {
     }
 
     func refreshSizeForContent() {
+        self.scheduleSizeAndPositionUpdate()
+    }
+
+    private func scheduleSizeAndPositionUpdate(after delay: TimeInterval = 0.03) {
         self.pendingResizeWorkItem?.cancel()
 
         // Debounce rapid streaming updates to avoid resize thrash.
@@ -116,7 +133,7 @@ final class BottomOverlayWindowController {
             self?.updateSizeAndPosition()
         }
         self.pendingResizeWorkItem = resizeWorkItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03, execute: resizeWorkItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: resizeWorkItem)
     }
 
     /// Update window size based on current SwiftUI content and re-position
@@ -800,6 +817,7 @@ final class BottomOverlayModeMenuController {
 
 private struct BottomOverlayModeMenuView: View {
     @ObservedObject private var contentState = NotchContentState.shared
+    @ObservedObject private var settings = SettingsStore.shared
 
     let maxWidth: CGFloat
     let onHoverChanged: (Bool) -> Void
@@ -849,6 +867,7 @@ private struct BottomOverlayModeMenuView: View {
     @ViewBuilder
     private func modeRow(_ title: String, mode: OverlayMode, rowID: String) -> some View {
         let isSelected = self.normalizedOverlayMode == mode
+        let shortcut = OverlayShortcutResolver.shortcutDisplay(for: mode, settings: self.settings)
 
         Button(action: {
             guard !self.contentState.isProcessing else { return }
@@ -859,6 +878,15 @@ private struct BottomOverlayModeMenuView: View {
                 Text(title)
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
+                if !shortcut.isEmpty {
+                    Text(shortcut)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.white.opacity(0.08))
+                        .clipShape(Capsule())
+                }
                 if isSelected {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .semibold))
@@ -1126,6 +1154,7 @@ private struct PromptSelectorAnchorReader: NSViewRepresentable {
 struct BottomOverlayView: View {
     @ObservedObject private var contentState = NotchContentState.shared
     @ObservedObject private var appServices = AppServices.shared
+    @ObservedObject private var activeAppMonitor = ActiveAppMonitor.shared
     @ObservedObject private var settings = SettingsStore.shared
     @Environment(\.theme) private var theme
     @State private var isHoveringModeChip = false
@@ -1149,6 +1178,7 @@ struct BottomOverlayView: View {
         let barSpacing: CGFloat
         let minBarHeight: CGFloat
         let maxBarHeight: CGFloat
+        let containerWidth: CGFloat
         let overlayWidth: CGFloat
         let overlayHeight: CGFloat
         let previewBoxHeight: CGFloat
@@ -1173,6 +1203,7 @@ struct BottomOverlayView: View {
                     barSpacing: 3.5,
                     minBarHeight: 5,
                     maxBarHeight: 16,
+                    containerWidth: 200,
                     overlayWidth: 300,
                     overlayHeight: 124,
                     previewBoxHeight: 0,
@@ -1195,6 +1226,7 @@ struct BottomOverlayView: View {
                     barSpacing: 4.5,
                     minBarHeight: 6,
                     maxBarHeight: 28,
+                    containerWidth: 340,
                     overlayWidth: 380,
                     overlayHeight: 156,
                     previewBoxHeight: 0,
@@ -1217,6 +1249,7 @@ struct BottomOverlayView: View {
                     barSpacing: 6.0,
                     minBarHeight: 8,
                     maxBarHeight: 44,
+                    containerWidth: 600,
                     overlayWidth: 600,
                     overlayHeight: 288,
                     previewBoxHeight: 92,
@@ -1557,8 +1590,8 @@ struct BottomOverlayView: View {
                     self.modeSelectorView
                     self.promptSelectorView
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, self.layout.hPadding)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, self.layout.hPadding)
             }
 
             VStack(spacing: self.layout.vPadding / 2) {
@@ -1674,7 +1707,9 @@ struct BottomOverlayView: View {
                 // Waveform + Mode label row
                 HStack(spacing: self.layout.hPadding / 1.5) {
                     // Target app icon (the app where text will be typed)
-                    if self.settings.overlaySize != .small, let appIcon = contentState.targetAppIcon {
+                    let appIcon = self.contentState.targetAppIcon ?? self.activeAppMonitor.activeAppIcon
+                    if appIcon != nil || !self.appServices.asr.isAsrReady &&
+                        (self.appServices.asr.isLoadingModel || self.appServices.asr.isDownloadingModel) {
                         let showModelLoading = !self.appServices.asr.isAsrReady &&
                             (self.appServices.asr.isLoadingModel || self.appServices.asr.isDownloadingModel)
                         VStack(spacing: 2) {
@@ -1682,12 +1717,16 @@ struct BottomOverlayView: View {
                                 ProgressView()
                                     .controlSize(.mini)
                             }
-                            Image(nsImage: appIcon)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: self.layout.iconSize, height: self.layout.iconSize)
-                                .clipShape(RoundedRectangle(cornerRadius: self.layout.iconSize / 4))
+                            if let appIcon = appIcon {
+                                Image(nsImage: appIcon)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: self.layout.iconSize, height: self.layout.iconSize)
+                                    .clipShape(RoundedRectangle(cornerRadius: self.layout.iconSize / 4))
+                            }
                         }
+                        .frame(width: self.layout.iconSize, height: self.layout.iconSize)
+                        .opacity((appIcon != nil || self.appServices.asr.isLoadingModel || self.appServices.asr.isDownloadingModel) ? 1 : 0)
                     }
 
                     // Waveform visualization
@@ -1713,10 +1752,10 @@ struct BottomOverlayView: View {
                         }
                     }
                 }
-            }
+                }
             .padding(.horizontal, self.layout.hPadding)
             .padding(.vertical, self.layout.vPadding)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .center)
             .background(
                 ZStack {
                     // Solid pitch black background
@@ -1741,10 +1780,13 @@ struct BottomOverlayView: View {
             .frame(maxWidth: .infinity, alignment: .top)
         }
         .frame(
-            width: self.layout.usesFixedCanvas ? self.layout.overlayWidth : nil,
+            width: self.layout.usesFixedCanvas ? self.layout.overlayWidth : self.layout.containerWidth,
             height: self.layout.usesFixedCanvas ? self.layout.overlayHeight : nil,
             alignment: .top
         )
+        .onChange(of: self.settings.overlaySize) { _, _ in
+            BottomOverlayWindowController.shared.refreshSizeForContent()
+        }
         .onChange(of: self.contentState.cachedPreviewText) { _, _ in
             if !self.layout.usesFixedCanvas {
                 BottomOverlayWindowController.shared.refreshSizeForContent()

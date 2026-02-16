@@ -38,6 +38,13 @@ enum SidebarItem: Hashable {
 // NOTE: Streaming and AI response parsing is now handled by LLMClient
 
 struct ContentView: View {
+    private enum ActiveRecordingMode: String {
+        case none
+        case dictate
+        case edit
+        case command
+    }
+
     @EnvironmentObject private var appServices: AppServices
     @StateObject private var mouseTracker = MousePositionTracker()
     @StateObject private var commandModeService = CommandModeService()
@@ -64,6 +71,7 @@ struct ContentView: View {
     @State private var isRewriteModeShortcutEnabled: Bool = SettingsStore.shared.rewriteModeShortcutEnabled
     @State private var isRecordingForRewrite: Bool = false // Track if current recording is for rewrite mode
     @State private var isRecordingForCommand: Bool = false // Track if current recording is for command mode
+    @State private var activeRecordingMode: ActiveRecordingMode = .none
     @State private var isRecordingShortcut = false
     @State private var isRecordingCommandModeShortcut = false
     @State private var isRecordingRewriteShortcut = false
@@ -507,11 +515,11 @@ struct ContentView: View {
             if !newValue {
                 self.isRecordingCommandModeShortcut = false
 
-                if self.isRecordingForCommand {
+                if self.activeRecordingMode == .command {
                     if self.asr.isRunning {
                         Task { await self.asr.stopWithoutTranscription() }
                     }
-                    self.isRecordingForCommand = false
+                    self.clearActiveRecordingMode()
                     self.menuBarManager.setOverlayMode(.dictation)
                 }
             }
@@ -523,11 +531,11 @@ struct ContentView: View {
             if !newValue {
                 self.isRecordingRewriteShortcut = false
 
-                if self.isRecordingForRewrite {
+                if self.activeRecordingMode == .edit {
                     if self.asr.isRunning {
                         Task { await self.asr.stopWithoutTranscription() }
                     }
-                    self.isRecordingForRewrite = false
+                    self.clearActiveRecordingMode()
                     self.rewriteModeService.clearState()
                     self.menuBarManager.setOverlayMode(.dictation)
                 }
@@ -1499,21 +1507,15 @@ struct ContentView: View {
         DebugLogger.shared.debug("stopAndProcessTranscription called", source: "ContentView")
 
         // Check if we're in rewrite or command mode
-        let wasRewriteMode = self.isRecordingForRewrite
-        let wasCommandMode = self.isRecordingForCommand
+        let modeAtStop = self.activeRecordingMode
+        let wasRewriteMode = modeAtStop == .edit || self.isRecordingForRewrite
+        let wasCommandMode = modeAtStop == .command || self.isRecordingForCommand
         DebugLogger.shared.info(
-            "Routing decision snapshot | rewrite=\(wasRewriteMode) | command=\(wasCommandMode) | overlay=\(NotchContentState.shared.mode.rawValue)",
+            "Routing decision snapshot | activeMode=\(modeAtStop.rawValue) | rewrite=\(wasRewriteMode) | command=\(wasCommandMode) | overlay=\(NotchContentState.shared.mode.rawValue)",
             source: "ContentView"
         )
 
-        if wasRewriteMode {
-            self.isRecordingForRewrite = false
-            // Don't reset overlay mode here - let it stay colored until it hides
-        }
-        if wasCommandMode {
-            self.isRecordingForCommand = false
-            // Don't reset overlay mode here - let it stay colored until it hides
-        }
+        self.clearActiveRecordingMode()
 
         // Show "Transcribing..." state before calling stop() to keep overlay visible.
         // The asr.stop() call performs the final transcription which can take a moment
@@ -1785,18 +1787,36 @@ struct ContentView: View {
         }
     }
 
+    private func setActiveRecordingMode(_ mode: ActiveRecordingMode) {
+        self.activeRecordingMode = mode
+        switch mode {
+        case .none, .dictate:
+            self.isRecordingForCommand = false
+            self.isRecordingForRewrite = false
+        case .edit:
+            self.isRecordingForCommand = false
+            self.isRecordingForRewrite = true
+        case .command:
+            self.isRecordingForCommand = true
+            self.isRecordingForRewrite = false
+        }
+    }
+
+    private func clearActiveRecordingMode() {
+        self.setActiveRecordingMode(.none)
+    }
+
     private func handleLivePromptModeSwitch(_ mode: SettingsStore.PromptMode) {
         guard !NotchContentState.shared.isProcessing else { return }
         switch mode.normalized {
         case .dictate:
-            guard self.isRecordingForRewrite || NotchContentState.shared.mode != .dictation else { return }
-            self.isRecordingForRewrite = false
+            guard self.activeRecordingMode != .dictate || NotchContentState.shared.mode != .dictation else { return }
+            self.setActiveRecordingMode(.dictate)
             self.rewriteModeService.clearState()
             self.menuBarManager.setOverlayMode(.dictation)
         case .edit:
-            guard self.isRecordingForRewrite == false || NotchContentState.shared.mode == .dictation else { return }
-            self.isRecordingForRewrite = true
-            self.isRecordingForCommand = false
+            guard self.activeRecordingMode != .edit || NotchContentState.shared.mode == .dictation else { return }
+            self.setActiveRecordingMode(.edit)
             let hasOriginal = !self.rewriteModeService.originalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let hasContext = !self.rewriteModeService.selectedContextText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             if !hasOriginal, !hasContext {
@@ -1808,9 +1828,8 @@ struct ContentView: View {
             }
             self.menuBarManager.setOverlayMode(.edit)
         case .write, .rewrite:
-            guard self.isRecordingForRewrite == false || NotchContentState.shared.mode == .dictation else { return }
-            self.isRecordingForRewrite = true
-            self.isRecordingForCommand = false
+            guard self.activeRecordingMode != .edit || NotchContentState.shared.mode == .dictation else { return }
+            self.setActiveRecordingMode(.edit)
             let hasOriginal = !self.rewriteModeService.originalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let hasContext = !self.rewriteModeService.selectedContextText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             if !hasOriginal, !hasContext {
@@ -1828,16 +1847,13 @@ struct ContentView: View {
         guard !NotchContentState.shared.isProcessing else { return }
         switch mode {
         case .dictation:
-            self.isRecordingForCommand = false
             self.handleLivePromptModeSwitch(.dictate)
         case .edit, .write, .rewrite:
-            self.isRecordingForCommand = false
             self.handleLivePromptModeSwitch(.edit)
         case .command:
-            guard self.isRecordingForCommand == false || NotchContentState.shared.mode != .command else { return }
-            self.isRecordingForRewrite = false
+            guard self.activeRecordingMode != .command || NotchContentState.shared.mode != .command else { return }
             self.rewriteModeService.clearState()
-            self.isRecordingForCommand = true
+            self.setActiveRecordingMode(.command)
             self.menuBarManager.setOverlayMode(.command)
         }
     }
@@ -1862,6 +1878,8 @@ struct ContentView: View {
 
     // Capture app context at start to avoid mismatches if the user switches apps mid-session
     private func startRecording() {
+        self.setActiveRecordingMode(.dictate)
+
         // Ensure normal dictation mode is set (command/rewrite modes set their own)
         if !self.isRecordingForCommand, !self.isRecordingForRewrite {
             self.menuBarManager.setOverlayMode(.dictation)
@@ -2107,6 +2125,20 @@ struct ContentView: View {
             startRecordingCallback: {
                 self.startRecording()
             },
+            dictationModeCallback: {
+                DebugLogger.shared.info("Dictate mode triggered", source: "ContentView")
+                self.setActiveRecordingMode(.dictate)
+                self.rewriteModeService.clearState()
+                self.menuBarManager.setOverlayMode(.dictation)
+
+                guard !self.asr.isRunning else { return }
+                if SettingsStore.shared.enableTranscriptionSounds {
+                    TranscriptionSoundPlayer.shared.playStartSound()
+                }
+                Task {
+                    await self.asr.start()
+                }
+            },
             stopAndProcessCallback: {
                 await self.stopAndProcessTranscription()
             },
@@ -2114,10 +2146,12 @@ struct ContentView: View {
                 DebugLogger.shared.info("Command mode triggered", source: "ContentView")
 
                 // Set flag so stopAndProcessTranscription knows to process as command
-                self.isRecordingForCommand = true
+                self.setActiveRecordingMode(.command)
 
                 // Set overlay mode to command
                 self.menuBarManager.setOverlayMode(.command)
+
+                guard !self.asr.isRunning else { return }
 
                 // Start recording immediately for the command
                 DebugLogger.shared.info(
@@ -2153,7 +2187,9 @@ struct ContentView: View {
                 }
 
                 // Set flag so stopAndProcessTranscription knows to process as rewrite
-                self.isRecordingForRewrite = true
+                self.setActiveRecordingMode(.edit)
+
+                guard !self.asr.isRunning else { return }
 
                 // Start recording immediately for the edit instruction
                 DebugLogger.shared.info("Starting voice recording for edit mode", source: "ContentView")
@@ -2163,6 +2199,15 @@ struct ContentView: View {
                 Task {
                     await self.asr.start()
                 }
+            },
+            isDictateRecordingProvider: {
+                self.activeRecordingMode == .dictate
+            },
+            isCommandRecordingProvider: {
+                self.activeRecordingMode == .command
+            },
+            isRewriteRecordingProvider: {
+                self.activeRecordingMode == .edit
             }
         )
 
@@ -2183,13 +2228,8 @@ struct ContentView: View {
             }
 
             // Reset recording mode flags
-            if self.isRecordingForCommand {
-                self.isRecordingForCommand = false
-                self.menuBarManager.setOverlayMode(.dictation)
-                handled = true
-            }
-            if self.isRecordingForRewrite {
-                self.isRecordingForRewrite = false
+            if self.activeRecordingMode != .none {
+                self.clearActiveRecordingMode()
                 self.menuBarManager.setOverlayMode(.dictation)
                 handled = true
             }
