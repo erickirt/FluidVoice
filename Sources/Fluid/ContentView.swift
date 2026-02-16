@@ -1614,6 +1614,10 @@ struct ContentView: View {
 
             finalText = await self.processTextWithAI(transcribedText)
 
+            // Clear transient status text before leaving processing state to avoid
+            // a brief non-shimmer "Refining..." preview flash.
+            NotchOverlayManager.shared.updateTranscriptionText("")
+
             // Hide processing animation
             self.menuBarManager.setProcessing(false)
         } else {

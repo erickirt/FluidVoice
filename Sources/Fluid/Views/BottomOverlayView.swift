@@ -1204,8 +1204,8 @@ struct BottomOverlayView: View {
                 )
             case .large:
                 return LayoutConstants(
-                    hPadding: 24,
-                    vPadding: 18,
+                    hPadding: 18,
+                    vPadding: 12,
                     waveformWidth: 180,
                     waveformHeight: 48,
                     iconSize: 26,
@@ -1252,6 +1252,13 @@ struct BottomOverlayView: View {
         }
     }
 
+    private static let transientOverlayStatusTexts: Set<String> = [
+        "Transcribing...",
+        "Refining...",
+        "Thinking...",
+        "Working...",
+    ]
+
     // ContentView writes transient status strings into transcriptionText while processing
     // (e.g. "Transcribing...", "Refining..."). Prefer that when present.
     private var processingStatusText: String {
@@ -1260,7 +1267,7 @@ struct BottomOverlayView: View {
     }
 
     private var hasTranscription: Bool {
-        !self.contentState.transcriptionText.isEmpty
+        !self.transcriptionPreviewText.isEmpty
     }
 
     private var normalizedOverlayMode: OverlayMode {
@@ -1331,7 +1338,22 @@ struct BottomOverlayView: View {
     }
 
     private var transcriptionPreviewText: String {
-        self.contentState.cachedPreviewText
+        let preview = self.contentState.cachedPreviewText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !self.contentState.isProcessing else { return self.contentState.cachedPreviewText }
+        guard Self.transientOverlayStatusTexts.contains(preview) else { return self.contentState.cachedPreviewText }
+        return ""
+    }
+
+    private var overlayBorderLineWidth: CGFloat {
+        self.settings.overlaySize == .large ? 0.8 : 1
+    }
+
+    private var overlayBorderTopOpacity: Double {
+        self.settings.overlaySize == .large ? 0.10 : 0.15
+    }
+
+    private var overlayBorderBottomOpacity: Double {
+        self.settings.overlaySize == .large ? 0.05 : 0.08
     }
 
     private func chipBackground(isHovered: Bool, disabled: Bool) -> some View {
@@ -1535,6 +1557,8 @@ struct BottomOverlayView: View {
                     self.modeSelectorView
                     self.promptSelectorView
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, self.layout.hPadding)
             }
 
             VStack(spacing: self.layout.vPadding / 2) {
@@ -1548,7 +1572,7 @@ struct BottomOverlayView: View {
                                     color: self.modeColor,
                                     font: .system(size: self.layout.transFontSize, weight: .medium)
                                 )
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                             } else if self.hasTranscription {
                                 let previewText = self.transcriptionPreviewText
                                 if !previewText.isEmpty {
@@ -1583,7 +1607,7 @@ struct BottomOverlayView: View {
                         }
                         .padding(.vertical, self.transcriptionVerticalPadding)
                         .frame(
-                            maxWidth: self.previewMaxWidth,
+                            maxWidth: .infinity,
                             minHeight: self.previewMaxHeight,
                             maxHeight: self.previewMaxHeight,
                             alignment: .topLeading
@@ -1704,13 +1728,13 @@ struct BottomOverlayView: View {
                         .strokeBorder(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.15),
-                                    Color.white.opacity(0.08),
+                                    Color.white.opacity(self.overlayBorderTopOpacity),
+                                    Color.white.opacity(self.overlayBorderBottomOpacity),
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
                             ),
-                            lineWidth: 1
+                            lineWidth: self.overlayBorderLineWidth
                         )
                 }
             )
