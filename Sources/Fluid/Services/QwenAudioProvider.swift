@@ -42,11 +42,7 @@ final class QwenAudioProvider: TranscriptionProvider {
         progressHandler?(0.05)
 
         if #available(macOS 15.0, *) {
-            let modelDirectory = try await Qwen3AsrModels.download()
-            progressHandler?(0.75)
-
-            let manager = Qwen3AsrManager()
-            try await manager.loadModels(from: modelDirectory)
+            let manager = try await self.prepareManagerWithRecovery(progressHandler: progressHandler)
             self.managerStorage = manager
             self.isReady = true
             progressHandler?(1.0)
@@ -58,6 +54,51 @@ final class QwenAudioProvider: TranscriptionProvider {
             code: -2,
             userInfo: [NSLocalizedDescriptionKey: "Qwen3 ASR is unavailable on this macOS version."]
         )
+    }
+
+    @available(macOS 15.0, *)
+    private func prepareManagerWithRecovery(
+        progressHandler: ((Double) -> Void)?
+    ) async throws -> Qwen3AsrManager {
+        do {
+            return try await self.downloadAndLoadManager(progressHandler: progressHandler, progressValue: 0.75)
+        } catch {
+            DebugLogger.shared.warning(
+                "QwenAudioProvider: Initial model load failed (\(error)). Clearing Qwen cache and retrying once.",
+                source: "QwenAudioProvider"
+            )
+
+            let cacheDirectory = Qwen3AsrModels.defaultCacheDirectory()
+            if FileManager.default.fileExists(atPath: cacheDirectory.path) {
+                try? FileManager.default.removeItem(at: cacheDirectory)
+            }
+
+            progressHandler?(0.35)
+            do {
+                return try await self.downloadAndLoadManager(progressHandler: progressHandler, progressValue: 0.85)
+            } catch {
+                throw NSError(
+                    domain: "QwenAudioProvider",
+                    code: -5,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "Qwen model download is incomplete or corrupted. Cache was cleared and retry also failed: \(error.localizedDescription)"
+                    ]
+                )
+            }
+        }
+    }
+
+    @available(macOS 15.0, *)
+    private func downloadAndLoadManager(
+        progressHandler: ((Double) -> Void)?,
+        progressValue: Double
+    ) async throws -> Qwen3AsrManager {
+        let modelDirectory = try await Qwen3AsrModels.download()
+        progressHandler?(progressValue)
+
+        let manager = Qwen3AsrManager()
+        try await manager.loadModels(from: modelDirectory)
+        return manager
     }
 
     func transcribe(_ samples: [Float]) async throws -> ASRTranscriptionResult {

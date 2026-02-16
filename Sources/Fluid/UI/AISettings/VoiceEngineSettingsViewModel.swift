@@ -138,6 +138,11 @@ final class VoiceEngineSettingsViewModel: ObservableObject {
                 DebugLogger.shared.info("Model download completed: \(model.displayName)", source: "VoiceEngineVM")
             } catch {
                 DebugLogger.shared.error("Failed to download model \(model.displayName): \(error)", source: "VoiceEngineVM")
+                await MainActor.run {
+                    self.asr.errorTitle = "Model Download Failed"
+                    self.asr.errorMessage = error.localizedDescription
+                    self.asr.showError = true
+                }
             }
 
             // Clear downloading state
