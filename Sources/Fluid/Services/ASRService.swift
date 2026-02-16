@@ -114,6 +114,7 @@ final class ASRService: ObservableObject {
     private var downloadProgressTask: Task<Void, Never>?
     private var hasCompletedFirstTranscription: Bool = false // Track if model has warmed up with first transcription
     private var lastBoostHitTerm: String?
+    private var hasPendingParakeetVocabularyReload: Bool = false
     private let downloadRegistry = ModelDownloadRegistry()
     private var vocabularyChangeObserver: NSObjectProtocol?
 
@@ -443,12 +444,29 @@ final class ASRService: ObservableObject {
         let model = SettingsStore.shared.selectedSpeechModel
         guard model == .parakeetTDT || model == .parakeetTDTv2 else { return }
         guard self.isRunning == false else {
+            self.hasPendingParakeetVocabularyReload = true
             DebugLogger.shared.info(
-                "ASRService: Vocabulary changed while recording; refresh will occur after model reset.",
+                "ASRService: Vocabulary changed while recording; queued reload for when recording stops.",
                 source: "ASRService"
             )
             return
         }
+        self.hasPendingParakeetVocabularyReload = false
+        self.resetTranscriptionProvider()
+    }
+
+    @MainActor
+    private func applyPendingParakeetVocabularyReloadIfNeeded() {
+        guard self.hasPendingParakeetVocabularyReload else { return }
+
+        self.hasPendingParakeetVocabularyReload = false
+        let model = SettingsStore.shared.selectedSpeechModel
+        guard model == .parakeetTDT || model == .parakeetTDTv2 else { return }
+
+        DebugLogger.shared.info(
+            "ASRService: Applying queued vocabulary reload after recording stopped.",
+            source: "ASRService"
+        )
         self.resetTranscriptionProvider()
     }
 
@@ -736,6 +754,7 @@ final class ASRService: ObservableObject {
             DebugLogger.shared.warning("⚠️ STOP() - not running, returning empty string", source: "ASRService")
             return ""
         }
+        defer { self.applyPendingParakeetVocabularyReloadIfNeeded() }
 
         // Capture media pause state before we reset it, for resuming at the end
         let shouldResumeMedia = SettingsStore.shared.pauseMediaDuringTranscription && self.didPauseMediaForThisSession
@@ -887,6 +906,7 @@ final class ASRService: ObservableObject {
 
     func stopWithoutTranscription() async {
         guard self.isRunning else { return }
+        defer { self.applyPendingParakeetVocabularyReloadIfNeeded() }
 
         // Capture media pause state before we reset it, for resuming at the end
         let shouldResumeMedia = SettingsStore.shared.pauseMediaDuringTranscription && self.didPauseMediaForThisSession

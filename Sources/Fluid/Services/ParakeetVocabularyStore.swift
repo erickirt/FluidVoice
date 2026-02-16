@@ -110,14 +110,7 @@ final class ParakeetVocabularyStore {
     /// Tuning parameters remain backend-managed defaults unless explicitly present in the file.
     func loadUserBoostTerms() throws -> [VocabularyConfig.Term] {
         let rawJSON = try self.loadRawJSON()
-        let parsed = (try? self.validateJSON(rawJSON)) ?? VocabularyConfig(
-            alpha: nil,
-            minCtcScore: nil,
-            minSimilarity: nil,
-            minCombinedConfidence: nil,
-            minTermLength: nil,
-            terms: []
-        )
+        let parsed = try self.validateJSON(rawJSON)
         return Self.normalizeUserTerms(parsed.terms, maxTerms: Defaults.maxTerms)
     }
 
@@ -299,7 +292,16 @@ extension ParakeetVocabularyStore {
         guard !resolved.terms.isEmpty else { return nil }
 
         let cappedLimit = min(maxTerms, Defaults.maxTerms)
-        let cappedTerms = Array(resolved.terms.prefix(cappedLimit))
+        // Keep high-priority terms when capping large vocab sets.
+        let prioritizedTerms = resolved.terms.sorted { lhs, rhs in
+            let lhsWeight = lhs.weight ?? 0
+            let rhsWeight = rhs.weight ?? 0
+            if lhsWeight == rhsWeight {
+                return lhs.text.localizedCaseInsensitiveCompare(rhs.text) == .orderedAscending
+            }
+            return lhsWeight > rhsWeight
+        }
+        let cappedTerms = Array(prioritizedTerms.prefix(cappedLimit))
         let ctcModels = try await CtcModels.downloadAndLoad(variant: .ctc110m)
         let ctcTokenizer = try await CtcTokenizer.load(from: CtcModels.defaultCacheDirectory(for: ctcModels.variant))
 
