@@ -113,6 +113,7 @@ final class ASRService: ObservableObject {
     private var downloadProgressTask: Task<Void, Never>?
     private var hasCompletedFirstTranscription: Bool = false // Track if model has warmed up with first transcription
     private let downloadRegistry = ModelDownloadRegistry()
+    private var vocabularyChangeObserver: NSObjectProtocol?
 
     // MARK: - Error Handling
 
@@ -133,6 +134,7 @@ final class ASRService: ObservableObject {
 
     /// Cached providers to avoid re-instantiation
     private var fluidAudioProvider: FluidAudioProvider?
+    private var qwenAudioProvider: QwenAudioProvider?
     private var whisperProvider: WhisperProvider?
     private var appleSpeechProvider: AppleSpeechProvider?
     /// Stored as Any? because @available cannot be applied to stored properties
@@ -160,6 +162,8 @@ final class ASRService: ObservableObject {
             return self.getAppleSpeechProvider()
         case .parakeetTDT, .parakeetTDTv2:
             return self.getFluidAudioProvider()
+        case .qwen3Asr:
+            return self.getQwenProvider()
         default:
             return self.getWhisperProvider()
         }
@@ -172,6 +176,16 @@ final class ASRService: ObservableObject {
         let provider = FluidAudioProvider()
         self.fluidAudioProvider = provider
         DebugLogger.shared.info("ASRService: Created FluidAudio provider", source: "ASRService")
+        return provider
+    }
+
+    private func getQwenProvider() -> QwenAudioProvider {
+        if let existing = qwenAudioProvider {
+            return existing
+        }
+        let provider = QwenAudioProvider()
+        self.qwenAudioProvider = provider
+        DebugLogger.shared.info("ASRService: Created Qwen3 provider", source: "ASRService")
         return provider
     }
 
@@ -231,8 +245,10 @@ final class ASRService: ObservableObject {
             return AppleSpeechProvider()
         case .parakeetTDT, .parakeetTDTv2:
             // Create a new provider configured for the specific model
-            let provider = FluidAudioProvider(modelOverride: model)
+            let provider = FluidAudioProvider(modelOverride: model, configureWordBoosting: false)
             return provider
+        case .qwen3Asr:
+            return QwenAudioProvider(modelOverride: model)
         default:
             // Whisper models - create provider with specific model override
             let provider = WhisperProvider(modelOverride: model)
@@ -303,6 +319,7 @@ final class ASRService: ObservableObject {
 
         // Reset cached providers to force re-initialization with new settings
         self.fluidAudioProvider = nil
+        self.qwenAudioProvider = nil
         self.whisperProvider = nil
         self.appleSpeechProvider = nil
         self._appleSpeechAnalyzerProvider = nil
@@ -397,6 +414,33 @@ final class ASRService: ObservableObject {
         // - micStatus = .notDetermined
         // - micPermissionGranted = false
         // - modelsExistOnDisk = false
+        self.vocabularyChangeObserver = NotificationCenter.default.addObserver(
+            forName: .parakeetVocabularyDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleParakeetVocabularyDidChange()
+        }
+    }
+
+    deinit {
+        if let observer = self.vocabularyChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    @MainActor
+    private func handleParakeetVocabularyDidChange() {
+        let model = SettingsStore.shared.selectedSpeechModel
+        guard model == .parakeetTDT || model == .parakeetTDTv2 else { return }
+        guard self.isRunning == false else {
+            DebugLogger.shared.info(
+                "ASRService: Vocabulary changed while recording; refresh will occur after model reset.",
+                source: "ASRService"
+            )
+            return
+        }
+        self.resetTranscriptionProvider()
     }
 
     /// Call this AFTER the app has finished launching to complete ASR initialization.
@@ -728,7 +772,7 @@ final class ASRService: ObservableObject {
             DebugLogger.shared.debug("📝 Starting transcription executor...", source: "ASRService")
             let result = try await transcriptionExecutor.run { [provider = self.transcriptionProvider] in
                 DebugLogger.shared.debug("📝 Inside transcription executor closure", source: "ASRService")
-                let transcriptionResult = try await provider.transcribe(pcm)
+                let transcriptionResult = try await provider.transcribeFinal(pcm)
                 DebugLogger.shared.debug("📝 Transcription provider returned", source: "ASRService")
                 return transcriptionResult
             }
@@ -2102,7 +2146,7 @@ final class ASRService: ObservableObject {
         do {
             DebugLogger.shared.debug("Streaming chunk starting transcription (samples: \(chunk.count)) using \(self.transcriptionProvider.name)", source: "ASRService")
             let result = try await transcriptionExecutor.run { [provider = self.transcriptionProvider] in
-                try await provider.transcribe(chunk)
+                try await provider.transcribeStreaming(chunk)
             }
 
             let duration = Date().timeIntervalSince(startTime)

@@ -59,6 +59,7 @@ enum SpeechProviderFilter: String, CaseIterable, Identifiable {
     case nvidia = "NVIDIA"
     case apple = "Apple"
     case openai = "OpenAI"
+    case qwen = "Qwen"
 
     var id: String { self.rawValue }
 }

@@ -37,6 +37,14 @@ protocol TranscriptionProvider {
     /// - Returns: Transcription result with text and confidence
     func transcribe(_ samples: [Float]) async throws -> ASRTranscriptionResult
 
+    /// Transcribe audio for live streaming updates.
+    /// Providers can use faster/lighter paths than final transcription when needed.
+    func transcribeStreaming(_ samples: [Float]) async throws -> ASRTranscriptionResult
+
+    /// Transcribe audio for final output when recording stops.
+    /// Providers can use higher-quality passes (e.g., vocabulary rescoring) here.
+    func transcribeFinal(_ samples: [Float]) async throws -> ASRTranscriptionResult
+
     /// Check if models exist on disk (without loading them)
     func modelsExistOnDisk() -> Bool
 
@@ -48,6 +56,12 @@ protocol TranscriptionProvider {
 extension TranscriptionProvider {
     func modelsExistOnDisk() -> Bool { return false }
     func clearCache() async throws {}
+    func transcribeStreaming(_ samples: [Float]) async throws -> ASRTranscriptionResult {
+        try await self.transcribe(samples)
+    }
+    func transcribeFinal(_ samples: [Float]) async throws -> ASRTranscriptionResult {
+        try await self.transcribe(samples)
+    }
 }
 
 // MARK: - Architecture Detection

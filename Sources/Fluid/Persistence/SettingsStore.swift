@@ -1950,6 +1950,7 @@ final class SettingsStore: ObservableObject {
 
         case parakeetTDT = "parakeet-tdt"
         case parakeetTDTv2 = "parakeet-tdt-v2"
+        case qwen3Asr = "qwen3-asr"
 
         // MARK: - Apple Native
 
@@ -1973,6 +1974,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return "Parakeet TDT v3 (Multilingual)"
             case .parakeetTDTv2: return "Parakeet TDT v2 (English Only)"
+            case .qwen3Asr: return "Qwen3 ASR (Beta)"
             case .appleSpeech: return "Apple ASR Legacy"
             case .appleSpeechAnalyzer: return "Apple Speech - macOS 26+"
             case .whisperTiny: return "Whisper Tiny"
@@ -1988,6 +1990,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return "25 Languages"
             case .parakeetTDTv2: return "English Only (Higher Accuracy)"
+            case .qwen3Asr: return "30 Languages"
             case .appleSpeech: return "System Languages"
             case .appleSpeechAnalyzer: return "EN, ES, FR, DE, IT, JA, KO, PT, ZH"
             case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
@@ -1999,6 +2002,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return "~500 MB"
             case .parakeetTDTv2: return "~500 MB"
+            case .qwen3Asr: return "~2.0 GB"
             case .appleSpeech: return "Built-in (Zero Download)"
             case .appleSpeechAnalyzer: return "Built-in"
             case .whisperTiny: return "~75 MB"
@@ -2012,14 +2016,14 @@ final class SettingsStore: ObservableObject {
 
         var requiresAppleSilicon: Bool {
             switch self {
-            case .parakeetTDT, .parakeetTDTv2: return true
+            case .parakeetTDT, .parakeetTDTv2, .qwen3Asr: return true
             default: return false
             }
         }
 
         var isWhisperModel: Bool {
             switch self {
-            case .parakeetTDT, .parakeetTDTv2, .appleSpeech, .appleSpeechAnalyzer: return false
+            case .parakeetTDT, .parakeetTDTv2, .qwen3Asr, .appleSpeech, .appleSpeechAnalyzer: return false
             default: return true
             }
         }
@@ -2060,6 +2064,14 @@ final class SettingsStore: ObservableObject {
             }
         }
 
+        /// Requires macOS 15 or later.
+        var requiresMacOS15: Bool {
+            switch self {
+            case .qwen3Asr: return true
+            default: return false
+            }
+        }
+
         /// Returns models available for the current Mac's architecture and OS
         static var availableModels: [SpeechModel] {
             allCases.filter { model in
@@ -2069,6 +2081,14 @@ final class SettingsStore: ObservableObject {
                 // Filter by Apple Silicon requirement
                 if model.requiresAppleSilicon, !CPUArchitecture.isAppleSilicon {
                     return false
+                }
+                // Filter by macOS 15 requirement
+                if model.requiresMacOS15 {
+                    if #available(macOS 15.0, *) {
+                        // continue
+                    } else {
+                        return false
+                    }
                 }
                 // Filter by macOS 26 requirement
                 if model.requiresMacOS26 {
@@ -2094,6 +2114,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return "Blazing Fast - Multilingual"
             case .parakeetTDTv2: return "Blazing Fast - English"
+            case .qwen3Asr: return "Qwen3 - Multilingual"
             case .appleSpeech: return "Apple ASR Legacy"
             case .appleSpeechAnalyzer: return "Apple Speech - macOS 26+"
             case .whisperTiny: return "Fast & Light"
@@ -2112,6 +2133,8 @@ final class SettingsStore: ObservableObject {
                 return "Fast multilingual transcription with 25 languages. Best for everyday use."
             case .parakeetTDTv2:
                 return "Optimized for English accuracy and fastest transcription."
+            case .qwen3Asr:
+                return "Qwen3 multilingual ASR via FluidAudio. Higher quality, heavier memory footprint."
             case .appleSpeech:
                 return "Built-in macOS speech recognition. No download required."
             case .appleSpeechAnalyzer:
@@ -2136,6 +2159,8 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT, .parakeetTDTv2:
                 return 4.0
+            case .qwen3Asr:
+                return 8.0
             case .appleSpeech, .appleSpeechAnalyzer:
                 return 2.0 // Built-in, minimal overhead
             case .whisperTiny:
@@ -2156,6 +2181,8 @@ final class SettingsStore: ObservableObject {
         /// Warning text for models with high memory requirements, nil if no warning needed
         var memoryWarning: String? {
             switch self {
+            case .qwen3Asr:
+                return "⚠️ Requires 8GB+ RAM. Best on newer Apple Silicon Macs."
             case .whisperLarge:
                 return "⚠️ Requires 10GB+ RAM. May crash on systems with limited memory."
             case .whisperLargeTurbo:
@@ -2172,6 +2199,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return 5
             case .parakeetTDTv2: return 5
+            case .qwen3Asr: return 3
             case .appleSpeech: return 4
             case .appleSpeechAnalyzer: return 4
             case .whisperTiny: return 4
@@ -2188,6 +2216,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return 5
             case .parakeetTDTv2: return 5
+            case .qwen3Asr: return 4
             case .appleSpeech: return 4
             case .appleSpeechAnalyzer: return 4
             case .whisperTiny: return 2
@@ -2204,6 +2233,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return 1.0
             case .parakeetTDTv2: return 1.0
+            case .qwen3Asr: return 0.45
             case .appleSpeech: return 0.60
             case .appleSpeechAnalyzer: return 0.85
             case .whisperTiny: return 0.90
@@ -2220,6 +2250,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return 0.95
             case .parakeetTDTv2: return 0.98
+            case .qwen3Asr: return 0.90
             case .appleSpeech: return 0.60
             case .appleSpeechAnalyzer: return 0.80
             case .whisperTiny: return 0.40
@@ -2236,6 +2267,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return "FluidVoice Pick"
             case .parakeetTDTv2: return "FluidVoice Pick"
+            case .qwen3Asr: return "Beta"
             case .appleSpeechAnalyzer: return "New"
             default: return nil
             }
@@ -2244,7 +2276,7 @@ final class SettingsStore: ObservableObject {
         /// Optimization level for Apple Silicon (for display)
         var appleSiliconOptimized: Bool {
             switch self {
-            case .parakeetTDT, .parakeetTDTv2, .appleSpeechAnalyzer:
+            case .parakeetTDT, .parakeetTDTv2, .qwen3Asr, .appleSpeechAnalyzer:
                 return true
             default:
                 return false
@@ -2255,7 +2287,7 @@ final class SettingsStore: ObservableObject {
         /// Large Whisper models are too slow for streaming, so they only do final transcription on stop.
         var supportsStreaming: Bool {
             switch self {
-            case .whisperMedium, .whisperLargeTurbo, .whisperLarge:
+            case .qwen3Asr, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
                 return false // Too slow for real-time chunk processing
             default:
                 return true // All other models support streaming
@@ -2267,6 +2299,7 @@ final class SettingsStore: ObservableObject {
             case nvidia = "NVIDIA"
             case apple = "Apple"
             case openai = "OpenAI"
+            case qwen = "Qwen"
         }
 
         /// Which provider this model belongs to
@@ -2276,6 +2309,8 @@ final class SettingsStore: ObservableObject {
                 return .nvidia
             case .appleSpeech, .appleSpeechAnalyzer:
                 return .apple
+            case .qwen3Asr:
+                return .qwen
             case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
                 return .openai
             }
@@ -2297,6 +2332,15 @@ final class SettingsStore: ObservableObject {
             case .parakeetTDTv2:
                 // Hardcoded path check for NVIDIA v2
                 return Self.parakeetCacheDirectory(version: "parakeet-tdt-0.6b-v2-coreml")
+            case .qwen3Asr:
+                #if canImport(FluidAudio)
+                if #available(macOS 15.0, *) {
+                    return Qwen3AsrModels.modelsExist(at: Qwen3AsrModels.defaultCacheDirectory())
+                }
+                return false
+                #else
+                return false
+                #endif
             default:
                 // Whisper models
                 guard let whisperFile = self.whisperModelFile else { return false }
@@ -2324,6 +2368,8 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT, .parakeetTDTv2:
                 return "NVIDIA"
+            case .qwen3Asr:
+                return "Qwen"
             case .appleSpeech, .appleSpeechAnalyzer:
                 return "Apple"
             case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
@@ -2344,6 +2390,8 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT, .parakeetTDTv2:
                 return "#76B900"
+            case .qwen3Asr:
+                return "#E67E22"
             case .appleSpeech, .appleSpeechAnalyzer:
                 return "#A2AAAD" // Apple Gray
             case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
@@ -2455,6 +2503,20 @@ final class SettingsStore: ObservableObject {
                 // Validate model is available on this architecture
                 if model.requiresAppleSilicon && !CPUArchitecture.isAppleSilicon {
                     return .whisperBase
+                }
+                if model.requiresMacOS15 {
+                    if #available(macOS 15.0, *) {
+                        // available
+                    } else {
+                        return .whisperBase
+                    }
+                }
+                if model.requiresMacOS26 {
+                    if #available(macOS 26.0, *) {
+                        // available
+                    } else {
+                        return .whisperBase
+                    }
                 }
                 return model
             }
