@@ -431,6 +431,36 @@ private struct EditableBoostTerm: Identifiable {
     let term: ParakeetVocabularyStore.VocabularyConfig.Term
 }
 
+private enum BoostStrengthPreset: String, CaseIterable, Identifiable {
+    case mild = "Mild"
+    case balanced = "Balanced"
+    case strong = "Strong"
+
+    var id: String { self.rawValue }
+
+    var weight: Float {
+        switch self {
+        case .mild: return 7.0
+        case .balanced: return 10.0
+        case .strong: return 13.0
+        }
+    }
+
+    var hint: String {
+        switch self {
+        case .mild: return "Safer default. Lower chance of over-correcting."
+        case .balanced: return "Recommended for most domain words."
+        case .strong: return "Use for names/terms that must win often."
+        }
+    }
+
+    static func nearest(for weight: Float) -> Self {
+        if weight < 8.5 { return .mild }
+        if weight > 11.5 { return .strong }
+        return .balanced
+    }
+}
+
 // MARK: - Boost Term Row
 
 struct BoostTermRow: View {
@@ -511,6 +541,7 @@ struct AddBoostTermSheet: View {
 
     @State private var termText = ""
     @State private var aliasesText = ""
+    @State private var strength: BoostStrengthPreset = .balanced
 
     private var normalizedTerm: String {
         self.termText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -546,13 +577,27 @@ struct AddBoostTermSheet: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Common Variations (optional)")
-                    .font(.subheadline.weight(.medium))
+                .font(.subheadline.weight(.medium))
                 Text("Comma-separated forms that are often misheard.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 TextField("fluid voice, fluid boys", text: self.$aliasesText)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { self.saveIfValid() }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Boost Strength")
+                    .font(.subheadline.weight(.medium))
+                Picker("Boost Strength", selection: self.$strength) {
+                    ForEach(BoostStrengthPreset.allCases) { preset in
+                        Text(preset.rawValue).tag(preset)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text(self.strength.hint)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
 
             if self.isDuplicate {
@@ -569,6 +614,12 @@ struct AddBoostTermSheet: View {
                     Text(self.normalizedTerm.isEmpty ? "term" : self.normalizedTerm)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(self.theme.palette.accent)
+                    Text("w \(String(format: "%.1f", self.strength.weight))")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(.quaternary))
+                        .foregroundStyle(.secondary)
                     ForEach(self.parseAliases(), id: \.self) { alias in
                         Text(alias)
                             .font(.caption)
@@ -617,7 +668,7 @@ struct AddBoostTermSheet: View {
         self.onSave(
             ParakeetVocabularyStore.VocabularyConfig.Term(
                 text: self.normalizedTerm,
-                weight: 12.0,
+                weight: self.strength.weight,
                 aliases: self.parseAliases()
             )
         )
@@ -637,6 +688,7 @@ struct EditBoostTermSheet: View {
 
     @State private var termText = ""
     @State private var aliasesText = ""
+    @State private var strength: BoostStrengthPreset = .balanced
 
     private var normalizedTerm: String {
         self.termText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -681,6 +733,20 @@ struct EditBoostTermSheet: View {
                     .onSubmit { self.saveIfValid() }
             }
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Boost Strength")
+                    .font(.subheadline.weight(.medium))
+                Picker("Boost Strength", selection: self.$strength) {
+                    ForEach(BoostStrengthPreset.allCases) { preset in
+                        Text(preset.rawValue).tag(preset)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text(self.strength.hint)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
             if self.isDuplicate {
                 Text("This term already exists.")
                     .font(.caption)
@@ -695,6 +761,12 @@ struct EditBoostTermSheet: View {
                     Text(self.normalizedTerm.isEmpty ? "term" : self.normalizedTerm)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(self.theme.palette.accent)
+                    Text("w \(String(format: "%.1f", self.strength.weight))")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(.quaternary))
+                        .foregroundStyle(.secondary)
                     ForEach(self.parseAliases(), id: \.self) { alias in
                         Text(alias)
                             .font(.caption)
@@ -732,6 +804,7 @@ struct EditBoostTermSheet: View {
         .onAppear {
             self.termText = self.term.text
             self.aliasesText = (self.term.aliases ?? []).joined(separator: ", ")
+            self.strength = BoostStrengthPreset.nearest(for: self.term.weight ?? BoostStrengthPreset.balanced.weight)
         }
     }
 
@@ -747,7 +820,7 @@ struct EditBoostTermSheet: View {
         self.onSave(
             ParakeetVocabularyStore.VocabularyConfig.Term(
                 text: self.normalizedTerm,
-                weight: self.term.weight ?? 12.0,
+                weight: self.strength.weight,
                 aliases: self.parseAliases()
             )
         )

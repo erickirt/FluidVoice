@@ -1,9 +1,9 @@
 {
-  "alpha": 3.2,
-  "minCtcScore": -2.4,
-  "minSimilarity": 0.68,
-  "minCombinedConfidence": 0.58,
-  "minTermLength": 2,
+  "alpha": 2.8,
+  "minCtcScore": -2.2,
+  "minSimilarity": 0.72,
+  "minCombinedConfidence": 0.64,
+  "minTermLength": 3,
   "terms": [
     {
       "text": "FluidVoice",

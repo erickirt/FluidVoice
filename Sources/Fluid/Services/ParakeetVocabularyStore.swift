@@ -47,11 +47,12 @@ final class ParakeetVocabularyStore {
     }
 
     private enum Defaults {
-        static let alpha: Float = 3.2
-        static let minCtcScore: Float = -2.4
-        static let minSimilarity: Float = 0.68
-        static let minCombinedConfidence: Float = 0.58
-        static let minTermLength: Int = 2
+        // Balanced defaults to reduce over-biasing while still improving rare terms.
+        static let alpha: Float = 2.8
+        static let minCtcScore: Float = -2.2
+        static let minSimilarity: Float = 0.72
+        static let minCombinedConfidence: Float = 0.64
+        static let minTermLength: Int = 3
         static let maxTerms: Int = 256
     }
 
@@ -120,24 +121,16 @@ final class ParakeetVocabularyStore {
         return Self.normalizeUserTerms(parsed.terms, maxTerms: Defaults.maxTerms)
     }
 
-    /// Saves user-managed boost terms while preserving or defaulting backend tuning parameters.
+    /// Saves user-managed boost terms while keeping tuning backend-controlled.
     func saveUserBoostTerms(_ terms: [VocabularyConfig.Term]) throws {
         let normalizedTerms = Self.normalizeUserTerms(terms, maxTerms: Defaults.maxTerms)
-        let existingRawJSON = (try? self.loadRawJSON()) ?? Self.defaultTemplateJSON()
-        let existing = (try? self.validateJSON(existingRawJSON)) ?? VocabularyConfig(
-            alpha: nil,
-            minCtcScore: nil,
-            minSimilarity: nil,
-            minCombinedConfidence: nil,
-            minTermLength: nil,
-            terms: []
-        )
+        // Keep tuning backend-controlled so users only manage words in UI.
         let config = VocabularyConfig(
-            alpha: existing.alpha ?? Defaults.alpha,
-            minCtcScore: existing.minCtcScore ?? Defaults.minCtcScore,
-            minSimilarity: existing.minSimilarity ?? Defaults.minSimilarity,
-            minCombinedConfidence: existing.minCombinedConfidence ?? Defaults.minCombinedConfidence,
-            minTermLength: existing.minTermLength ?? Defaults.minTermLength,
+            alpha: Defaults.alpha,
+            minCtcScore: Defaults.minCtcScore,
+            minSimilarity: Defaults.minSimilarity,
+            minCombinedConfidence: Defaults.minCombinedConfidence,
+            minTermLength: Defaults.minTermLength,
             terms: normalizedTerms
         )
 
@@ -171,11 +164,12 @@ final class ParakeetVocabularyStore {
         let mergedTerms = self.mergeAndNormalizeTerms(jsonTerms: parsed.terms, dictionaryEntries: SettingsStore.shared.customDictionaryEntries)
 
         return ResolvedConfig(
-            alpha: parsed.alpha ?? Defaults.alpha,
-            minCtcScore: parsed.minCtcScore ?? Defaults.minCtcScore,
-            minSimilarity: parsed.minSimilarity ?? Defaults.minSimilarity,
-            minCombinedConfidence: parsed.minCombinedConfidence ?? Defaults.minCombinedConfidence,
-            minTermLength: parsed.minTermLength ?? Defaults.minTermLength,
+            // Backend-tuned values: avoid stale/aggressive values from old JSON files.
+            alpha: Defaults.alpha,
+            minCtcScore: Defaults.minCtcScore,
+            minSimilarity: Defaults.minSimilarity,
+            minCombinedConfidence: Defaults.minCombinedConfidence,
+            minTermLength: Defaults.minTermLength,
             terms: mergedTerms
         )
     }
@@ -228,7 +222,7 @@ final class ParakeetVocabularyStore {
             let aliases = entry.triggers
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
-            upsert(VocabularyConfig.Term(text: replacement, weight: 10.0, aliases: aliases))
+            upsert(VocabularyConfig.Term(text: replacement, weight: 8.0, aliases: aliases))
         }
 
         return mergedByText.values.sorted { lhs, rhs in
@@ -274,11 +268,11 @@ final class ParakeetVocabularyStore {
     static func defaultTemplateJSON() -> String {
         """
         {
-          "alpha": 3.2,
-          "minCtcScore": -2.4,
-          "minSimilarity": 0.68,
-          "minCombinedConfidence": 0.58,
-          "minTermLength": 2,
+          "alpha": 2.8,
+          "minCtcScore": -2.2,
+          "minSimilarity": 0.72,
+          "minCombinedConfidence": 0.64,
+          "minTermLength": 3,
           "terms": [
             {
               "text": "FluidVoice",
