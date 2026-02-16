@@ -227,8 +227,8 @@ struct WelcomeView: View {
 
                             Spacer()
 
-                            Button("Open") {
-                                self.selectedSidebarItem = .rewriteMode
+                            Button("Open AI Settings") {
+                                self.selectedSidebarItem = .aiEnhancements
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.small)

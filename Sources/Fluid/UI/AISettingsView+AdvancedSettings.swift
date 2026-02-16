@@ -256,26 +256,14 @@ extension AIEnhancementSettingsView {
         let verified = self.editModeVerifiedProviders
 
         return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.fluidGreen)
-                Text("Verified Provider & Model for Edit Text")
+            HStack(alignment: .center, spacing: 12) {
+                Text("Edit mode model selection (optional)")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(self.theme.palette.secondaryText)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-
-            Toggle("Sync with AI Enhancement model", isOn: self.editModeLinkedToGlobalBinding)
-                .toggleStyle(.checkbox)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .onChange(of: self.settings.rewriteModeLinkedToGlobal) { _, linked in
-                    if linked {
-                        self.syncEditModeToGlobalSelection()
-                    } else {
-                        self.normalizeEditModeProviderSelection()
-                    }
-                }
 
             if verified.isEmpty {
                 HStack(spacing: 8) {
@@ -298,39 +286,55 @@ extension AIEnhancementSettingsView {
             } else {
                 let providerID = self.activeEditModeProviderID
                 let models = self.viewModel.models(for: providerID)
-                HStack(alignment: .center, spacing: 10) {
-                    Text("Provider")
+                HStack(alignment: .center, spacing: 12) {
+                    Toggle("Sync with AI Enhancement model", isOn: self.editModeLinkedToGlobalBinding)
+                        .toggleStyle(.checkbox)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-
-                    Picker("", selection: self.editModeProviderBinding) {
-                        ForEach(verified) { provider in
-                            Text(provider.name).tag(provider.id)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .onChange(of: self.settings.rewriteModeLinkedToGlobal) { _, linked in
+                            if linked {
+                                self.syncEditModeToGlobalSelection()
+                            } else {
+                                self.normalizeEditModeProviderSelection()
+                            }
                         }
+
+                    HStack(alignment: .center, spacing: 10) {
+                        Text("Provider")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Picker("", selection: self.editModeProviderBinding) {
+                            ForEach(verified) { provider in
+                                Text(provider.name).tag(provider.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .frame(width: 170)
+                        .disabled(self.settings.rewriteModeLinkedToGlobal)
+
+                        Text("Model")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        SearchableModelPicker(
+                            models: models,
+                            selectedModel: self.editModeModelBinding(for: providerID),
+                            onRefresh: { await self.viewModel.fetchModels(for: providerID) },
+                            isRefreshing: self.viewModel.refreshingProviderID == providerID,
+                            refreshEnabled: !self.settings.rewriteModeLinkedToGlobal && self.canFetchModels(for: providerID),
+                            selectionEnabled: !self.settings.rewriteModeLinkedToGlobal && !models.isEmpty,
+                            controlWidth: 190,
+                            controlHeight: 28
+                        )
+                        .disabled(self.settings.rewriteModeLinkedToGlobal)
                     }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .frame(width: 170)
-                    .disabled(self.settings.rewriteModeLinkedToGlobal)
-
-                    Text("Model")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    SearchableModelPicker(
-                        models: models,
-                        selectedModel: self.editModeModelBinding(for: providerID),
-                        onRefresh: { await self.viewModel.fetchModels(for: providerID) },
-                        isRefreshing: self.viewModel.refreshingProviderID == providerID,
-                        refreshEnabled: !self.settings.rewriteModeLinkedToGlobal && self.canFetchModels(for: providerID),
-                        selectionEnabled: !self.settings.rewriteModeLinkedToGlobal && !models.isEmpty,
-                        controlWidth: 190,
-                        controlHeight: 28
-                    )
-                    .disabled(self.settings.rewriteModeLinkedToGlobal)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .opacity(self.settings.rewriteModeLinkedToGlobal ? 0.65 : 1)
                 }
                 .padding(10)
-                .opacity(self.settings.rewriteModeLinkedToGlobal ? 0.65 : 1)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(self.theme.palette.cardBackground.opacity(0.45))
@@ -345,6 +349,9 @@ extension AIEnhancementSettingsView {
             }
         }
         .padding(.horizontal, 2)
+        .onAppear {
+            self.ensureDefaultEditModeSyncState()
+        }
     }
 
     private var editModeVerifiedProviders: [AIEnhancementSettingsViewModel.ProviderItemData] {
@@ -445,6 +452,14 @@ extension AIEnhancementSettingsView {
             ?? self.settings.selectedModel
             ?? self.viewModel.models(for: providerID).first
         self.settings.rewriteModeSelectedModel = model
+    }
+
+    private func ensureDefaultEditModeSyncState() {
+        // If no persisted value exists yet, default Sync to ON.
+        if UserDefaults.standard.object(forKey: "RewriteModeLinkedToGlobal") == nil {
+            self.settings.rewriteModeLinkedToGlobal = true
+            self.syncEditModeToGlobalSelection()
+        }
     }
 
     private func canFetchModels(for providerID: String) -> Bool {
