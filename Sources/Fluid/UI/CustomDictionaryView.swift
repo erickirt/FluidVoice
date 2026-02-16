@@ -18,10 +18,10 @@ struct CustomDictionaryView: View {
     @State private var editingBoostTerm: EditableBoostTerm?
 
     // Collapsible section states
-    @State private var isOfflineSectionExpanded = true
-    @State private var isAISectionExpanded = false
+    @State private var isOfflineSectionExpanded = false
+    @State private var isAISectionExpanded = true
 
-    @State private var boostStatusMessage = "Add boosted terms for Parakeet recognition."
+    @State private var boostStatusMessage = "Add custom words for better Parakeet recognition."
     @State private var boostHasError = false
 
     var body: some View {
@@ -29,11 +29,11 @@ struct CustomDictionaryView: View {
             VStack(alignment: .leading, spacing: 16) {
                 self.pageHeader
 
-                // Section 1: Offline/Instant Replacement
-                self.offlineReplacementSection
-
-                // Section 2: AI Post-Processing (Coming Soon)
+                // Section 1: Custom Words (Parakeet)
                 self.aiPostProcessingSection
+
+                // Section 2: Instant Replacement
+                self.offlineReplacementSection
             }
             .padding(20)
         }
@@ -88,13 +88,13 @@ struct CustomDictionaryView: View {
                     .fontWeight(.semibold)
             }
 
-            Text("Improve transcription accuracy by defining word replacements. Choose between instant offline replacement or AI-powered context-aware corrections.")
+            Text("Improve transcription accuracy with Custom Words for names and product terms, plus Instant Replacement for simple find-and-replace.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
     }
 
-    // MARK: - Section 1: Offline Replacement
+    // MARK: - Section 2: Offline Replacement
 
     private var offlineReplacementSection: some View {
         ThemedCard(hoverEffect: false) {
@@ -228,7 +228,7 @@ struct CustomDictionaryView: View {
         }
     }
 
-    // MARK: - Section 2: Parakeet Word Boosting
+    // MARK: - Section 1: Custom Words (Parakeet)
 
     private var aiPostProcessingSection: some View {
         ThemedCard(hoverEffect: false) {
@@ -245,10 +245,10 @@ struct CustomDictionaryView: View {
                             .foregroundStyle(.secondary)
                             .frame(width: 16)
 
-                        Text("Parakeet Word Boosting")
+                        Text("Custom Words (Parakeet)")
                             .font(.headline)
 
-                        Text("WORD BOOST")
+                        Text("PARAKEET")
                             .font(.caption2.weight(.semibold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -283,11 +283,15 @@ struct CustomDictionaryView: View {
                         .padding(.vertical, 12)
 
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Add important words and phrases in a normal form. No JSON editing required.")
+                        Text("Add names, product words, and uncommon terms in a simple form.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
-                        Text("Instant Replacement entries are auto-merged into boosting, so you can configure either section.")
+                        Text("Words from Instant Replacement are also used here automatically.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+
+                        Text("Applies when using a Parakeet voice engine.")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
 
@@ -296,7 +300,7 @@ struct CustomDictionaryView: View {
                                 Image(systemName: "waveform.and.magnifyingglass")
                                     .font(.system(size: 28))
                                     .foregroundStyle(.tertiary)
-                                Text("No boosted terms yet")
+                                Text("No custom words yet")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                                 Button {
@@ -304,7 +308,7 @@ struct CustomDictionaryView: View {
                                 } label: {
                                     HStack(spacing: 4) {
                                         Image(systemName: "plus")
-                                        Text("Add Boosted Term")
+                                        Text("Add Custom Word")
                                     }
                                 }
                                 .buttonStyle(.borderedProminent)
@@ -332,7 +336,7 @@ struct CustomDictionaryView: View {
                                 Button {
                                     self.showAddBoostSheet = true
                                 } label: {
-                                    Label("Add Term", systemImage: "plus")
+                                    Label("Add Word", systemImage: "plus")
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .tint(self.theme.palette.accent)
@@ -374,11 +378,11 @@ struct CustomDictionaryView: View {
     private func loadBoostTerms() {
         do {
             self.boostTerms = try ParakeetVocabularyStore.shared.loadUserBoostTerms()
-            self.boostStatusMessage = "Loaded \(self.boostTerms.count) boosted terms."
+            self.boostStatusMessage = "Loaded \(self.boostTerms.count) custom words."
             self.boostHasError = false
         } catch {
             self.boostTerms = []
-            self.boostStatusMessage = "Failed to load boosted terms: \(error.localizedDescription)"
+            self.boostStatusMessage = "Couldn't load custom words: \(error.localizedDescription)"
             self.boostHasError = true
         }
     }
@@ -386,10 +390,10 @@ struct CustomDictionaryView: View {
     private func saveBoostTerms() {
         do {
             try ParakeetVocabularyStore.shared.saveUserBoostTerms(self.boostTerms)
-            self.boostStatusMessage = "Saved \(self.boostTerms.count) boosted terms."
+            self.boostStatusMessage = "Saved \(self.boostTerms.count) custom words."
             self.boostHasError = false
         } catch {
-            self.boostStatusMessage = "Failed to save boosted terms: \(error.localizedDescription)"
+            self.boostStatusMessage = "Couldn't save custom words: \(error.localizedDescription)"
             self.boostHasError = true
         }
     }
@@ -448,9 +452,9 @@ private enum BoostStrengthPreset: String, CaseIterable, Identifiable {
 
     var hint: String {
         switch self {
-        case .mild: return "Safer default. Lower chance of over-correcting."
-        case .balanced: return "Recommended for most domain words."
-        case .strong: return "Use for names/terms that must win often."
+        case .mild: return "Gentle nudge with lower chance of accidental corrections."
+        case .balanced: return "Best default for most names and product terms."
+        case .strong: return "Use when this word should win more often in noisy audio."
         }
     }
 
@@ -497,7 +501,7 @@ struct BoostTermRow: View {
             Spacer()
 
             if let weight = self.term.weight {
-                Text("w \(String(format: "%.1f", weight))")
+                Text("\(BoostStrengthPreset.nearest(for: weight).rawValue) priority")
                     .font(.caption2.weight(.semibold))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
@@ -558,7 +562,7 @@ struct AddBoostTermSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Add Boosted Term")
+                Text("Add Custom Word")
                     .font(.headline)
                 Spacer()
                 Button("Cancel") { self.dismiss() }
@@ -587,9 +591,9 @@ struct AddBoostTermSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Boost Strength")
+                Text("Word Priority")
                     .font(.subheadline.weight(.medium))
-                Picker("Boost Strength", selection: self.$strength) {
+                Picker("Word Priority", selection: self.$strength) {
                     ForEach(BoostStrengthPreset.allCases) { preset in
                         Text(preset.rawValue).tag(preset)
                     }
@@ -614,7 +618,7 @@ struct AddBoostTermSheet: View {
                     Text(self.normalizedTerm.isEmpty ? "term" : self.normalizedTerm)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(self.theme.palette.accent)
-                    Text("w \(String(format: "%.1f", self.strength.weight))")
+                    Text("\(self.strength.rawValue) priority")
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
@@ -644,7 +648,7 @@ struct AddBoostTermSheet: View {
 
             HStack {
                 Spacer()
-                Button("Add Term") { self.saveIfValid() }
+                Button("Add Word") { self.saveIfValid() }
                     .buttonStyle(.borderedProminent)
                     .tint(self.theme.palette.accent)
                     .disabled(!self.canSave)
@@ -705,7 +709,7 @@ struct EditBoostTermSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Edit Boosted Term")
+                Text("Edit Custom Word")
                     .font(.headline)
                 Spacer()
                 Button("Cancel") { self.dismiss() }
@@ -734,9 +738,9 @@ struct EditBoostTermSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Boost Strength")
+                Text("Word Priority")
                     .font(.subheadline.weight(.medium))
-                Picker("Boost Strength", selection: self.$strength) {
+                Picker("Word Priority", selection: self.$strength) {
                     ForEach(BoostStrengthPreset.allCases) { preset in
                         Text(preset.rawValue).tag(preset)
                     }
@@ -761,7 +765,7 @@ struct EditBoostTermSheet: View {
                     Text(self.normalizedTerm.isEmpty ? "term" : self.normalizedTerm)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(self.theme.palette.accent)
-                    Text("w \(String(format: "%.1f", self.strength.weight))")
+                    Text("\(self.strength.rawValue) priority")
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
