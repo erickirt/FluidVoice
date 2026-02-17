@@ -444,7 +444,7 @@ private enum BoostStrengthPreset: String, CaseIterable, Identifiable {
 
     var weight: Float {
         switch self {
-        case .mild: return 7.0
+        case .mild: return 5.0
         case .balanced: return 10.0
         case .strong: return 13.0
         }
@@ -452,7 +452,7 @@ private enum BoostStrengthPreset: String, CaseIterable, Identifiable {
 
     var hint: String {
         switch self {
-        case .mild: return "Gentle nudge with lower chance of accidental corrections."
+        case .mild: return "Very light nudge with minimal impact."
         case .balanced: return "Best default for most names and product terms."
         case .strong: return "Use when this word should win more often in noisy audio."
         }

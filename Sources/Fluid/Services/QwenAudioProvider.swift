@@ -1,5 +1,5 @@
 import Foundation
-#if arch(arm64)
+#if arch(arm64) && ENABLE_QWEN
 import FluidAudio
 
 /// TranscriptionProvider implementation for Qwen3-ASR via FluidAudio.

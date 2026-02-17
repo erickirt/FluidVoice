@@ -2352,7 +2352,7 @@ final class SettingsStore: ObservableObject {
                 // Hardcoded path check for NVIDIA v2
                 return Self.parakeetCacheDirectory(version: "parakeet-tdt-0.6b-v2-coreml")
             case .qwen3Asr:
-                #if canImport(FluidAudio)
+                #if canImport(FluidAudio) && ENABLE_QWEN
                 if #available(macOS 15.0, *) {
                     return Qwen3AsrModels.modelsExist(at: Qwen3AsrModels.defaultCacheDirectory())
                 }
