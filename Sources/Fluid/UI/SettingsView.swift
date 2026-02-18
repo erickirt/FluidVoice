@@ -96,6 +96,10 @@ struct SettingsView: View {
         )
     }
 
+    private var currentAppVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+    }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 16) {
@@ -120,14 +124,14 @@ struct SettingsView: View {
                             )
                             Divider().opacity(0.2)
 
-                            // Show in Dock
+                            // Hide from Dock & App Switcher
                             self.settingsToggleRow(
-                                title: "Show in Dock",
-                                description: "Display FluidVoice icon in the Dock",
+                                title: "Hide from Dock & App Switcher",
+                                description: "Keep FluidVoice in the menu bar only (hides Dock icon and Cmd+Tab entry)",
                                 footnote: "Note: May require app restart to take effect.",
                                 isOn: Binding(
-                                    get: { SettingsStore.shared.showInDock },
-                                    set: { SettingsStore.shared.showInDock = $0 }
+                                    get: { SettingsStore.shared.hideFromDockAndAppSwitcher },
+                                    set: { SettingsStore.shared.hideFromDockAndAppSwitcher = $0 }
                                 )
                             )
                             Divider().opacity(0.2)
@@ -245,6 +249,10 @@ struct SettingsView: View {
                                         .font(.caption)
                                         .foregroundStyle(.tertiary)
                                 }
+
+                                Text("Current version: \(self.currentAppVersion)")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
                             }
 
                             // Update Buttons
@@ -866,10 +874,10 @@ struct SettingsView: View {
                     .padding(16)
                 }
 
-                // Visualization Sensitivity Card
+                // Overlay Settings Card
                 ThemedCard(style: .standard) {
                     VStack(alignment: .leading, spacing: 14) {
-                        Label("Visualization", systemImage: "waveform")
+                        Label("Overlay", systemImage: "waveform")
                             .font(.headline)
                             .foregroundStyle(.primary)
 

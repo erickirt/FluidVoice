@@ -1212,6 +1212,13 @@ final class SettingsStore: ObservableObject {
         }
     }
 
+    /// Issue #162 wording: hide app from Dock and Cmd+Tab when enabled.
+    /// Backed by existing `showInDock` storage to keep this change minimal.
+    var hideFromDockAndAppSwitcher: Bool {
+        get { !self.showInDock }
+        set { self.showInDock = !newValue }
+    }
+
     var autoUpdateCheckEnabled: Bool {
         get {
             let value = self.defaults.object(forKey: Keys.autoUpdateCheckEnabled)

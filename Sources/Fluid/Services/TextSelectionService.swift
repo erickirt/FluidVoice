@@ -99,8 +99,10 @@ final class TextSelectionService {
             return nil
         }
 
+        let axValue = unsafeBitCast(axRange, to: AXValue.self)
+
         var range = CFRange()
-        let gotRange = AXValueGetValue(axRange as! AXValue, .cfRange, &range)
+        let gotRange = AXValueGetValue(axValue, .cfRange, &range)
         guard gotRange else {
             self.diag("AXValueGetValue(.cfRange) failed")
             return nil
