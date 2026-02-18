@@ -551,7 +551,7 @@ final class MenuBarManager: ObservableObject {
         let first = NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
         let index = response.rawValue - first
 
-        if index >= 0 && index < options.count {
+        if index >= 0, index < options.count {
             NSWorkspace.shared.open(options[index].url)
             return
         }

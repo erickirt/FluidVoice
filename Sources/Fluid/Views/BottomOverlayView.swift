@@ -353,7 +353,7 @@ final class BottomOverlayPromptMenuController {
         guard self.menuWindow?.isVisible == true else { return }
         let insideMenu = self.menuWindow?.frame.contains(screenPoint) ?? false
         let insideSelector = self.selectorFrameInScreen.contains(screenPoint)
-        if !insideMenu && !insideSelector {
+        if !insideMenu, !insideSelector {
             self.hide()
         }
     }
@@ -630,7 +630,7 @@ final class BottomOverlayModeMenuController {
         guard self.menuWindow?.isVisible == true else { return }
         let insideMenu = self.menuWindow?.frame.contains(screenPoint) ?? false
         let insideSelector = self.selectorFrameInScreen.contains(screenPoint)
-        if !insideMenu && !insideSelector {
+        if !insideMenu, !insideSelector {
             self.hide()
         }
     }
@@ -894,7 +894,7 @@ final class BottomOverlayActionsMenuController {
         guard self.menuWindow?.isVisible == true else { return }
         let insideMenu = self.menuWindow?.frame.contains(screenPoint) ?? false
         let insideSelector = self.selectorFrameInScreen.contains(screenPoint)
-        if !insideMenu && !insideSelector {
+        if !insideMenu, !insideSelector {
             self.hide()
         }
     }
@@ -1319,7 +1319,6 @@ private struct BottomOverlayPromptMenuView: View {
             if let pid { _ = TypingService.activateApp(pid: pid) }
         }
     }
-
 }
 
 private struct BottomOverlayActionsMenuView: View {
@@ -1964,22 +1963,22 @@ struct BottomOverlayView: View {
                 }
                 .allowsHitTesting(false)
             )
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            self.isHoveringModeChip = hovering && !self.contentState.isProcessing
-        }
-        .onTapGesture {
-            guard self.layout.showsTopControls, !self.contentState.isProcessing else { return }
-            self.closePromptMenu()
-            self.closeActionsMenu()
-            BottomOverlayModeMenuController.shared.updateAnchor(
-                selectorFrameInScreen: self.modeSelectorFrameInScreen,
-                parentWindow: self.modeSelectorWindow,
-                maxWidth: self.promptSelectorMaxWidth,
-                menuGap: self.promptMenuGap
-            )
-            BottomOverlayModeMenuController.shared.toggleFromTap()
-        }
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                self.isHoveringModeChip = hovering && !self.contentState.isProcessing
+            }
+            .onTapGesture {
+                guard self.layout.showsTopControls, !self.contentState.isProcessing else { return }
+                self.closePromptMenu()
+                self.closeActionsMenu()
+                BottomOverlayModeMenuController.shared.updateAnchor(
+                    selectorFrameInScreen: self.modeSelectorFrameInScreen,
+                    parentWindow: self.modeSelectorWindow,
+                    maxWidth: self.promptSelectorMaxWidth,
+                    menuGap: self.promptMenuGap
+                )
+                BottomOverlayModeMenuController.shared.toggleFromTap()
+            }
     }
 
     private var promptSelectorTrigger: some View {
@@ -2308,7 +2307,8 @@ struct BottomOverlayView: View {
                     // Target app icon (the app where text will be typed)
                     let appIcon = self.contentState.targetAppIcon ?? self.activeAppMonitor.activeAppIcon
                     if appIcon != nil || !self.appServices.asr.isAsrReady &&
-                        (self.appServices.asr.isLoadingModel || self.appServices.asr.isDownloadingModel) {
+                        (self.appServices.asr.isLoadingModel || self.appServices.asr.isDownloadingModel)
+                    {
                         let showModelLoading = !self.appServices.asr.isAsrReady &&
                             (self.appServices.asr.isLoadingModel || self.appServices.asr.isDownloadingModel)
                         VStack(spacing: 2) {
@@ -2351,7 +2351,7 @@ struct BottomOverlayView: View {
                         }
                     }
                 }
-                }
+            }
             .padding(.horizontal, self.layout.hPadding)
             .padding(.vertical, self.layout.vPadding)
             .frame(maxWidth: .infinity, alignment: .center)

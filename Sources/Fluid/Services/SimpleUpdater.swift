@@ -123,10 +123,16 @@ final class SimpleUpdater {
                     $0.name.lowercased().hasSuffix(".zip")
             }
             let fallbackTagURL = URL(string: "https://github.com/\(owner)/\(repo)/releases/tag/\(release.tag_name)")
-            let url = zipAsset?.browser_download_url ?? release.html_url ?? fallbackTagURL ?? URL(string: "https://github.com/\(owner)/\(repo)/releases")!
+            let fallbackReleasesURL = URL(string: "https://github.com/\(owner)/\(repo)/releases")
+            let url = zipAsset?.browser_download_url ??
+                release.html_url ??
+                fallbackTagURL ??
+                fallbackReleasesURL ??
+                URL(fileURLWithPath: "/")
             return ReleaseBuildOption(version: release.tag_name, url: url)
         }
     }
+
     // Allowed Apple Developer Team IDs for code-sign validation
     // Configured per your request; restrict to your actual Team ID only.
     private let allowedTeamIDs: Set<String> = [

@@ -19,12 +19,14 @@ final class RewriteModeService: ObservableObject {
     private var forcePromptTraceToConsole: Bool {
         ProcessInfo.processInfo.environment["FLUID_PROMPT_TRACE"] == "1"
     }
+
     private var diagnosticsEnabled: Bool {
         if ProcessInfo.processInfo.environment["FLUID_REWRITE_DIAGNOSTICS"] == "1" {
             return true
         }
         return UserDefaults.standard.bool(forKey: "RewriteModeDiagnosticsEnabled")
     }
+
     private var shouldTracePromptProcessing: Bool {
         if let explicit = UserDefaults.standard.object(forKey: "RewriteModePromptTraceEnabled") as? Bool {
             return explicit
@@ -274,7 +276,9 @@ final class RewriteModeService: ObservableObject {
             return settings.rewriteModeSelectedModel ?? "gpt-4.1"
         }()
         self.appendDiagnosticLog(
-            "LLM config | writeMode=\(isWriteMode) | linkedToGlobal=\(settings.rewriteModeLinkedToGlobal) | provider=\(providerID) | model=\(model) | profile=\(selectedPromptName) | contextChars=\(contextText.count) | contextInjected=\(!contextBlock.isEmpty)"
+            "LLM config | writeMode=\(isWriteMode) | linkedToGlobal=\(settings.rewriteModeLinkedToGlobal) | " +
+                "provider=\(providerID) | model=\(model) | profile=\(selectedPromptName) | " +
+                "contextChars=\(contextText.count) | contextInjected=\(!contextBlock.isEmpty)"
         )
         let apiKey = settings.getAPIKey(for: providerID) ?? ""
 

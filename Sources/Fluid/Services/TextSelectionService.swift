@@ -123,7 +123,8 @@ final class TextSelectionService {
         let nsText = fullText as NSString
         guard range.location >= 0,
               range.length > 0,
-              range.location + range.length <= nsText.length else {
+              range.location + range.length <= nsText.length
+        else {
             self.diag("Selected range out of bounds (textLen=\(nsText.length), location=\(range.location), length=\(range.length))")
             return nil
         }

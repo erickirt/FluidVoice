@@ -1,5 +1,5 @@
-import Foundation
 import Darwin
+import Foundation
 
 /// A lightweight file-backed logger that mirrors in-app debug logs to disk for diagnostics.
 final class FileLogger {
@@ -112,8 +112,8 @@ final class FileLogger {
         let build = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
         let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
         let pid = ProcessInfo.processInfo.processIdentifier
-        appendUnlocked(line: "[RUN] PID=\(pid) AppVersion=\(appVersion) Build=\(build) OS=\(osVersion)")
-        appendUnlocked(line: "[RUN] Processed by \(Bundle.main.bundleIdentifier ?? "unknown")")
+        self.appendUnlocked(line: "[RUN] PID=\(pid) AppVersion=\(appVersion) Build=\(build) OS=\(osVersion)")
+        self.appendUnlocked(line: "[RUN] Processed by \(Bundle.main.bundleIdentifier ?? "unknown")")
     }
 
     private func rotateIfNeeded(force: Bool) {
@@ -170,8 +170,8 @@ final class FileLogger {
         signal(SIGTRAP, fileLoggerSignalHandler)
     }
 
-    fileprivate static func writeCrashSignalLine(_ signalNumber: Int32) {
-        guard Self.crashFileDescriptor >= 0 else { return }
+    static func writeCrashSignalLine(_ signalNumber: Int32) {
+        guard self.crashFileDescriptor >= 0 else { return }
         let bytes: [UInt8]
         switch signalNumber {
         case SIGABRT: bytes = Self.sigAbrtLine
@@ -187,8 +187,8 @@ final class FileLogger {
         }
     }
 
-    fileprivate static func writeCrashLineDirect(_ line: String) {
-        guard Self.crashFileDescriptor >= 0 else { return }
+    static func writeCrashLineDirect(_ line: String) {
+        guard self.crashFileDescriptor >= 0 else { return }
         let message = line.hasSuffix("\n") ? line : "\(line)\n"
         message.withCString { ptr in
             _ = write(Self.crashFileDescriptor, ptr, strlen(ptr))
@@ -196,7 +196,7 @@ final class FileLogger {
     }
 }
 
-private func fileLoggerSignalHandler(_ signalNumber: Int32) -> Void {
+private func fileLoggerSignalHandler(_ signalNumber: Int32) {
     FileLogger.writeCrashSignalLine(signalNumber)
     signal(signalNumber, SIG_DFL)
     raise(signalNumber)

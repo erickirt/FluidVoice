@@ -227,7 +227,7 @@ final class SettingsStore: ObservableObject {
             self.id = try container.decode(String.self, forKey: .id)
             self.name = try container.decode(String.self, forKey: .name)
             self.prompt = try container.decode(String.self, forKey: .prompt)
-            self.mode = (try container.decodeIfPresent(PromptMode.self, forKey: .mode) ?? .dictate).normalized
+            self.mode = try (container.decodeIfPresent(PromptMode.self, forKey: .mode) ?? .dictate).normalized
             self.includeContext = try container.decodeIfPresent(Bool.self, forKey: .includeContext) ?? false
             self.createdAt = try container.decode(Date.self, forKey: .createdAt)
             self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
@@ -2134,12 +2134,8 @@ final class SettingsStore: ObservableObject {
                     return false
                 }
                 // Filter by macOS 15 requirement
-                if model.requiresMacOS15 {
-                    if #available(macOS 15.0, *) {
-                        // continue
-                    } else {
-                        return false
-                    }
+                if model.requiresMacOS15, #unavailable(macOS 15.0) {
+                    return false
                 }
                 // Filter by macOS 26 requirement
                 if model.requiresMacOS26 {
@@ -2478,37 +2474,6 @@ final class SettingsStore: ObservableObject {
         }
     }
 
-    /// Available Whisper model sizes
-    enum WhisperModelSize: String, CaseIterable, Identifiable {
-        case tiny = "ggml-tiny.bin"
-        case base = "ggml-base.bin"
-        case small = "ggml-small.bin"
-        case medium = "ggml-medium.bin"
-        case large = "ggml-large-v3.bin"
-
-        var id: String { rawValue }
-
-        var displayName: String {
-            switch self {
-            case .tiny: return "Tiny (~75 MB)"
-            case .base: return "Base (~142 MB)"
-            case .small: return "Small (~466 MB)"
-            case .medium: return "Medium (~1.5 GB)"
-            case .large: return "Large (~2.9 GB)"
-            }
-        }
-
-        var description: String {
-            switch self {
-            case .tiny: return "Fastest, lower accuracy"
-            case .base: return "Good balance of speed and accuracy"
-            case .small: return "Better accuracy, slower"
-            case .medium: return "High accuracy, requires more memory"
-            case .large: return "Best accuracy, large download"
-            }
-        }
-    }
-
     /// Selected transcription provider - defaults to "auto" which picks based on architecture
     var selectedTranscriptionProvider: TranscriptionProviderOption {
         get {
@@ -2540,7 +2505,42 @@ final class SettingsStore: ObservableObject {
             self.defaults.set(newValue.rawValue, forKey: Keys.whisperModelSize)
         }
     }
+}
 
+extension SettingsStore {
+    /// Available Whisper model sizes
+    enum WhisperModelSize: String, CaseIterable, Identifiable {
+        case tiny = "ggml-tiny.bin"
+        case base = "ggml-base.bin"
+        case small = "ggml-small.bin"
+        case medium = "ggml-medium.bin"
+        case large = "ggml-large-v3.bin"
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .tiny: return "Tiny (~75 MB)"
+            case .base: return "Base (~142 MB)"
+            case .small: return "Small (~466 MB)"
+            case .medium: return "Medium (~1.5 GB)"
+            case .large: return "Large (~2.9 GB)"
+            }
+        }
+
+        var description: String {
+            switch self {
+            case .tiny: return "Fastest, lower accuracy"
+            case .base: return "Good balance of speed and accuracy"
+            case .small: return "Better accuracy, slower"
+            case .medium: return "High accuracy, requires more memory"
+            case .large: return "Best accuracy, large download"
+            }
+        }
+    }
+}
+
+extension SettingsStore {
     // MARK: - Unified Speech Model Selection
 
     /// The selected speech recognition model.
@@ -2559,19 +2559,11 @@ final class SettingsStore: ObservableObject {
                 if model.requiresAppleSilicon && !CPUArchitecture.isAppleSilicon {
                     return .whisperBase
                 }
-                if model.requiresMacOS15 {
-                    if #available(macOS 15.0, *) {
-                        // available
-                    } else {
-                        return .whisperBase
-                    }
+                if model.requiresMacOS15, #unavailable(macOS 15.0) {
+                    return .whisperBase
                 }
-                if model.requiresMacOS26 {
-                    if #available(macOS 26.0, *) {
-                        // available
-                    } else {
-                        return .whisperBase
-                    }
+                if model.requiresMacOS26, #unavailable(macOS 26.0) {
+                    return .whisperBase
                 }
                 return model
             }

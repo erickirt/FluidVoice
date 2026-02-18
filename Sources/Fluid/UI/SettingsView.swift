@@ -1161,11 +1161,11 @@ struct SettingsView: View {
                     }
                 }
 
-            // CRITICAL FIX: Populate cached default device names after onAppear, not during view body evaluation.
-            // This avoids the CoreAudio/SwiftUI AttributeGraph race condition that causes EXC_BAD_ACCESS.
-            self.cachedDefaultInputName = AudioDevice.getDefaultInputDevice()?.name ?? ""
-            self.cachedDefaultOutputName = AudioDevice.getDefaultOutputDevice()?.name ?? ""
-            self.refreshRollbackState()
+                // CRITICAL FIX: Populate cached default device names after onAppear, not during view body evaluation.
+                // This avoids the CoreAudio/SwiftUI AttributeGraph race condition that causes EXC_BAD_ACCESS.
+                self.cachedDefaultInputName = AudioDevice.getDefaultInputDevice()?.name ?? ""
+                self.cachedDefaultOutputName = AudioDevice.getDefaultOutputDevice()?.name ?? ""
+                self.refreshRollbackState()
             }
         }
         .onChange(of: self.visualizerNoiseThreshold) { _, newValue in
@@ -1218,7 +1218,7 @@ struct SettingsView: View {
         let first = NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
         let index = response.rawValue - first
 
-        if index >= 0 && index < options.count {
+        if index >= 0, index < options.count {
             NSWorkspace.shared.open(options[index].url)
             return
         }

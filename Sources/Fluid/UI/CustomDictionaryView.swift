@@ -625,7 +625,7 @@ struct AddBoostTermSheet: View {
             ParakeetVocabularyStore.VocabularyConfig.Term(
                 text: self.normalizedTerm,
                 weight: self.strength.weight,
-                aliases: nil
+                aliases: []
             )
         )
         self.dismiss()

@@ -226,12 +226,10 @@ final class FluidAudioProvider: TranscriptionProvider {
 
         var hits: [String] = []
         hits.reserveCapacity(min(limit, 2))
-        for candidate in self.boostedTermLookup {
-            if normalizedText.contains(" \(candidate) ") {
-                hits.append(candidate)
-                if hits.count >= limit {
-                    break
-                }
+        for candidate in self.boostedTermLookup where normalizedText.contains(" \(candidate) ") {
+            hits.append(candidate)
+            if hits.count >= limit {
+                break
             }
         }
         return hits
@@ -241,12 +239,12 @@ final class FluidAudioProvider: TranscriptionProvider {
         var unique: Set<String> = []
         unique.reserveCapacity(terms.count * 2)
         for term in terms {
-            let normalized = normalizeForLookup(term.text)
+            let normalized = self.normalizeForLookup(term.text)
             if !normalized.isEmpty {
                 unique.insert(normalized)
             }
             for alias in term.aliases ?? [] {
-                let normalizedAlias = normalizeForLookup(alias)
+                let normalizedAlias = self.normalizeForLookup(alias)
                 if !normalizedAlias.isEmpty {
                     unique.insert(normalizedAlias)
                 }

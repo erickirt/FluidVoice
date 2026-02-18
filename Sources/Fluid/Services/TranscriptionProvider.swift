@@ -59,6 +59,7 @@ extension TranscriptionProvider {
     func transcribeStreaming(_ samples: [Float]) async throws -> ASRTranscriptionResult {
         try await self.transcribe(samples)
     }
+
     func transcribeFinal(_ samples: [Float]) async throws -> ASRTranscriptionResult {
         try await self.transcribe(samples)
     }

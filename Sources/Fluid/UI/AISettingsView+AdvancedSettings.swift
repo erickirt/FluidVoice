@@ -116,29 +116,29 @@ extension AIEnhancementSettingsView {
                     .foregroundStyle(isSelected ? tone : self.theme.palette.secondaryText.opacity(0.35))
                     .frame(width: 18, height: 18)
 
-                    Menu {
-                        Button("Edit Prompt") { onManage() }
-                        if mode == .edit {
-                            Divider()
-                            Text("Selected text context is added automatically when text is selected.")
-                        }
-                        if let onDelete {
-                            Divider()
-                            Button(role: .destructive, action: { onDelete() }) {
-                                Label("Delete Prompt", systemImage: "trash")
-                            }
-                        } else if let onResetDefault {
-                            Divider()
-                            Button("Reset to Built-in Default", role: .destructive) { onResetDefault() }
-                                .disabled(!canResetDefault)
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.system(size: 14, weight: .semibold))
-                            .frame(width: AISettingsLayout.controlHeight, height: AISettingsLayout.controlHeight)
+                Menu {
+                    Button("Edit Prompt") { onManage() }
+                    if mode == .edit {
+                        Divider()
+                        Text("Selected text context is added automatically when text is selected.")
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(self.theme.palette.secondaryText)
+                    if let onDelete {
+                        Divider()
+                        Button(role: .destructive, action: { onDelete() }) {
+                            Label("Delete Prompt", systemImage: "trash")
+                        }
+                    } else if let onResetDefault {
+                        Divider()
+                        Button("Reset to Built-in Default", role: .destructive) { onResetDefault() }
+                            .disabled(!canResetDefault)
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: AISettingsLayout.controlHeight, height: AISettingsLayout.controlHeight)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(self.theme.palette.secondaryText)
             }
         }
         .padding(12)
@@ -269,7 +269,7 @@ extension AIEnhancementSettingsView {
                 HStack(spacing: 8) {
                     Image(systemName: "info.circle")
                         .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondary)
                     Text("No verified providers yet. Verify a provider above to enable Edit Text model selection.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -611,114 +611,114 @@ extension AIEnhancementSettingsView {
 
             if self.viewModel.draftPromptMode == .dictate {
                 VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: "waveform")
-                        .foregroundStyle(self.theme.palette.accent)
-                    Text("Test")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                    Spacer()
-                }
-
-                let hotkeyDisplay = self.settings.hotkeyShortcut.displayString
-                let canTest = self.viewModel.isAIPostProcessingConfiguredForDictation()
-
-                Toggle(isOn: Binding(
-                    get: { self.promptTest.isActive },
-                    set: { enabled in
-                        if enabled {
-                            let combined = self.viewModel.combinedDraftPrompt(self.viewModel.draftPromptText, mode: self.viewModel.draftPromptMode)
-                            self.promptTest.activate(draftPromptText: combined)
-                        } else {
-                            self.promptTest.deactivate()
-                        }
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform")
+                            .foregroundStyle(self.theme.palette.accent)
+                        Text("Test")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        Spacer()
                     }
-                )) {
-                    Text("Enable Test Mode (Hotkey: \(hotkeyDisplay))")
-                        .font(.caption)
-                }
-                .toggleStyle(.switch)
-                .disabled(!canTest)
 
-                if !canTest {
-                    Text("Testing is disabled because AI post-processing is not configured.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                } else if self.promptTest.isActive {
-                    Text("Press the hotkey to start/stop recording. The transcription will be post-processed using your draft prompt and shown below (nothing will be typed into other apps).")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                    let hotkeyDisplay = self.settings.hotkeyShortcut.displayString
+                    let canTest = self.viewModel.isAIPostProcessingConfiguredForDictation()
 
-                if self.promptTest.isActive {
-                    if self.promptTest.isProcessing {
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.small)
-                            Text("Processing…")
-                                .font(.caption)
+                    Toggle(isOn: Binding(
+                        get: { self.promptTest.isActive },
+                        set: { enabled in
+                            if enabled {
+                                let combined = self.viewModel.combinedDraftPrompt(self.viewModel.draftPromptText, mode: self.viewModel.draftPromptMode)
+                                self.promptTest.activate(draftPromptText: combined)
+                            } else {
+                                self.promptTest.deactivate()
+                            }
+                        }
+                    )) {
+                        Text("Enable Test Mode (Hotkey: \(hotkeyDisplay))")
+                            .font(.caption)
+                    }
+                    .toggleStyle(.switch)
+                    .disabled(!canTest)
+
+                    if !canTest {
+                        Text("Testing is disabled because AI post-processing is not configured.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    } else if self.promptTest.isActive {
+                        Text("Press the hotkey to start/stop recording. The transcription will be post-processed using your draft prompt and shown below (nothing will be typed into other apps).")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if self.promptTest.isActive {
+                        if self.promptTest.isProcessing {
+                            HStack(spacing: 8) {
+                                ProgressView().controlSize(.small)
+                                Text("Processing…")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        if !self.promptTest.lastError.isEmpty {
+                            Text(self.promptTest.lastError)
+                                .font(.caption2)
+                                .foregroundStyle(.red)
+                                .textSelection(.enabled)
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Raw transcription")
+                                .font(.caption2)
                                 .foregroundStyle(.secondary)
+                            TextEditor(text: Binding(
+                                get: { self.promptTest.lastTranscriptionText },
+                                set: { _ in }
+                            ))
+                            .font(.system(.caption, design: .monospaced))
+                            .frame(minHeight: 70)
+                            .scrollContentBackground(.hidden)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(self.theme.palette.contentBackground.opacity(0.7))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .stroke(self.theme.palette.cardBorder.opacity(0.35), lineWidth: 1)
+                                    )
+                            )
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Post-processed output")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            TextEditor(text: Binding(
+                                get: { self.promptTest.lastOutputText },
+                                set: { _ in }
+                            ))
+                            .font(.system(.caption, design: .monospaced))
+                            .frame(minHeight: 110)
+                            .scrollContentBackground(.hidden)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(self.theme.palette.contentBackground.opacity(0.7))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .stroke(self.theme.palette.cardBorder.opacity(0.35), lineWidth: 1)
+                                    )
+                            )
                         }
                     }
-
-                    if !self.promptTest.lastError.isEmpty {
-                        Text(self.promptTest.lastError)
-                            .font(.caption2)
-                            .foregroundStyle(.red)
-                            .textSelection(.enabled)
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Raw transcription")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        TextEditor(text: Binding(
-                            get: { self.promptTest.lastTranscriptionText },
-                            set: { _ in }
-                        ))
-                        .font(.system(.caption, design: .monospaced))
-                        .frame(minHeight: 70)
-                        .scrollContentBackground(.hidden)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(self.theme.palette.contentBackground.opacity(0.7))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .stroke(self.theme.palette.cardBorder.opacity(0.35), lineWidth: 1)
-                                )
-                        )
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Post-processed output")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        TextEditor(text: Binding(
-                            get: { self.promptTest.lastOutputText },
-                            set: { _ in }
-                        ))
-                        .font(.system(.caption, design: .monospaced))
-                        .frame(minHeight: 110)
-                        .scrollContentBackground(.hidden)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(self.theme.palette.contentBackground.opacity(0.7))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .stroke(self.theme.palette.cardBorder.opacity(0.35), lineWidth: 1)
-                                )
-                        )
-                    }
                 }
-            }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(self.theme.palette.accent.opacity(0.06))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(self.theme.palette.cardBorder.opacity(0.5), lineWidth: 1)
-                    )
-            )
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(self.theme.palette.accent.opacity(0.06))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(self.theme.palette.cardBorder.opacity(0.5), lineWidth: 1)
+                        )
+                )
             } else if self.promptTest.isActive {
                 Text("Prompt test mode is available only for Dictate prompts.")
                     .font(.caption2)

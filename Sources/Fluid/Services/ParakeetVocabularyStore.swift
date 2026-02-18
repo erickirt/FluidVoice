@@ -12,7 +12,35 @@ final class ParakeetVocabularyStore {
         struct Term: Codable, Hashable, Sendable {
             let text: String
             let weight: Float?
-            let aliases: [String]?
+            let aliases: [String]
+
+            init(text: String, weight: Float?, aliases: [String] = []) {
+                self.text = text
+                self.weight = weight
+                self.aliases = aliases
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case text
+                case weight
+                case aliases
+            }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.text = try container.decode(String.self, forKey: .text)
+                self.weight = try container.decodeIfPresent(Float.self, forKey: .weight)
+                self.aliases = try container.decodeIfPresent([String].self, forKey: .aliases) ?? []
+            }
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(self.text, forKey: .text)
+                try container.encodeIfPresent(self.weight, forKey: .weight)
+                if !self.aliases.isEmpty {
+                    try container.encode(self.aliases, forKey: .aliases)
+                }
+            }
         }
 
         let alpha: Float?
@@ -191,13 +219,13 @@ final class ParakeetVocabularyStore {
         )
         var mergedByText: [String: VocabularyConfig.Term] = [:]
 
-        func normalizeAliases(_ aliases: [String]?, excluding text: String) -> [String]? {
-            let normalized = (aliases ?? [])
+        func normalizeAliases(_ aliases: [String], excluding text: String) -> [String] {
+            let normalized = aliases
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
                 .filter { $0.caseInsensitiveCompare(text) != .orderedSame }
             let deduped = Array(Set(normalized.map { $0.lowercased() })).sorted()
-            return deduped.isEmpty ? nil : deduped
+            return deduped
         }
 
         func upsert(_ term: VocabularyConfig.Term) {
@@ -206,12 +234,12 @@ final class ParakeetVocabularyStore {
             let key = normalizedText.lowercased()
 
             if let existing = mergedByText[key] {
-                let combinedAliases = Array(Set((existing.aliases ?? []) + (term.aliases ?? []))).sorted()
+                let combinedAliases = Array(Set(existing.aliases + term.aliases)).sorted()
                 let combinedWeight = max(existing.weight ?? 0, term.weight ?? 0)
                 mergedByText[key] = VocabularyConfig.Term(
                     text: existing.text,
                     weight: combinedWeight > 0 ? combinedWeight : nil,
-                    aliases: combinedAliases.isEmpty ? nil : combinedAliases
+                    aliases: combinedAliases
                 )
                 return
             }
@@ -259,7 +287,7 @@ final class ParakeetVocabularyStore {
             guard !seen.contains(key) else { continue }
             seen.insert(key)
 
-            let aliases = (term.aliases ?? [])
+            let aliases = term.aliases
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
                 .filter { $0.caseInsensitiveCompare(text) != .orderedSame }
@@ -269,7 +297,7 @@ final class ParakeetVocabularyStore {
                 VocabularyConfig.Term(
                     text: text,
                     weight: term.weight,
-                    aliases: dedupedAliases.isEmpty ? nil : dedupedAliases
+                    aliases: dedupedAliases
                 )
             )
 
