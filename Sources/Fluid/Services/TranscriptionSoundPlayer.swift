@@ -11,7 +11,8 @@ final class TranscriptionSoundPlayer {
 
     func playStartSound() {
         let selected = SettingsStore.shared.transcriptionStartSound
-        self.play(soundName: selected.soundFileName)
+        guard let soundName = selected.soundFileName else { return }
+        self.play(soundName: soundName)
     }
 
     private func play(soundName: String) {

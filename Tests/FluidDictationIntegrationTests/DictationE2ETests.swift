@@ -4,6 +4,42 @@ import XCTest
 @testable import FluidVoice_Debug
 
 final class DictationE2ETests: XCTestCase {
+    private let enableTranscriptionSoundsKey = "EnableTranscriptionSounds"
+    private let transcriptionStartSoundKey = "TranscriptionStartSound"
+
+    func testTranscriptionStartSound_noneOptionHasNoFile() {
+        XCTAssertEqual(SettingsStore.TranscriptionStartSound.none.displayName, "None")
+        XCTAssertNil(SettingsStore.TranscriptionStartSound.none.soundFileName)
+    }
+
+    func testTranscriptionStartSound_legacyDisabledToggleMigratesToNone() {
+        self.withRestoredDefaults(keys: [self.enableTranscriptionSoundsKey, self.transcriptionStartSoundKey]) {
+            let defaults = UserDefaults.standard
+            defaults.set(false, forKey: self.enableTranscriptionSoundsKey)
+            defaults.set(SettingsStore.TranscriptionStartSound.fluidSfx1.rawValue, forKey: self.transcriptionStartSoundKey)
+
+            let value = SettingsStore.shared.transcriptionStartSound
+
+            XCTAssertEqual(value, .none)
+            XCTAssertNil(defaults.object(forKey: self.enableTranscriptionSoundsKey))
+            XCTAssertEqual(defaults.string(forKey: self.transcriptionStartSoundKey), SettingsStore.TranscriptionStartSound.none.rawValue)
+        }
+    }
+
+    func testTranscriptionStartSound_legacyEnabledToggleKeepsSelectedSound() {
+        self.withRestoredDefaults(keys: [self.enableTranscriptionSoundsKey, self.transcriptionStartSoundKey]) {
+            let defaults = UserDefaults.standard
+            defaults.set(true, forKey: self.enableTranscriptionSoundsKey)
+            defaults.set(SettingsStore.TranscriptionStartSound.fluidSfx2.rawValue, forKey: self.transcriptionStartSoundKey)
+
+            let value = SettingsStore.shared.transcriptionStartSound
+
+            XCTAssertEqual(value, .fluidSfx2)
+            XCTAssertNil(defaults.object(forKey: self.enableTranscriptionSoundsKey))
+            XCTAssertEqual(defaults.string(forKey: self.transcriptionStartSoundKey), SettingsStore.TranscriptionStartSound.fluidSfx2.rawValue)
+        }
+    }
+
     func testDictationEndToEnd_whisperTiny_transcribesFixture() async throws {
         // Arrange
         SettingsStore.shared.shareAnonymousAnalytics = false
@@ -62,5 +98,27 @@ final class DictationE2ETests: XCTestCase {
             .joined(separator: " ")
 
         return collapsed
+    }
+
+    private func withRestoredDefaults(keys: [String], run: () -> Void) {
+        let defaults = UserDefaults.standard
+        var snapshot: [String: Any] = [:]
+        for key in keys {
+            if let value = defaults.object(forKey: key) {
+                snapshot[key] = value
+            }
+        }
+
+        defer {
+            for key in keys {
+                if let previous = snapshot[key] {
+                    defaults.set(previous, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
+        }
+
+        run()
     }
 }
