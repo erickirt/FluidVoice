@@ -5,16 +5,55 @@ import Foundation
 
 /// Result of a transcription operation
 struct TranscriptionResult: Identifiable, Sendable, Codable {
-    let id = UUID()
+    let id: UUID
     let text: String
     let confidence: Float
     let duration: TimeInterval
     let processingTime: TimeInterval
     let fileName: String
-    let timestamp: Date = .init()
+    let timestamp: Date
+
+    init(
+        id: UUID = UUID(),
+        text: String,
+        confidence: Float,
+        duration: TimeInterval,
+        processingTime: TimeInterval,
+        fileName: String,
+        timestamp: Date = Date()
+    ) {
+        self.id = id
+        self.text = text
+        self.confidence = confidence
+        self.duration = duration
+        self.processingTime = processingTime
+        self.fileName = fileName
+        self.timestamp = timestamp
+    }
 
     enum CodingKeys: String, CodingKey {
         case text, confidence, duration, processingTime, fileName, timestamp
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = UUID()
+        self.text = try c.decode(String.self, forKey: .text)
+        self.confidence = try c.decode(Float.self, forKey: .confidence)
+        self.duration = try c.decode(TimeInterval.self, forKey: .duration)
+        self.processingTime = try c.decode(TimeInterval.self, forKey: .processingTime)
+        self.fileName = try c.decode(String.self, forKey: .fileName)
+        self.timestamp = try c.decode(Date.self, forKey: .timestamp)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(text, forKey: .text)
+        try c.encode(confidence, forKey: .confidence)
+        try c.encode(duration, forKey: .duration)
+        try c.encode(processingTime, forKey: .processingTime)
+        try c.encode(fileName, forKey: .fileName)
+        try c.encode(timestamp, forKey: .timestamp)
     }
 }
 
@@ -258,6 +297,7 @@ final class MeetingTranscriptionService: ObservableObject {
             )
 
             self.result = result
+            FileTranscriptionHistoryStore.shared.addEntry(result)
             return result
 
         } catch let error as TranscriptionError {
