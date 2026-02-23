@@ -171,7 +171,7 @@ xcodebuild test -project Fluid.xcodeproj -scheme Fluid -destination 'platform=ma
 
 ## Privacy & Analytics
 
-FluidVoice is designed to be local-first, but it includes optional anonymous analytics.
+FluidVoice is designed to be local-first, but it includes optional anonymous analytics, solely to keep track of FV usage and future feature development.
 
 ### What this helps with
 - Feature usage patterns (for example dictation, command mode, and write mode)
@@ -185,10 +185,11 @@ FluidVoice is designed to be local-first, but it includes optional anonymous ana
 - High-level success/error outcomes
 
 ### What is not collected
-- Raw audio or transcribed text
+- Your voice, Raw audio or transcribed text
 - Selected text, prompts, or AI-generated responses
 - Terminal commands or outputs
 - Window titles, file names/paths, clipboard content, or typed content
+- or ANYTHING personal or private information. 
 
 ### How to disable
 Analytics are enabled by default. You can disable or re-enable them at any time from:
@@ -197,6 +198,7 @@ Analytics are enabled by default. You can disable or re-enable them at any time 
 
 ### Why this exists
 Anonymous telemetry helps us understand what breaks, where performance can be improved, and which features matter most without collecting personal content.
+This helps us continue building what users want and if we should even continue developing features for you. 
 
 ## License History
 
