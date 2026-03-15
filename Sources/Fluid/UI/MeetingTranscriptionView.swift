@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct MeetingTranscriptionView: View {
     let asrService: ASRService
     @StateObject private var transcriptionService: MeetingTranscriptionService
+    @ObservedObject private var fileHistoryStore = FileTranscriptionHistoryStore.shared
     @State private var selectedFileURL: URL?
     @Environment(\.theme) private var theme
 
@@ -14,6 +15,7 @@ struct MeetingTranscriptionView: View {
 
     @State private var showingFilePicker = false
     @State private var showingExportDialog = false
+    @State private var exportResult: TranscriptionResult?
     @State private var exportFormat: ExportFormat = .text
     @State private var showingCopyConfirmation = false
     @State private var isDropTargeted = false
@@ -75,6 +77,13 @@ struct MeetingTranscriptionView: View {
                     if let message = self.dropErrorMessage {
                         self.dropErrorCard(message: message)
                     }
+
+                    // Recent transcriptions (persisted history)
+                    if !self.fileHistoryStore.entries.isEmpty {
+                        Divider()
+                            .padding(.vertical, 8)
+                        self.recentTranscriptionsSection
+                    }
                 }
                 .padding(24)
             }
@@ -93,6 +102,24 @@ struct MeetingTranscriptionView: View {
                     .padding()
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
+        }
+        .fileExporter(
+            isPresented: self.$showingExportDialog,
+            document: TranscriptionDocument(
+                result: self.exportResult ?? TranscriptionResult(text: "", confidence: 0, duration: 0, processingTime: 0, fileName: "transcript"),
+                format: self.exportFormat,
+                service: self.transcriptionService
+            ),
+            contentType: self.exportFormat == .text ? .plainText : .json,
+            defaultFilename: "\((self.exportResult?.fileName).map { "\($0)_transcript" } ?? "transcript").\(self.exportFormat.fileExtension)"
+        ) { exportCompletion in
+            switch exportCompletion {
+            case .success:
+                DebugLogger.shared.info("File exported successfully", source: "MeetingTranscriptionView")
+            case let .failure(error):
+                DebugLogger.shared.error("Export failed: \(error)", source: "MeetingTranscriptionView")
+            }
+            self.exportResult = nil
         }
     }
 
@@ -277,6 +304,7 @@ struct MeetingTranscriptionView: View {
                     .help("Copy to clipboard")
 
                     Button(action: {
+                        self.exportResult = result
                         self.showingExportDialog = true
                     }) {
                         Image(systemName: "square.and.arrow.up")
@@ -315,23 +343,146 @@ struct MeetingTranscriptionView: View {
                         .stroke(self.theme.palette.cardBorder.opacity(0.45), lineWidth: 1)
                 )
         )
-        .fileExporter(
-            isPresented: self.$showingExportDialog,
-            document: TranscriptionDocument(
-                result: result,
-                format: self.exportFormat,
-                service: self.transcriptionService
-            ),
-            contentType: self.exportFormat == .text ? .plainText : .json,
-            defaultFilename: "\(result.fileName)_transcript.\(self.exportFormat.fileExtension)"
-        ) { result in
-            switch result {
-            case .success:
-                DebugLogger.shared.info("File exported successfully", source: "MeetingTranscriptionView")
-            case let .failure(error):
-                DebugLogger.shared.error("Export failed: \(error)", source: "MeetingTranscriptionView")
+    }
+
+    // MARK: - Recent Transcriptions Section
+
+    private var recentTranscriptionsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Recent transcriptions")
+                    .font(.headline)
+                Spacer()
+                if !self.fileHistoryStore.entries.isEmpty {
+                    Button("Clear all") {
+                        self.fileHistoryStore.clearAll()
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+                }
+            }
+
+            VStack(spacing: 8) {
+                ForEach(self.fileHistoryStore.entries) { entry in
+                    self.recentEntryRow(entry: entry)
+                }
+            }
+
+            if let entry = self.fileHistoryStore.selectedEntry {
+                self.historyDetailCard(entry: entry)
             }
         }
+    }
+
+    private func recentEntryRow(entry: FileTranscriptionEntry) -> some View {
+        let isSelected = self.fileHistoryStore.selectedEntryID == entry.id
+        return Button(action: {
+            self.fileHistoryStore.selectedEntryID = entry.id
+        }) {
+            HStack {
+                Image(systemName: "doc.text.fill")
+                    .font(.body)
+                    .foregroundColor(Color.fluidGreen)
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.fileName)
+                        .font(.system(size: 14, weight: .medium))
+                        .lineLimit(1)
+                    Text(entry.relativeTimeString)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(entry.previewText)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "chevron.right.circle.fill")
+                        .foregroundColor(Color.fluidGreen)
+                }
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(self.theme.palette.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(isSelected ? Color.fluidGreen.opacity(0.5) : self.theme.palette.cardBorder.opacity(0.3), lineWidth: isSelected ? 2 : 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func historyDetailCard(entry: FileTranscriptionEntry) -> some View {
+        let result = entry.toTranscriptionResult()
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("From history")
+                        .font(.headline)
+                    HStack(spacing: 16) {
+                        Label("\(String(format: "%.1f", entry.duration))s", systemImage: "clock")
+                        Label("\(String(format: "%.0f%%", entry.confidence * 100))", systemImage: "checkmark.circle")
+                        Label(entry.fullDateString, systemImage: "calendar")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+                Spacer()
+                HStack(spacing: 8) {
+                    Button(action: { self.copyToClipboard(entry.text) }) {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .help("Copy to clipboard")
+                    Button(action: {
+                        self.exportResult = result
+                        self.showingExportDialog = true
+                    }) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .help("Export transcription")
+                    Button(action: {
+                        self.fileHistoryStore.deleteEntry(id: entry.id)
+                    }) {
+                        Image(systemName: "trash")
+                    }
+                    .help("Remove from history")
+                }
+                .buttonStyle(.borderless)
+            }
+            Divider()
+            ScrollView {
+                Text(entry.text)
+                    .font(.body)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+            }
+            .frame(maxHeight: 300)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(self.theme.palette.contentBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(self.theme.palette.cardBorder.opacity(0.45), lineWidth: 1)
+                    )
+            )
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(self.theme.palette.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(self.theme.palette.cardBorder.opacity(0.45), lineWidth: 1)
+                )
+        )
     }
 
     // MARK: - Error Card
