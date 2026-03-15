@@ -2168,9 +2168,15 @@ struct ContentView: View {
     private func restoreFocusToRecordingTarget() async {
         guard let pid = NotchContentState.shared.recordingTargetPID else { return }
         let activated = TypingService.activateApp(pid: pid)
+        let focusedElementRestored = TypingService.restoreCapturedFocus(in: pid)
+        DebugLogger.shared.debug(
+            "Restore focus -> appActivated: \(activated), elementFocusRestored: \(focusedElementRestored), targetPID: \(pid)",
+            source: "ContentView"
+        )
         if activated {
-            // Small delay to allow window focus to settle before typing events fire.
-            try? await Task.sleep(nanoseconds: 80_000_000) // 80ms
+            // Small delay to allow focus to settle before typing events fire.
+            let settleNanos: UInt64 = focusedElementRestored ? 40_000_000 : 90_000_000
+            try? await Task.sleep(nanoseconds: settleNanos)
         }
     }
 
