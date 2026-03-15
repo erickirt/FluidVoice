@@ -183,10 +183,15 @@ final class TypingService {
         self.log("[TypingService] insertTextInstantly called with \(text.count) characters")
         self.log("[TypingService] Attempting to type text: \"\(text.prefix(50))\(text.count > 50 ? "..." : "")\"")
 
-        // Preferred: target a specific PID when provided (e.g., the app that was focused when recording started).
-        // Clipboard paste tends to be the most reliable option across native, web, and Electron apps.
+        // Preferred: behave like a user paste after the app has been restored.
+        // This tends to work better for custom web editors than posting Cmd+V to a PID.
         if let preferredTargetPID, preferredTargetPID > 0 {
-            self.log("[TypingService] Trying clipboard-to-PID insertion targeting preferred PID \(preferredTargetPID)")
+            self.log("[TypingService] Trying global clipboard insertion after restoring preferred PID \(preferredTargetPID)")
+            if self.insertTextViaClipboard(text) {
+                self.log("[TypingService] SUCCESS: Global clipboard insertion completed for preferred target")
+                return
+            }
+            self.log("[TypingService] Global clipboard insertion failed, trying clipboard-to-PID fallback")
             if self.insertTextViaClipboardToPid(text, targetPID: preferredTargetPID) {
                 self.log("[TypingService] SUCCESS: Clipboard-to-PID insertion completed")
                 return
