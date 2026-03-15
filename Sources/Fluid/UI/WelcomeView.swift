@@ -549,6 +549,37 @@ struct OnboardingFlowView: View {
 
     @State private var playgroundText: String = ""
     @State private var isPlaygroundRecording: Bool = false
+    @State private var preferredLanguageChoice: PreferredLanguageChoice = .englishOnly
+
+    private enum PreferredLanguageChoice: String, CaseIterable, Identifiable {
+        case englishOnly
+        case multipleLanguages
+        case other
+
+        var id: String { self.rawValue }
+
+        var title: String {
+            switch self {
+            case .englishOnly:
+                return "English only"
+            case .multipleLanguages:
+                return "Multiple languages"
+            case .other:
+                return "Other"
+            }
+        }
+
+        var subtitle: String {
+            switch self {
+            case .englishOnly:
+                return "Uses Parakeet TDT v2"
+            case .multipleLanguages:
+                return "Uses Parakeet TDT v3"
+            case .other:
+                return "Choose a different model manually"
+            }
+        }
+    }
 
     private enum Step: Int, CaseIterable {
         case voiceModel = 0
@@ -576,7 +607,7 @@ struct OnboardingFlowView: View {
             switch self {
             case .voiceModel:
                 return CPUArchitecture.isAppleSilicon
-                    ? "Recommended for your Mac: Parakeet TDT v3. Download it once to continue."
+                    ? "Choose the best voice model for how you speak. Download it once to continue."
                     : "Recommended for your Mac: Whisper. Download it once to continue."
             case .microphone:
                 return "Allow FluidVoice to capture audio from your microphone."
@@ -599,17 +630,33 @@ struct OnboardingFlowView: View {
     }
 
     private var recommendedOnboardingModel: SettingsStore.SpeechModel {
-        CPUArchitecture.isAppleSilicon ? .parakeetTDT : .whisperBase
+        if CPUArchitecture.isAppleSilicon {
+            switch self.preferredLanguageChoice {
+            case .englishOnly:
+                return .parakeetTDTv2
+            case .multipleLanguages, .other:
+                return .parakeetTDT
+            }
+        }
+        return .whisperBase
     }
 
     private var recommendedOnboardingModelDisplayName: String {
-        CPUArchitecture.isAppleSilicon ? "Parakeet TDT v3" : "Whisper"
+        self.recommendedOnboardingModel.displayName
     }
 
     private var recommendedModelReasonText: String {
-        CPUArchitecture.isAppleSilicon
-            ? "Best for Apple Silicon: highest speed and accuracy for daily dictation."
-            : "Best for Intel Macs: dependable Whisper quality with broad compatibility."
+        if CPUArchitecture.isAppleSilicon {
+            switch self.preferredLanguageChoice {
+            case .englishOnly:
+                return "Best if you mainly speak English. Lower complexity and tuned for English dictation."
+            case .multipleLanguages:
+                return "Best if you switch languages. Broader support with Parakeet TDT v3."
+            case .other:
+                return "Choose a different model below if neither of the default language paths fits."
+            }
+        }
+        return "Best for Intel Macs: dependable Whisper quality with broad compatibility."
     }
 
     private var onboardingModelOptions: [SettingsStore.SpeechModel] {
@@ -625,7 +672,29 @@ struct OnboardingFlowView: View {
     }
 
     private var onboardingAlternativeModels: [SettingsStore.SpeechModel] {
-        self.onboardingModelOptions.filter { $0 != self.recommendedOnboardingModel }
+        let filtered = self.onboardingModelOptions.filter { $0 != self.recommendedOnboardingModel }
+        guard self.preferredLanguageChoice == .other, self.shouldShowLanguageChoice else {
+            return filtered
+        }
+        return filtered.filter { model in
+            model != .parakeetTDT && model != .parakeetTDTv2
+        }
+    }
+
+    private var shouldShowLanguageChoice: Bool {
+        CPUArchitecture.isAppleSilicon
+    }
+
+    private var showsMappedRecommendedModel: Bool {
+        !self.shouldShowLanguageChoice || self.preferredLanguageChoice != .other
+    }
+
+    private var shouldShowAlternativeModels: Bool {
+        !self.shouldShowLanguageChoice || self.preferredLanguageChoice == .other
+    }
+
+    private var parakeetV3LanguageNames: String {
+        "Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Slovak, Slovenian, Spanish, Swedish, Russian, and Ukrainian"
     }
 
     private var isRecommendedModelSelected: Bool {
@@ -683,8 +752,6 @@ struct OnboardingFlowView: View {
         switch self.step {
         case .playground:
             return "Finish Setup"
-        case .aiEnhancement:
-            return "Continue to Playground"
         default:
             return "Continue"
         }
@@ -712,6 +779,7 @@ struct OnboardingFlowView: View {
             }
         }
         .onAppear {
+            self.syncPreferredLanguageChoiceWithSelectedModel()
             Task { @MainActor in
                 self.asr.micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
                 await self.asr.checkIfModelsExistAsync()
@@ -769,12 +837,32 @@ struct OnboardingFlowView: View {
             VStack(alignment: .leading, spacing: 16) {
                 ThemedCard(style: .standard) {
                     VStack(alignment: .leading, spacing: 14) {
+                        if self.shouldShowLanguageChoice {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Preferred language")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(self.theme.palette.primaryText)
+
+                                Text("Pick the path that matches how you usually speak. You can change models later.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+
+                                HStack(spacing: 10) {
+                                    ForEach(PreferredLanguageChoice.allCases) { option in
+                                        self.preferredLanguageOptionCard(for: option)
+                                    }
+                                }
+                            }
+
+                            Divider().padding(.vertical, 2)
+                        }
+
                         HStack(spacing: 10) {
                             Image(systemName: self.isVoiceModelReady ? "checkmark.circle.fill" : "cpu")
                                 .foregroundStyle(self.isVoiceModelReady ? Color.fluidGreen : self.theme.palette.accent)
 
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("Recommended for this Mac: \(self.recommendedOnboardingModelDisplayName)")
+                                Text(self.recommendedModelHeadline)
                                     .font(.body.weight(.semibold))
                                     .foregroundStyle(self.theme.palette.primaryText)
 
@@ -786,14 +874,22 @@ struct OnboardingFlowView: View {
                             Spacer()
                         }
 
-                        HStack(spacing: 10) {
-                            Label(self.recommendedOnboardingModel.downloadSize, systemImage: "internaldrive")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                        if self.showsMappedRecommendedModel {
+                            HStack(spacing: 10) {
+                                Label(self.recommendedOnboardingModel.downloadSize, systemImage: "internaldrive")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
 
-                            Text(self.recommendedOnboardingModel.languageSupport)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                Text(self.recommendedOnboardingModel.languageSupport)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            if self.recommendedOnboardingModel == .parakeetTDT {
+                                Text("Supported languages: \(self.parakeetV3LanguageNames)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
 
                         if self.isPreparingRecommendedModel {
@@ -849,21 +945,27 @@ struct OnboardingFlowView: View {
 
                             Spacer()
 
-                            Button(self.onboardingModelActionButtonTitle(for: self.recommendedOnboardingModel)) {
-                                self.prepareOnboardingModel(self.recommendedOnboardingModel)
+                            if self.preferredLanguageChoice == .other && self.shouldShowLanguageChoice {
+                                Text("Choose a model from the options below.")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Button(self.onboardingModelActionButtonTitle(for: self.recommendedOnboardingModel)) {
+                                    self.prepareOnboardingModel(self.recommendedOnboardingModel)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(self.theme.palette.accent)
+                                .disabled(self.asr.isRunning || self.isPreparingRecommendedModel || self.isRecommendedModelReady)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(self.theme.palette.accent)
-                            .disabled(self.asr.isRunning || self.isPreparingRecommendedModel || self.isRecommendedModelReady)
                         }
 
-                        if self.isVoiceModelReady && !self.isRecommendedModelSelected {
+                        if self.isVoiceModelReady && !self.isRecommendedModelSelected && self.preferredLanguageChoice != .other {
                             Text("A different model is already configured. You can continue, or switch to the recommended model.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
 
-                        if !self.onboardingAlternativeModels.isEmpty {
+                        if self.shouldShowAlternativeModels && !self.onboardingAlternativeModels.isEmpty {
                             Divider().padding(.vertical, 2)
 
                             Text("Other popular options")
@@ -1074,7 +1176,7 @@ struct OnboardingFlowView: View {
             Spacer()
 
             if self.step == .aiEnhancement {
-                Button("Skip for now") {
+                Button("Skip this step") {
                     self.markAISkipped()
                     self.goNext()
                 }
@@ -1132,16 +1234,13 @@ struct OnboardingFlowView: View {
         if isDownloaded {
             return isSelected ? "Load" : "Use"
         }
-        return isSelected ? "Download" : "Use & Download"
+        return "Use & Download"
     }
 
-    private func prepareOnboardingModel(_ model: SettingsStore.SpeechModel) {
+    private func prepareOnboardingModel(_ model: SettingsStore.SpeechModel, preserveManualChoice: Bool = false) {
         guard !self.asr.isRunning else { return }
 
-        if self.settings.selectedSpeechModel != model {
-            self.settings.selectedSpeechModel = model
-            self.asr.resetTranscriptionProvider()
-        }
+        self.selectOnboardingModel(model, preserveManualChoice: preserveManualChoice)
 
         Task { @MainActor in
             do {
@@ -1159,93 +1258,177 @@ struct OnboardingFlowView: View {
         let isPreparing = self.isPreparingOnboardingModel(model)
         let isReady = self.isOnboardingModelReady(model)
 
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
+        return Button {
+            self.selectOnboardingModel(model, preserveManualChoice: true)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(model.displayName)
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(self.theme.palette.primaryText)
 
-                        if isSelected {
-                            Text("Selected")
-                                .font(.caption2.weight(.semibold))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(self.theme.palette.accent.opacity(0.18)))
-                                .foregroundStyle(self.theme.palette.accent)
+                        Text(model.cardDescription)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+
+                        HStack(spacing: 10) {
+                            Label(model.downloadSize, systemImage: "internaldrive")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(model.languageSupport)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if model == .parakeetTDT {
+                            Text("Supported languages: \(self.parakeetV3LanguageNames)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
                     }
 
-                    Text(model.cardDescription)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                    Spacer(minLength: 8)
 
-                    HStack(spacing: 10) {
-                        Label(model.downloadSize, systemImage: "internaldrive")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Text(model.languageSupport)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                    Button(self.onboardingModelActionButtonTitle(for: model)) {
+                        self.prepareOnboardingModel(model, preserveManualChoice: true)
                     }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(self.asr.isRunning || isPreparing || isReady)
                 }
 
-                Spacer(minLength: 8)
-
-                Button(self.onboardingModelActionButtonTitle(for: model)) {
-                    self.prepareOnboardingModel(model)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(self.asr.isRunning || isPreparing || isReady)
-            }
-
-            if isPreparing {
-                if self.asr.isDownloadingModel, let progress = self.asr.downloadProgress {
-                    if progress >= 0.82 {
-                        HStack(spacing: 6) {
-                            ProgressView()
-                                .controlSize(.mini)
-                            Text("Finalizing...")
+                if isPreparing {
+                    if self.asr.isDownloadingModel, let progress = self.asr.downloadProgress {
+                        if progress >= 0.82 {
+                            HStack(spacing: 6) {
+                                ProgressView()
+                                    .controlSize(.mini)
+                                Text("Finalizing...")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            ProgressView(value: progress)
+                                .tint(self.theme.palette.accent)
+                            Text("Downloading \(Int(progress * 100))%")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
                     } else {
-                        ProgressView(value: progress)
-                            .tint(self.theme.palette.accent)
-                        Text("Downloading \(Int(progress * 100))%")
+                        Text("Loading model...")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
-                } else {
-                    Text("Loading model...")
-                        .font(.caption2)
+                } else if isReady {
+                    Label("Downloaded and loaded", systemImage: "checkmark.circle.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Color.fluidGreen)
+                } else if isDownloaded {
+                    Label(isSelected ? "Downloaded. Click Load to finish." : "Downloaded", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
-            } else if isReady {
-                Label("Downloaded and loaded", systemImage: "checkmark.circle.fill")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(Color.fluidGreen)
-            } else if isDownloaded {
-                Label(isSelected ? "Downloaded. Click Load to finish." : "Downloaded", systemImage: "arrow.triangle.2.circlepath")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(self.theme.palette.cardBackground.opacity(isSelected ? 0.82 : 0.55))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(
+                                isSelected ? self.theme.palette.accent.opacity(0.45) : self.theme.palette.cardBorder.opacity(0.32),
+                                lineWidth: 1
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func selectOnboardingModel(_ model: SettingsStore.SpeechModel, preserveManualChoice: Bool = false) {
+        if self.settings.selectedSpeechModel != model {
+            self.settings.selectedSpeechModel = model
+            self.asr.resetTranscriptionProvider()
+        }
+        if preserveManualChoice && self.preferredLanguageChoice == .other {
+            return
+        }
+        self.syncPreferredLanguageChoiceWithSelectedModel()
+    }
+
+    private var recommendedModelHeadline: String {
+        if self.shouldShowLanguageChoice {
+            switch self.preferredLanguageChoice {
+            case .englishOnly:
+                return "English only uses \(self.recommendedOnboardingModelDisplayName)"
+            case .multipleLanguages:
+                return "Multiple languages uses \(self.recommendedOnboardingModelDisplayName)"
+            case .other:
+                return "Other languages or workflows"
             }
         }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(self.theme.palette.cardBackground.opacity(isSelected ? 0.82 : 0.55))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(
-                            isSelected ? self.theme.palette.accent.opacity(0.45) : self.theme.palette.cardBorder.opacity(0.32),
-                            lineWidth: 1
-                        )
-                )
-        )
+
+        return "Recommended for this Mac: \(self.recommendedOnboardingModelDisplayName)"
+    }
+
+    private func preferredLanguageOptionCard(for option: PreferredLanguageChoice) -> some View {
+        let isSelected = self.preferredLanguageChoice == option
+
+        return Button {
+            self.preferredLanguageChoice = option
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(option.title)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(self.theme.palette.primaryText)
+
+                    if option != .other {
+                        Text("FluidVoice Recommended")
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(self.theme.palette.accent.opacity(0.18)))
+                            .foregroundStyle(self.theme.palette.accent)
+                    }
+
+                }
+
+                Text(option.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(self.theme.palette.cardBackground.opacity(isSelected ? 0.82 : 0.55))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(
+                                isSelected ? self.theme.palette.accent.opacity(0.55) : self.theme.palette.cardBorder.opacity(0.32),
+                                lineWidth: 1
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func syncPreferredLanguageChoiceWithSelectedModel() {
+        guard self.shouldShowLanguageChoice else { return }
+
+        switch self.settings.selectedSpeechModel {
+        case .parakeetTDTv2:
+            self.preferredLanguageChoice = .englishOnly
+        case .parakeetTDT:
+            self.preferredLanguageChoice = .multipleLanguages
+        default:
+            self.preferredLanguageChoice = .other
+        }
     }
 
     private func handleMicrophoneAction() {

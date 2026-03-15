@@ -937,6 +937,7 @@ struct ContentView: View {
             accessibilityEnabled: self.accessibilityEnabled,
             markAISkipped: {
                 self.settings.onboardingAISkipped = true
+                self.menuBarManager.setAIProcessingEnabled(false)
             },
             markPlaygroundValidated: {
                 self.settings.onboardingPlaygroundValidated = true

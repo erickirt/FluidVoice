@@ -44,6 +44,18 @@ extension AIEnhancementSettingsView {
             .cornerRadius(6)
     }
 
+    func aiOnboardingInfoRow(_ body: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle()
+                .fill(self.theme.palette.accent.opacity(0.9))
+                .frame(width: 5, height: 5)
+                .padding(.top, 5)
+            Text(body)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     // MARK: - AI Configuration Card
 
     var aiConfigurationCard: some View {
@@ -69,6 +81,16 @@ extension AIEnhancementSettingsView {
                     if self.viewModel.enableAIProcessing {
                         Divider()
                             .background(self.theme.palette.separator.opacity(0.5))
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("FluidVoice can clean up or rewrite your transcription using AI.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            self.aiOnboardingInfoRow("Local models run on your Mac. Examples: Ollama and LM Studio.")
+                            self.aiOnboardingInfoRow("Cloud models use a provider of your choice. Examples: OpenAI, Anthropic, Groq, and OpenRouter.")
+                            self.aiOnboardingInfoRow("If you do not want to choose right now, FluidVoice still works without AI.")
+                        }
 
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 2) {
@@ -749,13 +771,24 @@ extension AIEnhancementSettingsView {
 
         return AnyView(VStack(alignment: .leading, spacing: 10) {
             if isApple {
-                HStack(spacing: 10) {
-                    Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.fluidGreen)
-                    Text("Apple Intelligence runs on-device and does not require an API key.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "lock.shield.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.fluidGreen)
+                        Text("Apple Intelligence runs on-device and does not require an API key.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack(spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.orange)
+                        Text("Output quality can be poor and inconsistent. Use it at your discretion.")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)

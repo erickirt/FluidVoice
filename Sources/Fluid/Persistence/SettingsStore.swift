@@ -2029,7 +2029,8 @@ final class SettingsStore: ObservableObject {
 
         var languageSupport: String {
             switch self {
-            case .parakeetTDT: return "25 Languages"
+            case .parakeetTDT:
+                return "25 European Languages"
             case .parakeetTDTv2: return "English Only (Higher Accuracy)"
             case .qwen3Asr: return "30 Languages"
             case .appleSpeech: return "System Languages"
