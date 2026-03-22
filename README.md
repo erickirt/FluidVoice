@@ -56,6 +56,7 @@ https://github.com/user-attachments/assets/c57ef6d5-f0a1-4a3f-a121-637533442c24
 - **Smart typing** directly into any app
 - **Menu bar integration** for quick access
 - **Auto-updates** with seamless restart
+- **Opt-in beta channel** for early preview builds
 
 ## Supported Models
 
@@ -79,6 +80,7 @@ Universal support (runs on Intel & Apple Silicon). Supports 99 languages.
 3. Grant microphone and accessibility permissions when prompted
 4. Set your preferred hotkey in settings
 5. Optionally add an AI provider API key for enhanced transcription, keys are stored securely in your macOS Keychain. Make sure select "Always allow" for permissions
+6. Optional: opt in to beta builds in `Settings → Automatic Updates → Beta Releases`
 
 ## Requirements
 

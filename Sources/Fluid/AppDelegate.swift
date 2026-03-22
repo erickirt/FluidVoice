@@ -6,22 +6,16 @@
 //
 
 import AppKit
-import AppUpdater
 import PromiseKit
 import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    private var updater: AppUpdater?
     private var updateCheckTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Bring up file logging + crash handlers immediately during launch.
         _ = FileLogger.shared
         DebugLogger.shared.info("Application launched", source: "AppDelegate")
-
-        // Initialize AppUpdater for automatic updates
-        // Repository: https://github.com/altic-dev/Fluid-oss
-        self.updater = AppUpdater(owner: "altic-dev", repo: "Fluid-oss")
 
         // Initialize app settings (dock visibility, etc.)
         SettingsStore.shared.initializeAppSettings()
@@ -124,8 +118,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Confirm invocation
         DebugLogger.shared.info("🔎 Manual update check triggered", source: "AppDelegate")
 
-        // We use SimpleUpdater for manual checks; AppUpdater instance is optional
-
         // Get current app version for debugging
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
         DebugLogger.shared.info(
@@ -135,11 +127,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DebugLogger.shared.info("Checking repository: altic-dev/Fluid-oss", source: "AppDelegate")
         DebugLogger.shared.debug("🔍 DEBUG: Manual update check started - Current version: \(currentVersion)", source: "AppDelegate")
         DebugLogger.shared.debug("🔍 DEBUG: Repository: altic-dev/Fluid-oss", source: "AppDelegate")
+        let includePrerelease = SettingsStore.shared.betaReleasesEnabled
+        DebugLogger.shared.info(
+            "Beta releases opt-in: \(SettingsStore.shared.betaReleasesEnabled)",
+            source: "AppDelegate"
+        )
 
         Task { @MainActor in
             do {
                 // Use our tolerant updater to handle v-prefixed tags and 2-part versions
-                try await SimpleUpdater.shared.checkAndUpdate(owner: "altic-dev", repo: "Fluid-oss")
+                try await SimpleUpdater.shared.checkAndUpdate(
+                    owner: "altic-dev",
+                    repo: "Fluid-oss",
+                    includePrerelease: includePrerelease
+                )
                 // If we get here, an update was found; SimpleUpdater will relaunch on success
                 // Show a quick heads-up before app restarts
                 self.showUpdateAlert(
@@ -149,9 +150,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {
                 if let pmkError = error as? PMKError, pmkError.isCancelled {
                     DebugLogger.shared.info("App is already up-to-date", source: "AppDelegate")
+                    let isBeta = SettingsStore.shared.betaReleasesEnabled
                     self.showUpdateAlert(
-                        title: "No Updates",
-                        message: "You're already running the latest version of Fluid!"
+                        title: isBeta ? "No Beta Updates" : "No Updates",
+                        message: isBeta
+                            ? "You're already running the latest build available in the beta channel."
+                            : "You're already running the latest version of Fluid!"
                     )
                 } else {
                     DebugLogger.shared.error("Update check failed: \(error)", source: "AppDelegate")
@@ -184,7 +188,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DebugLogger.shared.info("Performing automatic update check for altic-dev/Fluid-oss", source: "AppDelegate")
 
             do {
-                let result = try await SimpleUpdater.shared.checkForUpdate(owner: "altic-dev", repo: "Fluid-oss")
+                let includePrerelease = SettingsStore.shared.betaReleasesEnabled
+                let result = try await SimpleUpdater.shared.checkForUpdate(
+                    owner: "altic-dev",
+                    repo: "Fluid-oss",
+                    includePrerelease: includePrerelease
+                )
 
                 // Update the last check date regardless of result
                 await MainActor.run {

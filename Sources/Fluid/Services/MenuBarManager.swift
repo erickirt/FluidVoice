@@ -440,7 +440,11 @@ final class MenuBarManager: ObservableObject {
         // Fallback: perform direct, tolerant check so the menu item always does something
         Task { @MainActor in
             do {
-                try await SimpleUpdater.shared.checkAndUpdate(owner: "altic-dev", repo: "Fluid-oss")
+                try await SimpleUpdater.shared.checkAndUpdate(
+                    owner: "altic-dev",
+                    repo: "Fluid-oss",
+                    includePrerelease: SettingsStore.shared.betaReleasesEnabled
+                )
                 let ok = NSAlert()
                 ok.messageText = "Update Found!"
                 ok.informativeText = "A new version is available and will be installed now."
@@ -450,8 +454,11 @@ final class MenuBarManager: ObservableObject {
             } catch {
                 let msg = NSAlert()
                 if let pmkError = error as? PMKError, pmkError.isCancelled {
-                    msg.messageText = "You’re Up To Date"
-                    msg.informativeText = "You're already running the latest version of FluidVoice."
+                    let isBeta = SettingsStore.shared.betaReleasesEnabled
+                    msg.messageText = isBeta ? "You’re Up To Date (Beta)" : "You’re Up To Date"
+                    msg.informativeText = isBeta
+                        ? "You're already running the latest build available in the beta channel."
+                        : "You're already running the latest version of FluidVoice."
                 } else {
                     msg.messageText = "Update Check Failed"
                     msg.informativeText = "Unable to check for updates. Please try again later.\n\nError: \(error.localizedDescription)"
@@ -521,7 +528,8 @@ final class MenuBarManager: ObservableObject {
                 let options = try await SimpleUpdater.shared.fetchRecentReleaseBuildOptions(
                     owner: "altic-dev",
                     repo: "Fluid-oss",
-                    limit: 3
+                    limit: 3,
+                    includePrerelease: SettingsStore.shared.betaReleasesEnabled
                 )
                 self.presentPreviousBuildPicker(options)
             } catch {

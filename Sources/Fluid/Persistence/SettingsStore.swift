@@ -2877,6 +2877,7 @@ private extension SettingsStore {
         static let copyTranscriptionToClipboard = "CopyTranscriptionToClipboard"
         static let textInsertionMode = "TextInsertionMode"
         static let autoUpdateCheckEnabled = "AutoUpdateCheckEnabled"
+        static let betaReleasesEnabled = "BetaReleasesEnabled"
         static let lastUpdateCheckDate = "LastUpdateCheckDate"
         static let updatePromptSnoozedUntil = "UpdatePromptSnoozedUntil"
         static let snoozedUpdateVersion = "SnoozedUpdateVersion"
@@ -3000,6 +3001,19 @@ extension SettingsStore {
         set {
             objectWillChange.send()
             self.defaults.set(newValue.rawValue, forKey: Keys.textInsertionMode)
+        }
+    }
+
+    var betaReleasesEnabled: Bool {
+        get {
+            let value = self.defaults.object(forKey: Keys.betaReleasesEnabled)
+            return value as? Bool ?? false // Default to stable-only updates
+        }
+        set {
+            objectWillChange.send()
+            self.defaults.set(newValue, forKey: Keys.betaReleasesEnabled)
+            self.lastUpdateCheckDate = nil
+            self.clearUpdateSnooze()
         }
     }
 

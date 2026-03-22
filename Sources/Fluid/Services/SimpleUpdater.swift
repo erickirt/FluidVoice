@@ -48,6 +48,50 @@ struct GHRelease: Decodable {
     let html_url: URL?
 }
 
+private struct SemanticVersion: Comparable {
+    enum Identifier: Equatable {
+        case numeric(Int)
+        case string(String)
+    }
+
+    let major: Int
+    let minor: Int
+    let patch: Int
+    let prerelease: [Identifier]
+
+    static func < (lhs: SemanticVersion, rhs: SemanticVersion) -> Bool {
+        if lhs.major != rhs.major { return lhs.major < rhs.major }
+        if lhs.minor != rhs.minor { return lhs.minor < rhs.minor }
+        if lhs.patch != rhs.patch { return lhs.patch < rhs.patch }
+
+        // Stable release has higher precedence than prerelease for same core version.
+        if lhs.prerelease.isEmpty && rhs.prerelease.isEmpty { return false }
+        if lhs.prerelease.isEmpty { return false }
+        if rhs.prerelease.isEmpty { return true }
+
+        let count = min(lhs.prerelease.count, rhs.prerelease.count)
+        for index in 0..<count {
+            let left = lhs.prerelease[index]
+            let right = rhs.prerelease[index]
+            if left == right { continue }
+
+            switch (left, right) {
+            case let (.numeric(a), .numeric(b)):
+                return a < b
+            case (.numeric, .string):
+                return true
+            case (.string, .numeric):
+                return false
+            case let (.string(a), .string(b)):
+                return a < b
+            }
+        }
+
+        // If all compared identifiers are equal, shorter prerelease has lower precedence.
+        return lhs.prerelease.count < rhs.prerelease.count
+    }
+}
+
 @MainActor
 final class SimpleUpdater {
     struct ReleaseBuildOption {
@@ -96,27 +140,21 @@ final class SimpleUpdater {
         }
     }
 
-    func fetchRecentReleaseBuildOptions(owner: String, repo: String, limit: Int = 3) async throws -> [ReleaseBuildOption] {
-        guard let releasesURL = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases") else {
-            throw SimpleUpdateError.invalidURL
-        }
-
-        let (data, response) = try await URLSession.shared.data(from: releasesURL)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw SimpleUpdateError.invalidResponse
-        }
-
-        let releases: [GHRelease]
-        do {
-            releases = try JSONDecoder().decode([GHRelease].self, from: data)
-        } catch {
-            throw SimpleUpdateError.jsonDecoding
-        }
-
+    func fetchRecentReleaseBuildOptions(
+        owner: String,
+        repo: String,
+        limit: Int = 3,
+        includePrerelease: Bool = false
+    ) async throws -> [ReleaseBuildOption] {
+        let releases = try await self.fetchReleases(owner: owner, repo: repo)
         let count = max(1, limit)
-        let stableReleases = releases.filter { !$0.prerelease }.prefix(count)
+        let candidates = self.sortedCandidateReleases(
+            releases,
+            includePrerelease: includePrerelease
+        ).prefix(count)
 
-        return stableReleases.map { release in
+        return candidates.map { entry in
+            let release = entry.release
             let zipAsset = release.assets.first {
                 $0.content_type == "application/zip" ||
                     $0.content_type == "application/x-zip-compressed" ||
@@ -140,25 +178,17 @@ final class SimpleUpdater {
     ]
 
     // Fetch latest release notes from GitHub
-    func fetchLatestReleaseNotes(owner: String, repo: String) async throws -> (version: String, notes: String) {
-        guard let releasesURL = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases") else {
-            throw SimpleUpdateError.invalidURL
-        }
+    func fetchLatestReleaseNotes(
+        owner: String,
+        repo: String,
+        includePrerelease: Bool = false
+    ) async throws -> (version: String, notes: String) {
+        let releases = try await self.fetchReleases(owner: owner, repo: repo)
 
-        let (data, response) = try await URLSession.shared.data(from: releasesURL)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw SimpleUpdateError.invalidResponse
-        }
-
-        let releases: [GHRelease]
-        do {
-            releases = try JSONDecoder().decode([GHRelease].self, from: data)
-        } catch {
-            throw SimpleUpdateError.jsonDecoding
-        }
-
-        // Get latest non-prerelease release
-        guard let latest = releases.first(where: { !$0.prerelease }) else {
+        guard let latest = self.selectLatestRelease(
+            from: releases,
+            includePrerelease: includePrerelease
+        ) else {
             throw SimpleUpdateError.noSuitableRelease
         }
 
@@ -169,67 +199,65 @@ final class SimpleUpdater {
     }
 
     // Silent check that returns update info without showing alerts or installing
-    func checkForUpdate(owner: String, repo: String) async throws -> (hasUpdate: Bool, latestVersion: String) {
-        guard let releasesURL = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases") else {
-            throw SimpleUpdateError.invalidURL
-        }
+    func checkForUpdate(
+        owner: String,
+        repo: String,
+        includePrerelease: Bool = false
+    ) async throws -> (hasUpdate: Bool, latestVersion: String) {
+        let releases = try await self.fetchReleases(owner: owner, repo: repo)
 
-        let (data, response) = try await URLSession.shared.data(from: releasesURL)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw SimpleUpdateError.invalidResponse
-        }
-
-        let releases: [GHRelease]
-        do {
-            releases = try JSONDecoder().decode([GHRelease].self, from: data)
-        } catch {
-            throw SimpleUpdateError.jsonDecoding
-        }
-
-        // choose latest non-prerelease release
-        guard let latest = releases.first(where: { !$0.prerelease }) else {
+        guard let latest = self.selectLatestRelease(
+            from: releases,
+            includePrerelease: includePrerelease
+        ) else {
             throw SimpleUpdateError.noSuitableRelease
         }
 
         let currentVersionString = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
-        let current = self.parseVersion(currentVersionString)
+        let current = self.parseSemanticVersion(currentVersionString) ?? SemanticVersion(
+            major: 0,
+            minor: 0,
+            patch: 0,
+            prerelease: []
+        )
         let latestTag = latest.tag_name
-        let latestVersion = self.parseVersion(latestTag)
+        guard let latestVersion = self.parseSemanticVersion(latestTag) else {
+            throw SimpleUpdateError.noSuitableRelease
+        }
 
         // Return whether update is available
-        return (self.isVersion(latestVersion, greaterThan: current), latestTag)
+        return (latestVersion > current, latestTag)
     }
 
-    func checkAndUpdate(owner: String, repo: String) async throws {
-        guard let releasesURL = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases") else {
-            throw SimpleUpdateError.invalidURL
-        }
+    func checkAndUpdate(
+        owner: String,
+        repo: String,
+        includePrerelease: Bool = false
+    ) async throws {
+        let releases = try await self.fetchReleases(owner: owner, repo: repo)
 
-        let (data, response) = try await URLSession.shared.data(from: releasesURL)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw SimpleUpdateError.invalidResponse
-        }
-
-        let releases: [GHRelease]
-        do {
-            releases = try JSONDecoder().decode([GHRelease].self, from: data)
-        } catch {
-            throw SimpleUpdateError.jsonDecoding
-        }
-
-        // choose latest non-prerelease release
-        guard let latest = releases.first(where: { !$0.prerelease }) else {
+        guard let latest = self.selectLatestRelease(
+            from: releases,
+            includePrerelease: includePrerelease
+        ) else {
             throw SimpleUpdateError.noSuitableRelease
         }
 
         let currentVersionString = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
-        let current = self.parseVersion(currentVersionString)
+        let current = self.parseSemanticVersion(currentVersionString) ?? SemanticVersion(
+            major: 0,
+            minor: 0,
+            patch: 0,
+            prerelease: []
+        )
         let latestTag = latest.tag_name
-        let latestVersion = self.parseVersion(latestTag)
+        guard let latestVersion = self.parseSemanticVersion(latestTag) else {
+            throw SimpleUpdateError.noSuitableRelease
+        }
 
         let currentBundle = Bundle.main
         // up to date
-        if !self.isVersion(latestVersion, greaterThan: current) {
+        if !(latestVersion > current) {
             throw PMKError.cancelled // mimic AppUpdater semantics for up-to-date
         }
 
@@ -323,6 +351,75 @@ final class SimpleUpdater {
     }
 
     // MARK: - Helpers
+
+    private func fetchReleases(owner: String, repo: String) async throws -> [GHRelease] {
+        guard let releasesURL = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases") else {
+            throw SimpleUpdateError.invalidURL
+        }
+
+        let (data, response) = try await URLSession.shared.data(from: releasesURL)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw SimpleUpdateError.invalidResponse
+        }
+
+        do {
+            return try JSONDecoder().decode([GHRelease].self, from: data)
+        } catch {
+            throw SimpleUpdateError.jsonDecoding
+        }
+    }
+
+    private func selectLatestRelease(from releases: [GHRelease], includePrerelease: Bool) -> GHRelease? {
+        return self.sortedCandidateReleases(releases, includePrerelease: includePrerelease).first?.release
+    }
+
+    private func sortedCandidateReleases(
+        _ releases: [GHRelease],
+        includePrerelease: Bool
+    ) -> [(release: GHRelease, version: SemanticVersion)] {
+        return releases
+            .compactMap { release in
+                guard let version = self.parseSemanticVersion(release.tag_name) else {
+                    return nil
+                }
+                let isPrerelease = self.isPrereleaseRelease(release)
+                if !includePrerelease, isPrerelease {
+                    return nil
+                }
+                return (release, version)
+            }
+            .sorted { lhs, rhs in
+                if lhs.version != rhs.version {
+                    return lhs.version > rhs.version
+                }
+
+                // Tie-break with publish date when tags map to same semantic version.
+                let lhsPublished = lhs.release.published_at ?? ""
+                let rhsPublished = rhs.release.published_at ?? ""
+                return lhsPublished > rhsPublished
+            }
+    }
+
+    private func isPrereleaseRelease(_ release: GHRelease) -> Bool {
+        return release.prerelease || self.hasPrereleaseSuffix(in: release.tag_name)
+    }
+
+    private func hasPrereleaseSuffix(in version: String) -> Bool {
+        var trimmed = version.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("v") || trimmed.hasPrefix("V") {
+            trimmed.removeFirst()
+        }
+        if let plusIndex = trimmed.firstIndex(of: "+") {
+            trimmed = String(trimmed[..<plusIndex])
+        }
+
+        guard let hyphenIndex = trimmed.firstIndex(of: "-") else {
+            return false
+        }
+
+        let suffix = trimmed[trimmed.index(after: hyphenIndex)...]
+        return suffix.isEmpty == false
+    }
 
     private func rollbackRootDirectory() -> URL {
         let base = self.fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -426,29 +523,51 @@ final class SimpleUpdater {
         }
     }
 
-    private func parseVersion(_ s: String) -> [Int] {
-        var t = s.hasPrefix("v") ? String(s.dropFirst()) : s
-
-        // Strip any suffix after hyphen (e.g., "1.5.2-beta.1" → "1.5.2")
-        // This handles pre-release suffixes like -beta, -alpha, -rc1, etc.
-        if let hyphenIndex = t.firstIndex(of: "-") {
-            t = String(t[..<hyphenIndex])
+    private func parseSemanticVersion(_ version: String) -> SemanticVersion? {
+        var trimmed = version.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("v") || trimmed.hasPrefix("V") {
+            trimmed.removeFirst()
         }
 
-        let comps = t.split(separator: ".").map { Int($0) ?? 0 }
-        return [comps[safe: 0] ?? 0, comps[safe: 1] ?? 0, comps[safe: 2] ?? 0]
-    }
+        // Ignore build metadata for precedence.
+        if let plusIndex = trimmed.firstIndex(of: "+") {
+            trimmed = String(trimmed[..<plusIndex])
+        }
 
-    private func versionString(_ v: [Int]) -> String {
-        // Match asset naming that omits trailing .0
-        if v[2] == 0 { return "\(v[0]).\(v[1])" }
-        return "\(v[0]).\(v[1]).\(v[2])"
-    }
+        let components = trimmed.split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
+        guard !components.isEmpty else { return nil }
 
-    private func isVersion(_ a: [Int], greaterThan b: [Int]) -> Bool {
-        if a[0] != b[0] { return a[0] > b[0] }
-        if a[1] != b[1] { return a[1] > b[1] }
-        return a[2] > b[2]
+        let coreComponents = components[0].split(separator: ".", omittingEmptySubsequences: false)
+        guard coreComponents.count >= 2 else { return nil }
+        guard let major = Int(coreComponents[0]), let minor = Int(coreComponents[1]) else { return nil }
+        let patch: Int
+        if coreComponents.count >= 3 {
+            guard let parsedPatch = Int(coreComponents[2]) else { return nil }
+            patch = parsedPatch
+        } else {
+            patch = 0
+        }
+
+        let prereleaseIdentifiers: [SemanticVersion.Identifier]
+        if components.count > 1 {
+            prereleaseIdentifiers = components[1]
+                .split(separator: ".", omittingEmptySubsequences: false)
+                .map { identifier in
+                    if let numeric = Int(identifier) {
+                        return .numeric(numeric)
+                    }
+                    return .string(identifier.lowercased())
+                }
+        } else {
+            prereleaseIdentifiers = []
+        }
+
+        return SemanticVersion(
+            major: major,
+            minor: minor,
+            patch: patch,
+            prerelease: prereleaseIdentifiers
+        )
     }
 
     private func unzip(at url: URL) async throws -> URL {
@@ -572,11 +691,5 @@ final class SimpleUpdater {
                 }
             }
         }
-    }
-}
-
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }

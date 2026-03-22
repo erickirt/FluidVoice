@@ -276,6 +276,32 @@ struct SettingsView: View {
                                     .labelsHidden()
                                 }
 
+                                HStack(alignment: .center) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Beta Releases")
+                                            .font(.body)
+                                        Text("Opt in to preview builds that may be unstable")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    Toggle("", isOn: Binding(
+                                        get: { SettingsStore.shared.betaReleasesEnabled },
+                                        set: { SettingsStore.shared.betaReleasesEnabled = $0 }
+                                    ))
+                                    .toggleStyle(.switch)
+                                    .tint(self.theme.palette.accent)
+                                    .labelsHidden()
+                                }
+
+                                if SettingsStore.shared.betaReleasesEnabled {
+                                    Text("Beta opt-in enabled. Update checks include both stable and beta builds.")
+                                        .font(.caption)
+                                        .foregroundStyle(self.theme.palette.warning)
+                                }
+
                                 if let lastCheck = SettingsStore.shared.lastUpdateCheckDate {
                                     Text("Last checked: \(lastCheck.formatted(date: .abbreviated, time: .shortened))")
                                         .font(.caption)
@@ -292,9 +318,11 @@ struct SettingsView: View {
                                 Button("Check for Updates") {
                                     Task { @MainActor in
                                         do {
+                                            let includePrerelease = SettingsStore.shared.betaReleasesEnabled
                                             try await SimpleUpdater.shared.checkAndUpdate(
                                                 owner: "altic-dev",
-                                                repo: "Fluid-oss"
+                                                repo: "Fluid-oss",
+                                                includePrerelease: includePrerelease
                                             )
                                             let ok = NSAlert()
                                             ok.messageText = "Update Found!"
@@ -305,8 +333,11 @@ struct SettingsView: View {
                                         } catch {
                                             let msg = NSAlert()
                                             if let pmkError = error as? PMKError, pmkError.isCancelled {
-                                                msg.messageText = "You're Up To Date"
-                                                msg.informativeText = "You're already running the latest version of FluidVoice."
+                                                let isBeta = SettingsStore.shared.betaReleasesEnabled
+                                                msg.messageText = isBeta ? "You're Up To Date (Beta)" : "You're Up To Date"
+                                                msg.informativeText = isBeta
+                                                    ? "You're already running the latest build available in the beta channel."
+                                                    : "You're already running the latest version of FluidVoice."
                                             } else {
                                                 msg.messageText = "Update Check Failed"
                                                 msg.informativeText = "Unable to check for updates. Please try again later.\n\nError: \(error.localizedDescription)"
@@ -1262,7 +1293,8 @@ struct SettingsView: View {
                 let options = try await SimpleUpdater.shared.fetchRecentReleaseBuildOptions(
                     owner: "altic-dev",
                     repo: "Fluid-oss",
-                    limit: 3
+                    limit: 3,
+                    includePrerelease: SettingsStore.shared.betaReleasesEnabled
                 )
                 self.presentPreviousBuildPicker(options)
             } catch {
