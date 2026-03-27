@@ -84,7 +84,7 @@ Universal support (runs on Intel & Apple Silicon). Supports 99 languages.
 
 ## Requirements
 
-- macOS 14.0 (Sonoma) or later
+- macOS 15.0 (Sequoia) or later
 - Apple Silicon Mac (M1, M2, M3, M4)
 - Intel Macs are supported from 1.5.1 builds using Whisper models!
 - Microphone access
