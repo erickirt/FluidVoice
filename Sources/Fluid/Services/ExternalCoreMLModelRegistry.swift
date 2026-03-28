@@ -50,6 +50,9 @@ struct ExternalCoreMLASRModelSpec {
     let expectedSampleRate: Int
     let computeUnits: MLComputeUnits
     let sourceURL: URL?
+    let repositoryOwner: String?
+    let repositoryName: String?
+    let repositoryRevision: String
 
     var requiredEntries: [String] {
         [
@@ -63,6 +66,11 @@ struct ExternalCoreMLASRModelSpec {
 
     func url(for entry: String, in directory: URL) -> URL {
         directory.appendingPathComponent(entry, isDirectory: entry.hasSuffix(".mlpackage"))
+    }
+
+    var defaultCacheDirectory: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent(self.artifactFolderHint, isDirectory: true)
     }
 
     func validateArtifacts(at directory: URL) -> Bool {
@@ -126,7 +134,10 @@ enum ExternalCoreMLModelRegistry {
                 expectedModelID: "CohereLabs/cohere-transcribe-03-2026",
                 expectedSampleRate: 16000,
                 computeUnits: .cpuAndGPU,
-                sourceURL: URL(string: "https://huggingface.co/BarathwajAnandan/cohere-transcribe-03-2026-CoreML-6bit")
+                sourceURL: URL(string: "https://huggingface.co/BarathwajAnandan/cohere-transcribe-03-2026-CoreML-6bit"),
+                repositoryOwner: "BarathwajAnandan",
+                repositoryName: "cohere-transcribe-03-2026-CoreML-6bit",
+                repositoryRevision: "main"
             )
         default:
             return nil

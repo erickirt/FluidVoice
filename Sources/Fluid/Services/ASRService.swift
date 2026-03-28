@@ -128,10 +128,10 @@ final class ASRService: ObservableObject {
     var modelStatusMessage: String {
         let usesExternalArtifacts = SettingsStore.shared.selectedSpeechModel.requiresExternalArtifacts
         if self.isAsrReady { return "Model ready" }
-        if self.isDownloadingModel { return usesExternalArtifacts ? "Importing model..." : "Downloading model..." }
+        if self.isDownloadingModel { return "Downloading model..." }
         if self.isLoadingModel { return "Loading model into memory..." }
-        if self.modelsExistOnDisk { return usesExternalArtifacts ? "Model imported, needs loading" : "Model cached, needs loading" }
-        return usesExternalArtifacts ? "Model not imported" : "Model not downloaded"
+        if self.modelsExistOnDisk { return usesExternalArtifacts ? "Model cached, needs loading" : "Model cached, needs loading" }
+        return "Model not downloaded"
     }
 
     // MARK: - Transcription Provider (Settable)

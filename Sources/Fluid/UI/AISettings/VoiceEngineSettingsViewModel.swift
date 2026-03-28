@@ -98,9 +98,6 @@ final class VoiceEngineSettingsViewModel: ObservableObject {
 
     func activateSpeechModel(_ model: SettingsStore.SpeechModel) {
         guard !self.asr.isRunning else { return }
-        if model.requiresExternalArtifacts && self.ensureExternalArtifactsConfigured(for: model) == false {
-            return
-        }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             self.settings.selectedSpeechModel = model
             self.previewSpeechModel = model
@@ -121,10 +118,6 @@ final class VoiceEngineSettingsViewModel: ObservableObject {
 
     func downloadSpeechModel(_ model: SettingsStore.SpeechModel) {
         guard !self.asr.isRunning else { return }
-        if model.requiresExternalArtifacts {
-            _ = self.ensureExternalArtifactsConfigured(for: model)
-            return
-        }
         guard self.downloadingModel == nil else { return } // Prevent concurrent downloads
         self.downloadingModel = model
         self.downloadProgress = 0.0
@@ -150,7 +143,7 @@ final class VoiceEngineSettingsViewModel: ObservableObject {
             } catch {
                 DebugLogger.shared.error("Failed to download model \(model.displayName): \(error)", source: "VoiceEngineVM")
                 await MainActor.run {
-                    self.asr.errorTitle = model.requiresExternalArtifacts ? "Model Import Failed" : "Model Download Failed"
+                    self.asr.errorTitle = "Model Download Failed"
                     self.asr.errorMessage = error.localizedDescription
                     self.asr.showError = true
                 }
@@ -211,7 +204,7 @@ final class VoiceEngineSettingsViewModel: ObservableObject {
         case .qwen3Asr:
             return "Qwen3 ASR is a multilingual FluidAudio model with strong quality, but higher memory usage. Requires macOS 15+."
         case .cohereTranscribeSixBit:
-            return "Cohere Transcribe uses an external CoreML pipeline loaded from a local folder. Best on Apple Silicon with 8GB+ RAM."
+            return "Cohere Transcribe downloads a CoreML pipeline from Hugging Face and caches it locally. Best on Apple Silicon with 8GB+ RAM."
         default:
             return "Whisper models support 99 languages and work on any Mac."
         }
@@ -222,7 +215,7 @@ final class VoiceEngineSettingsViewModel: ObservableObject {
             try await self.asr.ensureAsrReady()
         } catch {
             DebugLogger.shared.error("Failed to download models: \(error)", source: "AISettingsView")
-            self.asr.errorTitle = self.settings.selectedSpeechModel.requiresExternalArtifacts ? "Model Import Failed" : "Model Download Failed"
+            self.asr.errorTitle = "Model Download Failed"
             self.asr.errorMessage = error.localizedDescription
             self.asr.showError = true
         }
@@ -245,73 +238,8 @@ final class VoiceEngineSettingsViewModel: ObservableObject {
         self.selectedSpeechProvider = provider
     }
 
-    func externalArtifactsDirectoryDisplay(for model: SettingsStore.SpeechModel) -> String? {
-        self.settings.externalCoreMLArtifactsDirectory(for: model)?.path
-    }
-
-    func chooseExternalArtifactsDirectory(for model: SettingsStore.SpeechModel) {
-        _ = self.ensureExternalArtifactsConfigured(for: model, forceChooser: true)
-    }
-
-    func clearExternalArtifactsDirectory(for model: SettingsStore.SpeechModel) {
-        self.settings.setExternalCoreMLArtifactsDirectory(nil, for: model)
-        if self.settings.selectedSpeechModel == model {
-            self.asr.resetTranscriptionProvider()
-        }
-    }
-
     func openExternalModelSource(for model: SettingsStore.SpeechModel) {
         guard let url = model.externalCoreMLSpec?.sourceURL else { return }
         NSWorkspace.shared.open(url)
-    }
-
-    @discardableResult
-    private func ensureExternalArtifactsConfigured(
-        for model: SettingsStore.SpeechModel,
-        forceChooser: Bool = false
-    ) -> Bool {
-        guard let spec = model.externalCoreMLSpec else { return true }
-        if forceChooser == false,
-           let directory = self.settings.externalCoreMLArtifactsDirectory(for: model),
-           spec.validateArtifacts(at: directory)
-        {
-            return true
-        }
-
-        let panel = NSOpenPanel()
-        panel.title = "Select \(model.displayName) Artifacts Folder"
-        panel.message = "Choose the folder containing \(spec.artifactFolderHint) and its CoreML files."
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = false
-        panel.prompt = "Use Folder"
-
-        guard panel.runModal() == .OK, let selectedDirectory = panel.url?.standardizedFileURL else {
-            return false
-        }
-
-        let candidateDirectory = spec.validateArtifacts(at: selectedDirectory)
-            ? selectedDirectory
-            : selectedDirectory.appendingPathComponent(spec.artifactFolderHint, isDirectory: true)
-
-        do {
-            try spec.validateArtifactsOrThrow(at: candidateDirectory)
-        } catch {
-            self.asr.errorTitle = "Artifacts Folder Invalid"
-            self.asr.errorMessage = error.localizedDescription
-            self.asr.showError = true
-            return false
-        }
-
-        self.settings.setExternalCoreMLArtifactsDirectory(candidateDirectory, for: model)
-        if self.settings.selectedSpeechModel == model {
-            self.asr.resetTranscriptionProvider()
-        } else {
-            Task {
-                await self.asr.checkIfModelsExistAsync()
-            }
-        }
-        return true
     }
 }

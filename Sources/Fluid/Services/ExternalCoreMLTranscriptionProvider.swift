@@ -33,39 +33,27 @@ final class ExternalCoreMLTranscriptionProvider: TranscriptionProvider {
             )
             throw Self.makeError("No external CoreML spec registered for \(model.displayName).")
         }
-        guard let directory = SettingsStore.shared.externalCoreMLArtifactsDirectory(for: model) else {
+        guard let directory = Self.artifactsDirectory(for: model, spec: spec) else {
             DebugLogger.shared.error(
-                "ExternalCoreML: no artifacts directory configured for model=\(model.rawValue)",
+                "ExternalCoreML: unable to resolve cache directory for model=\(model.rawValue)",
                 source: "ExternalCoreML"
             )
-            throw Self.makeError("Select the \(model.displayName) artifacts folder before loading the model.")
+            throw Self.makeError("Unable to resolve a cache directory for \(model.displayName).")
         }
 
-        DebugLogger.shared.info(
-            "ExternalCoreML: validating artifacts at \(directory.path)",
-            source: "ExternalCoreML"
+        try await self.ensureArtifactsPresent(
+            for: model,
+            spec: spec,
+            at: directory,
+            progressHandler: progressHandler
         )
 
-        do {
-            try spec.validateArtifactsOrThrow(at: directory)
-            DebugLogger.shared.info(
-                "ExternalCoreML: artifact validation passed for \(directory.lastPathComponent)",
-                source: "ExternalCoreML"
-            )
-        } catch {
-            DebugLogger.shared.error(
-                "ExternalCoreML: artifact validation failed: \(error.localizedDescription)",
-                source: "ExternalCoreML"
-            )
-            throw Self.makeError(error.localizedDescription)
-        }
-
-        progressHandler?(0.1)
+        progressHandler?(0.85)
 
         switch spec.backend {
         case .cohereTranscribe:
             let manager = CohereTranscribeAsrManager()
-            progressHandler?(0.35)
+            progressHandler?(0.9)
             DebugLogger.shared.info(
                 "ExternalCoreML: loading Cohere models [computeUnits=\(String(describing: spec.computeUnits))]",
                 source: "ExternalCoreML"
@@ -144,9 +132,8 @@ final class ExternalCoreMLTranscriptionProvider: TranscriptionProvider {
 
     func modelsExistOnDisk() -> Bool {
         let model = self.modelOverride ?? SettingsStore.shared.selectedSpeechModel
-        guard
-            let spec = model.externalCoreMLSpec,
-            let directory = SettingsStore.shared.externalCoreMLArtifactsDirectory(for: model)
+        guard let spec = model.externalCoreMLSpec,
+              let directory = Self.artifactsDirectory(for: model, spec: spec)
         else {
             return false
         }
@@ -155,9 +142,8 @@ final class ExternalCoreMLTranscriptionProvider: TranscriptionProvider {
 
     func clearCache() async throws {
         let model = self.modelOverride ?? SettingsStore.shared.selectedSpeechModel
-        guard
-            model.externalCoreMLSpec != nil,
-            let directory = SettingsStore.shared.externalCoreMLArtifactsDirectory(for: model)
+        guard let spec = model.externalCoreMLSpec,
+              let directory = Self.artifactsDirectory(for: model, spec: spec)
         else {
             self.isReady = false
             self.cohereManager = nil
@@ -174,12 +160,76 @@ final class ExternalCoreMLTranscriptionProvider: TranscriptionProvider {
             try FileManager.default.removeItem(at: compiledDirectory)
         }
 
+        if FileManager.default.fileExists(atPath: directory.path) {
+            DebugLogger.shared.info(
+                "ExternalCoreML: removing downloaded artifacts at \(directory.path)",
+                source: "ExternalCoreML"
+            )
+            try FileManager.default.removeItem(at: directory)
+        }
+
         self.isReady = false
         self.cohereManager = nil
         DebugLogger.shared.info(
             "ExternalCoreML: provider reset after cache clear",
             source: "ExternalCoreML"
         )
+    }
+
+    private func ensureArtifactsPresent(
+        for model: SettingsStore.SpeechModel,
+        spec: ExternalCoreMLASRModelSpec,
+        at directory: URL,
+        progressHandler: ((Double) -> Void)?
+    ) async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        if spec.validateArtifacts(at: directory) {
+            DebugLogger.shared.info(
+                "ExternalCoreML: artifact validation passed for \(directory.lastPathComponent)",
+                source: "ExternalCoreML"
+            )
+            progressHandler?(0.8)
+            return
+        }
+
+        guard let owner = spec.repositoryOwner, let repo = spec.repositoryName else {
+            throw Self.makeError("Missing repository metadata for \(model.displayName).")
+        }
+
+        DebugLogger.shared.info(
+            "ExternalCoreML: downloading missing artifacts from \(owner)/\(repo)",
+            source: "ExternalCoreML"
+        )
+
+        let downloader = HuggingFaceModelDownloader(
+            owner: owner,
+            repo: repo,
+            revision: spec.repositoryRevision,
+            requiredItems: spec.requiredEntries.map { .init(path: $0, isDirectory: $0.hasSuffix(".mlpackage")) }
+        )
+        try await downloader.ensureModelsPresent(at: directory) { progress, item in
+            DebugLogger.shared.debug(
+                "ExternalCoreML: download progress \(Int(progress * 100))% [\(item)]",
+                source: "ExternalCoreML"
+            )
+            progressHandler?(progress * 0.8)
+        }
+
+        do {
+            try spec.validateArtifactsOrThrow(at: directory)
+        } catch {
+            throw Self.makeError(error.localizedDescription)
+        }
+
+        SettingsStore.shared.setExternalCoreMLArtifactsDirectory(directory, for: model)
+    }
+
+    private static func artifactsDirectory(
+        for model: SettingsStore.SpeechModel,
+        spec: ExternalCoreMLASRModelSpec
+    ) -> URL? {
+        SettingsStore.shared.externalCoreMLArtifactsDirectory(for: model) ?? spec.defaultCacheDirectory
     }
 
     private static func makeError(_ description: String) -> NSError {
