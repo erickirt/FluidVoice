@@ -159,7 +159,7 @@ final class MeetingTranscriptionService: ObservableObject {
 
             // Check file extension
             let fileExtension = fileURL.pathExtension.lowercased()
-            let supportedFormats = ["wav", "mp3", "m4a", "aac", "flac", "aiff", "caf", "mp4", "mov"]
+            let supportedFormats = ["wav", "mp3", "m4a", "ogg", "aac", "flac", "aiff", "caf", "mp4", "mov"]
 
             guard supportedFormats.contains(fileExtension) else {
                 throw TranscriptionError
