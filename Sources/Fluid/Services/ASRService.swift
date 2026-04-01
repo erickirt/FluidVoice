@@ -138,6 +138,7 @@ final class ASRService: ObservableObject {
 
     /// Cached providers to avoid re-instantiation
     private var fluidAudioProvider: FluidAudioProvider?
+    private var parakeetRealtimeProvider: ParakeetRealtimeProvider?
     private var externalCoreMLProvider: ExternalCoreMLTranscriptionProvider?
     private var whisperProvider: WhisperProvider?
     private var appleSpeechProvider: AppleSpeechProvider?
@@ -166,6 +167,8 @@ final class ASRService: ObservableObject {
             return self.getAppleSpeechProvider()
         case .parakeetTDT, .parakeetTDTv2:
             return self.getFluidAudioProvider()
+        case .parakeetRealtime:
+            return self.getParakeetRealtimeProvider()
         case .cohereTranscribeSixBit:
             return self.getExternalCoreMLProvider()
         case .qwen3Asr:
@@ -191,6 +194,16 @@ final class ASRService: ObservableObject {
             "ASRService: Created FluidAudio provider [vocabBoosting=\(SettingsStore.shared.vocabularyBoostingEnabled)]",
             source: "ASRService"
         )
+        return provider
+    }
+
+    private func getParakeetRealtimeProvider() -> ParakeetRealtimeProvider {
+        if let existing = parakeetRealtimeProvider {
+            return existing
+        }
+        let provider = ParakeetRealtimeProvider()
+        self.parakeetRealtimeProvider = provider
+        DebugLogger.shared.info("ASRService: Created Parakeet real-time provider", source: "ASRService")
         return provider
     }
 
@@ -262,6 +275,8 @@ final class ASRService: ObservableObject {
             // Create a new provider configured for the specific model
             let provider = FluidAudioProvider(modelOverride: model, configureWordBoosting: false)
             return provider
+        case .parakeetRealtime:
+            return ParakeetRealtimeProvider()
         case .cohereTranscribeSixBit:
             return ExternalCoreMLTranscriptionProvider(modelOverride: model)
         case .qwen3Asr:
@@ -339,6 +354,7 @@ final class ASRService: ObservableObject {
 
         // Reset cached providers to force re-initialization with new settings
         self.fluidAudioProvider = nil
+        self.parakeetRealtimeProvider = nil
         self.externalCoreMLProvider = nil
         self.whisperProvider = nil
         self.appleSpeechProvider = nil
@@ -2085,7 +2101,7 @@ final class ASRService: ObservableObject {
 
     private func startParakeetDownloadProgressMonitor() {
         let model = SettingsStore.shared.selectedSpeechModel
-        guard model == .parakeetTDT || model == .parakeetTDTv2 else { return }
+        guard model == .parakeetTDT || model == .parakeetTDTv2 || model == .parakeetRealtime else { return }
         guard let modelDir = self.parakeetCacheDirectory(for: model) else { return }
 
         self.stopDownloadProgressMonitor()
@@ -2115,7 +2131,15 @@ final class ASRService: ObservableObject {
     private func parakeetCacheDirectory(for model: SettingsStore.SpeechModel) -> URL? {
         #if arch(arm64)
         let baseCacheDir = AsrModels.defaultCacheDirectory().deletingLastPathComponent()
-        let folder = (model == .parakeetTDTv2) ? "parakeet-tdt-0.6b-v2-coreml" : "parakeet-tdt-0.6b-v3-coreml"
+        let folder: String
+        switch model {
+        case .parakeetTDTv2:
+            folder = "parakeet-tdt-0.6b-v2-coreml"
+        case .parakeetRealtime:
+            folder = "parakeet-eou-streaming"
+        default:
+            folder = "parakeet-tdt-0.6b-v3-coreml"
+        }
         return baseCacheDir.appendingPathComponent(folder)
         #else
         return nil
@@ -2127,6 +2151,8 @@ final class ASRService: ObservableObject {
         switch model {
         case .parakeetTDT, .parakeetTDTv2:
             return 520 * 1024 * 1024
+        case .parakeetRealtime:
+            return 250 * 1024 * 1024
         default:
             return 0
         }

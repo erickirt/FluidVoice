@@ -2331,6 +2331,7 @@ final class SettingsStore: ObservableObject {
 
         case parakeetTDT = "parakeet-tdt"
         case parakeetTDTv2 = "parakeet-tdt-v2"
+        case parakeetRealtime = "parakeet-realtime"
         case qwen3Asr = "qwen3-asr"
         case cohereTranscribeSixBit = "cohere-transcribe-6bit"
 
@@ -2356,6 +2357,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return "Parakeet TDT v3 (Multilingual)"
             case .parakeetTDTv2: return "Parakeet TDT v2 (English Only)"
+            case .parakeetRealtime: return "Parakeet Flash (Beta)"
             case .qwen3Asr: return "Qwen3 ASR (Beta)"
             case .cohereTranscribeSixBit: return "Cohere Transcribe 6-bit"
             case .appleSpeech: return "Apple ASR Legacy"
@@ -2374,6 +2376,7 @@ final class SettingsStore: ObservableObject {
             case .parakeetTDT:
                 return "25 Languages"
             case .parakeetTDTv2: return "English Only (Higher Accuracy)"
+            case .parakeetRealtime: return "English Only (Live Streaming)"
             case .qwen3Asr: return "30 Languages"
             case .cohereTranscribeSixBit: return "14 Languages"
             case .appleSpeech: return "System Languages"
@@ -2387,6 +2390,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return "~500 MB"
             case .parakeetTDTv2: return "~500 MB"
+            case .parakeetRealtime: return "~250 MB"
             case .qwen3Asr: return "~2.0 GB"
             case .cohereTranscribeSixBit: return "~1.4 GB"
             case .appleSpeech: return "Built-in (Zero Download)"
@@ -2402,14 +2406,14 @@ final class SettingsStore: ObservableObject {
 
         var requiresAppleSilicon: Bool {
             switch self {
-            case .parakeetTDT, .parakeetTDTv2, .qwen3Asr, .cohereTranscribeSixBit: return true
+            case .parakeetTDT, .parakeetTDTv2, .parakeetRealtime, .qwen3Asr, .cohereTranscribeSixBit: return true
             default: return false
             }
         }
 
         var isWhisperModel: Bool {
             switch self {
-            case .parakeetTDT, .parakeetTDTv2, .qwen3Asr, .cohereTranscribeSixBit, .appleSpeech, .appleSpeechAnalyzer: return false
+            case .parakeetTDT, .parakeetTDTv2, .parakeetRealtime, .qwen3Asr, .cohereTranscribeSixBit, .appleSpeech, .appleSpeechAnalyzer: return false
             default: return true
             }
         }
@@ -2499,6 +2503,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return "Blazing Fast - Multilingual"
             case .parakeetTDTv2: return "Blazing Fast - English"
+            case .parakeetRealtime: return "Flash Dictation"
             case .qwen3Asr: return "Qwen3 - Multilingual"
             case .cohereTranscribeSixBit: return "Cohere - High Accuracy"
             case .appleSpeech: return "Apple ASR Legacy"
@@ -2522,6 +2527,8 @@ final class SettingsStore: ObservableObject {
                     "Slovenian, Spanish, Swedish, and Ukrainian."
             case .parakeetTDTv2:
                 return "Optimized for English accuracy and fastest transcription."
+            case .parakeetRealtime:
+                return "English-only streaming local dictation with low-latency partial text and end-of-utterance detection."
             case .qwen3Asr:
                 return "Qwen3 multilingual ASR via FluidAudio. Higher quality, heavier memory footprint."
             case .cohereTranscribeSixBit:
@@ -2548,7 +2555,7 @@ final class SettingsStore: ObservableObject {
         /// Minimum recommended RAM in GB for this model to run safely
         var requiredMemoryGB: Double {
             switch self {
-            case .parakeetTDT, .parakeetTDTv2:
+            case .parakeetTDT, .parakeetTDTv2, .parakeetRealtime:
                 return 4.0
             case .qwen3Asr:
                 return 8.0
@@ -2592,6 +2599,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return 5
             case .parakeetTDTv2: return 5
+            case .parakeetRealtime: return 5
             case .qwen3Asr: return 3
             case .cohereTranscribeSixBit: return 3
             case .appleSpeech: return 4
@@ -2610,6 +2618,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return 5
             case .parakeetTDTv2: return 5
+            case .parakeetRealtime: return 4
             case .qwen3Asr: return 4
             case .cohereTranscribeSixBit: return 5
             case .appleSpeech: return 4
@@ -2628,6 +2637,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return 1.0
             case .parakeetTDTv2: return 1.0
+            case .parakeetRealtime: return 1.0
             case .qwen3Asr: return 0.45
             case .cohereTranscribeSixBit: return 0.85
             case .appleSpeech: return 0.60
@@ -2646,6 +2656,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return 0.92
             case .parakeetTDTv2: return 0.96
+            case .parakeetRealtime: return 0.75
             case .qwen3Asr: return 0.90
             case .cohereTranscribeSixBit: return 0.98
             case .appleSpeech: return 0.60
@@ -2664,6 +2675,7 @@ final class SettingsStore: ObservableObject {
             switch self {
             case .parakeetTDT: return "FluidVoice Pick"
             case .parakeetTDTv2: return "FluidVoice Pick"
+            case .parakeetRealtime: return "Beta"
             case .qwen3Asr: return "Beta"
             case .cohereTranscribeSixBit: return "New"
             case .appleSpeechAnalyzer: return "New"
@@ -2674,7 +2686,7 @@ final class SettingsStore: ObservableObject {
         /// Optimization level for Apple Silicon (for display)
         var appleSiliconOptimized: Bool {
             switch self {
-            case .parakeetTDT, .parakeetTDTv2, .qwen3Asr, .cohereTranscribeSixBit, .appleSpeechAnalyzer:
+            case .parakeetTDT, .parakeetTDTv2, .parakeetRealtime, .qwen3Asr, .cohereTranscribeSixBit, .appleSpeechAnalyzer:
                 return true
             default:
                 return false
@@ -2696,6 +2708,8 @@ final class SettingsStore: ObservableObject {
         /// Models without native incremental decoding should use a slower interval.
         var streamingPreviewIntervalSeconds: Double {
             switch self {
+            case .parakeetRealtime:
+                return 0.2
             case .cohereTranscribeSixBit:
                 return 1.0
             default:
@@ -2707,6 +2721,8 @@ final class SettingsStore: ObservableObject {
         /// Cohere performs better with a slightly larger prefix than the default 1 second.
         var minimumStreamingPreviewSeconds: Double {
             switch self {
+            case .parakeetRealtime:
+                return 0.2
             case .cohereTranscribeSixBit:
                 return 1.5
             default:
@@ -2726,7 +2742,7 @@ final class SettingsStore: ObservableObject {
         /// Which provider this model belongs to
         var provider: Provider {
             switch self {
-            case .parakeetTDT, .parakeetTDTv2:
+            case .parakeetTDT, .parakeetTDTv2, .parakeetRealtime:
                 return .nvidia
             case .appleSpeech, .appleSpeechAnalyzer:
                 return .apple
@@ -2755,6 +2771,8 @@ final class SettingsStore: ObservableObject {
             case .parakeetTDTv2:
                 // Hardcoded path check for NVIDIA v2
                 return Self.parakeetCacheDirectory(version: "parakeet-tdt-0.6b-v2-coreml")
+            case .parakeetRealtime:
+                return Self.parakeetCacheDirectory(version: "parakeet-eou-streaming/parakeet-eou-streaming/160ms")
             case .qwen3Asr:
                 #if canImport(FluidAudio) && ENABLE_QWEN
                 if #available(macOS 15.0, *) {
@@ -2797,7 +2815,7 @@ final class SettingsStore: ObservableObject {
         /// Brand/provider name for the model (NVIDIA, Apple, OpenAI)
         var brandName: String {
             switch self {
-            case .parakeetTDT, .parakeetTDTv2:
+            case .parakeetTDT, .parakeetTDTv2, .parakeetRealtime:
                 return "NVIDIA"
             case .qwen3Asr:
                 return "Qwen"
@@ -2821,7 +2839,7 @@ final class SettingsStore: ObservableObject {
         /// Brand color for the provider badge
         var brandColorHex: String {
             switch self {
-            case .parakeetTDT, .parakeetTDTv2:
+            case .parakeetTDT, .parakeetTDTv2, .parakeetRealtime:
                 return "#76B900"
             case .qwen3Asr:
                 return "#E67E22"
@@ -3109,6 +3127,8 @@ extension SettingsStore.SpeechModel {
         switch self {
         case .parakeetTDT:
             return "BG, HR, CS, DA, NL, EN, ET, FI, FR, DE, EL, HU, IT, LV, LT, MT, PL, PT, RO, SK, SL, ES, SV, RU, UK"
+        case .parakeetRealtime:
+            return "EN"
         case .cohereTranscribeSixBit:
             return "14 Languages"
         case .appleSpeechAnalyzer:
