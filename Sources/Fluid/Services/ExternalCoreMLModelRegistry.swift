@@ -1,6 +1,6 @@
 import CoreML
-import Foundation
 import FluidAudio
+import Foundation
 
 enum ExternalCoreMLASRBackend {
     case cohereTranscribe
@@ -25,15 +25,15 @@ enum ExternalCoreMLArtifactsValidationError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .missingEntries(let entries):
+        case let .missingEntries(entries):
             return "Missing required files: \(entries.joined(separator: ", "))"
-        case .manifestMissing(let url):
+        case let .manifestMissing(url):
             return "Manifest file not found at \(url.path)"
-        case .manifestUnreadable(let url, let error):
+        case let .manifestUnreadable(url, error):
             return "Failed to read manifest at \(url.path): \(error.localizedDescription)"
-        case .unexpectedModelID(let expected, let actual):
+        case let .unexpectedModelID(expected, actual):
             return "Unexpected model_id '\(actual)'. Expected '\(expected)'."
-        case .unexpectedSampleRate(let expected, let actual):
+        case let .unexpectedSampleRate(expected, actual):
             return "Unexpected sample rate \(actual). Expected \(expected)."
         }
     }
@@ -137,7 +137,7 @@ enum ExternalCoreMLModelRegistry {
                 decoderFileName: "cohere_decoder_fullseq_masked.mlpackage",
                 cachedDecoderFileName: "cohere_decoder_cached.mlpackage",
                 expectedModelID: "CohereLabs/cohere-transcribe-03-2026",
-                expectedSampleRate: 16000,
+                expectedSampleRate: 16_000,
                 computeConfiguration: .aneSmall,
                 sourceURL: URL(string: "https://huggingface.co/BarathwajAnandan/cohere-transcribe-03-2026-CoreML-6bit"),
                 repositoryOwner: "BarathwajAnandan",

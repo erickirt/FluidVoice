@@ -309,7 +309,6 @@ extension VoiceEngineSettingsView {
                             Spacer()
                         }
                     }
-
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
@@ -503,7 +502,7 @@ extension VoiceEngineSettingsView {
                 ZStack(alignment: .trailing) {
                     if model.requiresExternalArtifacts {
                         HStack(spacing: 8) {
-                            if let _ = model.externalCoreMLSpec?.sourceURL {
+                            if model.externalCoreMLSpec?.sourceURL != nil {
                                 Button {
                                     self.viewModel.openExternalModelSource(for: model)
                                 } label: {

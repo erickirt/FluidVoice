@@ -63,16 +63,18 @@ final class HuggingFaceModelDownloader {
     ///   - owner: Hugging Face username or organization
     ///   - repo: Repository name containing the models
     ///   - revision: Branch or commit hash (default: "main")
-    init(owner: String, repo: String, revision: String = "main", requiredItems: [ModelItem]? = nil) {
+    init(owner: String, repo: String, revision: String = "main", requiredItems: [ModelItem] = []) {
         self.owner = owner
         self.repo = repo
         self.revision = revision
-        self.requiredItemsList = requiredItems ?? [
-            ModelItem(path: "MelEncoder.mlmodelc", isDirectory: true),
-            ModelItem(path: "Decoder.mlmodelc", isDirectory: true),
-            ModelItem(path: "JointDecision.mlmodelc", isDirectory: true),
-            ModelItem(path: "parakeet_v3_vocab.json", isDirectory: false),
-        ]
+        self.requiredItemsList = requiredItems.isEmpty
+            ? [
+                ModelItem(path: "MelEncoder.mlmodelc", isDirectory: true),
+                ModelItem(path: "Decoder.mlmodelc", isDirectory: true),
+                ModelItem(path: "JointDecision.mlmodelc", isDirectory: true),
+                ModelItem(path: "parakeet_v3_vocab.json", isDirectory: false),
+            ]
+            : requiredItems
         guard var apiBase = URL(string: "https://huggingface.co/api/models/") else {
             preconditionFailure("Invalid base Hugging Face API URL")
         }

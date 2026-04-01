@@ -2516,7 +2516,10 @@ final class SettingsStore: ObservableObject {
         var cardDescription: String {
             switch self {
             case .parakeetTDT:
-                return "Fast multilingual transcription. Supports Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Russian, Slovak, Slovenian, Spanish, Swedish, and Ukrainian."
+                return "Fast multilingual transcription. Supports Bulgarian, Croatian, Czech, Danish, " +
+                    "Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, " +
+                    "Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Russian, Slovak, " +
+                    "Slovenian, Spanish, Swedish, and Ukrainian."
             case .parakeetTDTv2:
                 return "Optimized for English accuracy and fastest transcription."
             case .qwen3Asr:
