@@ -689,6 +689,14 @@ struct ContentView: View {
         return (provider: providerOut, model: modelOut)
     }
 
+    private func currentTranscriptionModelInfo() -> (provider: String, model: String) {
+        let selectedModel = SettingsStore.shared.selectedSpeechModel
+        return (
+            provider: selectedModel.provider.rawValue.lowercased(),
+            model: selectedModel.rawValue
+        )
+    }
+
     // MARK: - Mode Transition Handler
 
     /// Centralized handler for sidebar mode transitions to ensure proper cleanup and state management
@@ -1714,9 +1722,13 @@ struct ContentView: View {
 
         // Check if we should use AI processing
         let shouldUseAI = DictationAIPostProcessingGate.isConfigured()
+        let transcriptionModelInfo = self.currentTranscriptionModelInfo()
 
         if shouldUseAI {
             DebugLogger.shared.debug("Routing transcription through AI post-processing", source: "ContentView")
+            let postProcessingModelInfo = self.currentDictationAIModelInfo()
+            let postProcessingInputChars = transcribedText.count
+            let postProcessingStart = Date()
 
             // Update overlay text to show we're now refining (processing already true)
             NotchOverlayManager.shared.updateTranscriptionText("Refining...")
@@ -1725,6 +1737,18 @@ struct ContentView: View {
             await Task.yield()
 
             finalText = await self.processTextWithAI(transcribedText)
+            let postProcessingLatencyMs = Int((Date().timeIntervalSince(postProcessingStart) * 1000).rounded())
+            AnalyticsService.shared.capture(
+                .dictationPostProcessingCompleted,
+                properties: [
+                    "latency_ms": postProcessingLatencyMs,
+                    "input_chars": postProcessingInputChars,
+                    "post_processing_provider": postProcessingModelInfo.provider ?? "unknown",
+                    "post_processing_model": postProcessingModelInfo.model ?? "unknown",
+                    "transcription_provider": transcriptionModelInfo.provider,
+                    "transcription_model": transcriptionModelInfo.model,
+                ]
+            )
 
             // Clear transient status text before leaving processing state to avoid
             // a brief non-shimmer "Refining..." preview flash.
@@ -1752,6 +1776,8 @@ struct ContentView: View {
                 "words_bucket": AnalyticsBuckets.bucketWords(AnalyticsBuckets.wordCount(in: finalText)),
                 "ai_used": shouldUseAI,
                 "ai_changed_text": transcribedText != finalText,
+                "transcription_provider": transcriptionModelInfo.provider,
+                "transcription_model": transcriptionModelInfo.model,
             ]
         )
 

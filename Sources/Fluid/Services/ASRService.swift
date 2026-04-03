@@ -259,6 +259,58 @@ final class ASRService: ObservableObject {
         self.transcriptionProvider
     }
 
+    private func currentTranscriptionAnalyticsDimensions() -> (provider: String, model: String) {
+        let selectedModel = SettingsStore.shared.selectedSpeechModel
+        return (
+            provider: selectedModel.provider.rawValue.lowercased(),
+            model: selectedModel.rawValue
+        )
+    }
+
+    private func streamingChunkErrorCategory(for error: Error) -> String {
+        if error is CancellationError {
+            return "cancelled"
+        }
+
+        let nsError = error as NSError
+        switch nsError.domain {
+        case AVFoundationErrorDomain:
+            return "avfoundation"
+        case NSOSStatusErrorDomain:
+            return "osstatus"
+        case NSCocoaErrorDomain:
+            return "cocoa"
+        default:
+            return "other"
+        }
+    }
+
+    private func captureStreamingChunkAnalytics(
+        success: Bool,
+        chunkSampleCount: Int,
+        latencyMs: Int,
+        error: Error? = nil
+    ) {
+        let dims = self.currentTranscriptionAnalyticsDimensions()
+        var properties: [String: Any] = [
+            "success": success,
+            "latency_ms": latencyMs,
+            "chunk_samples": chunkSampleCount,
+            "chunk_audio_seconds": Double(chunkSampleCount) / 16_000.0,
+            "transcription_provider": dims.provider,
+            "transcription_model": dims.model,
+        ]
+
+        if let error {
+            properties["error_category"] = self.streamingChunkErrorCategory(for: error)
+        }
+
+        AnalyticsService.shared.capture(
+            .transcriptionChunkProcessed,
+            properties: properties
+        )
+    }
+
     /// Gets a provider for a specific model (without changing the active selection)
     /// Used for downloading models without switching the active model.
     private func getProvider(for model: SettingsStore.SpeechModel) -> TranscriptionProvider {
@@ -2350,6 +2402,12 @@ final class ASRService: ObservableObject {
             }
 
             let duration = Date().timeIntervalSince(startTime)
+            let latencyMs = Int((duration * 1000).rounded())
+            self.captureStreamingChunkAnalytics(
+                success: true,
+                chunkSampleCount: chunk.count,
+                latencyMs: latencyMs
+            )
             DebugLogger.shared.debug(
                 "Streaming chunk transcription finished in \(String(format: "%.2f", duration))s",
                 source: "ASRService"
@@ -2386,6 +2444,14 @@ final class ASRService: ObservableObject {
                 self.skipNextChunk = true
             }
         } catch {
+            let duration = Date().timeIntervalSince(startTime)
+            let latencyMs = Int((duration * 1000).rounded())
+            self.captureStreamingChunkAnalytics(
+                success: false,
+                chunkSampleCount: chunk.count,
+                latencyMs: latencyMs,
+                error: error
+            )
             DebugLogger.shared.error("❌ Streaming failed: \(error)", source: "ASRService")
             self.skipNextChunk = true
         }

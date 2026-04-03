@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// Lightweight analytics pipeline:
@@ -8,6 +9,7 @@ final class AnalyticsService {
     static let shared = AnalyticsService()
 
     private let core = AnalyticsCore()
+    private static let hardwarePropertiesSnapshot = AnalyticsService.buildHardwareProperties()
 
     private init() {}
 
@@ -72,7 +74,7 @@ final class AnalyticsService {
 
         let settings = SettingsStore.shared
 
-        return [
+        var properties: [String: Any] = [
             "app_version": version,
             "app_build": build,
             "os_version": osVersion,
@@ -85,6 +87,76 @@ final class AnalyticsService {
             "press_and_hold_mode": settings.pressAndHoldMode,
             "copy_to_clipboard_enabled": settings.copyTranscriptionToClipboard,
         ]
+
+        for (key, value) in Self.hardwarePropertiesSnapshot {
+            properties[key] = value
+        }
+
+        return properties
+    }
+
+    private static func buildHardwareProperties() -> [String: Any] {
+        let architectureFamily = CPUArchitecture.isAppleSilicon ? "apple_silicon" : "intel"
+        let cpuBrand = self.sysctlString("machdep.cpu.brand_string") ?? "unknown"
+        let hardwareModel = self.sysctlString("hw.model") ?? "unknown"
+        let chipFamily = self.normalizedChipFamily(cpuBrand: cpuBrand, architectureFamily: architectureFamily)
+
+        return [
+            "hardware_arch_family": architectureFamily,
+            "hardware_chip_family": chipFamily,
+            "hardware_model": hardwareModel,
+        ]
+    }
+
+    private static func normalizedChipFamily(cpuBrand: String, architectureFamily: String) -> String {
+        let normalizedBrand = cpuBrand.lowercased()
+        let tokenized = normalizedBrand
+            .split(whereSeparator: { $0.isWhitespace })
+            .map { token in
+                String(token.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) })
+            }
+            .filter { !$0.isEmpty }
+
+        if architectureFamily == "apple_silicon" {
+            if let familyTokenIndex = tokenized.firstIndex(where: { self.isAppleMSeriesToken($0) }) {
+                let family = tokenized[familyTokenIndex]
+                let tiers = Set(["pro", "max", "ultra"])
+                if familyTokenIndex + 1 < tokenized.count {
+                    let tier = tokenized[familyTokenIndex + 1]
+                    if tiers.contains(tier) {
+                        return "\(family)_\(tier)"
+                    }
+                }
+                return family
+            }
+            return "apple_silicon_other"
+        }
+
+        if let intelTier = ["i9", "i7", "i5", "i3"].first(where: { tier in
+            tokenized.contains(where: { $0.hasPrefix(tier) })
+        }) {
+            return "intel_\(intelTier)"
+        }
+        if tokenized.contains(where: { $0.contains("xeon") }) {
+            return "intel_xeon"
+        }
+        return "intel_other"
+    }
+
+    private static func isAppleMSeriesToken(_ token: String) -> Bool {
+        guard token.hasPrefix("m"), token.count > 1 else { return false }
+        return token.dropFirst().allSatisfy(\.isNumber)
+    }
+
+    private static func sysctlString(_ name: String) -> String? {
+        var size: size_t = 0
+        guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 0 else { return nil }
+
+        var buffer = [CChar](repeating: 0, count: size)
+        guard sysctlbyname(name, &buffer, &size, nil, 0) == 0 else { return nil }
+
+        let value = String(cString: buffer).trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 }
 

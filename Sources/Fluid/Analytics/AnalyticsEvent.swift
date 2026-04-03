@@ -11,6 +11,8 @@ enum AnalyticsEvent: String {
 
     // Dictation
     case transcriptionCompleted = "transcription_completed"
+    case transcriptionChunkProcessed = "transcription_chunk_processed"
+    case dictationPostProcessingCompleted = "dictation_post_processing_completed"
     case outputDelivered = "output_delivered"
     case postTranscriptionEdit = "post_transcription_edit"
 
