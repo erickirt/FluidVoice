@@ -126,10 +126,11 @@ final class ASRService: ObservableObject {
 
     /// Returns a user-friendly status message for model loading state
     var modelStatusMessage: String {
+        let usesExternalArtifacts = SettingsStore.shared.selectedSpeechModel.requiresExternalArtifacts
         if self.isAsrReady { return "Model ready" }
         if self.isDownloadingModel { return "Downloading model..." }
         if self.isLoadingModel { return "Loading model into memory..." }
-        if self.modelsExistOnDisk { return "Model cached, needs loading" }
+        if self.modelsExistOnDisk { return usesExternalArtifacts ? "Model cached, needs loading" : "Model cached, needs loading" }
         return "Model not downloaded"
     }
 
@@ -137,6 +138,8 @@ final class ASRService: ObservableObject {
 
     /// Cached providers to avoid re-instantiation
     private var fluidAudioProvider: FluidAudioProvider?
+    private var parakeetRealtimeProvider: ParakeetRealtimeProvider?
+    private var externalCoreMLProvider: ExternalCoreMLTranscriptionProvider?
     private var whisperProvider: WhisperProvider?
     private var appleSpeechProvider: AppleSpeechProvider?
     /// Stored as Any? because @available cannot be applied to stored properties
@@ -164,6 +167,10 @@ final class ASRService: ObservableObject {
             return self.getAppleSpeechProvider()
         case .parakeetTDT, .parakeetTDTv2:
             return self.getFluidAudioProvider()
+        case .parakeetRealtime:
+            return self.getParakeetRealtimeProvider()
+        case .cohereTranscribeSixBit:
+            return self.getExternalCoreMLProvider()
         case .qwen3Asr:
             DebugLogger.shared.warning(
                 "ASRService: Qwen provider removed; falling back to FluidAudio Parakeet path",
@@ -187,6 +194,26 @@ final class ASRService: ObservableObject {
             "ASRService: Created FluidAudio provider [vocabBoosting=\(SettingsStore.shared.vocabularyBoostingEnabled)]",
             source: "ASRService"
         )
+        return provider
+    }
+
+    private func getParakeetRealtimeProvider() -> ParakeetRealtimeProvider {
+        if let existing = parakeetRealtimeProvider {
+            return existing
+        }
+        let provider = ParakeetRealtimeProvider()
+        self.parakeetRealtimeProvider = provider
+        DebugLogger.shared.info("ASRService: Created Parakeet real-time provider", source: "ASRService")
+        return provider
+    }
+
+    private func getExternalCoreMLProvider() -> ExternalCoreMLTranscriptionProvider {
+        if let existing = externalCoreMLProvider {
+            return existing
+        }
+        let provider = ExternalCoreMLTranscriptionProvider()
+        self.externalCoreMLProvider = provider
+        DebugLogger.shared.info("ASRService: Created external CoreML provider", source: "ASRService")
         return provider
     }
 
@@ -232,6 +259,58 @@ final class ASRService: ObservableObject {
         self.transcriptionProvider
     }
 
+    private func currentTranscriptionAnalyticsDimensions() -> (provider: String, model: String) {
+        let selectedModel = SettingsStore.shared.selectedSpeechModel
+        return (
+            provider: selectedModel.provider.rawValue.lowercased(),
+            model: selectedModel.rawValue
+        )
+    }
+
+    private func streamingChunkErrorCategory(for error: Error) -> String {
+        if error is CancellationError {
+            return "cancelled"
+        }
+
+        let nsError = error as NSError
+        switch nsError.domain {
+        case AVFoundationErrorDomain:
+            return "avfoundation"
+        case NSOSStatusErrorDomain:
+            return "osstatus"
+        case NSCocoaErrorDomain:
+            return "cocoa"
+        default:
+            return "other"
+        }
+    }
+
+    private func captureStreamingChunkAnalytics(
+        success: Bool,
+        chunkSampleCount: Int,
+        latencyMs: Int,
+        error: Error? = nil
+    ) {
+        let dims = self.currentTranscriptionAnalyticsDimensions()
+        var properties: [String: Any] = [
+            "success": success,
+            "latency_ms": latencyMs,
+            "chunk_samples": chunkSampleCount,
+            "chunk_audio_seconds": Double(chunkSampleCount) / 16_000.0,
+            "transcription_provider": dims.provider,
+            "transcription_model": dims.model,
+        ]
+
+        if let error {
+            properties["error_category"] = self.streamingChunkErrorCategory(for: error)
+        }
+
+        AnalyticsService.shared.capture(
+            .transcriptionChunkProcessed,
+            properties: properties
+        )
+    }
+
     /// Gets a provider for a specific model (without changing the active selection)
     /// Used for downloading models without switching the active model.
     private func getProvider(for model: SettingsStore.SpeechModel) -> TranscriptionProvider {
@@ -248,6 +327,10 @@ final class ASRService: ObservableObject {
             // Create a new provider configured for the specific model
             let provider = FluidAudioProvider(modelOverride: model, configureWordBoosting: false)
             return provider
+        case .parakeetRealtime:
+            return ParakeetRealtimeProvider()
+        case .cohereTranscribeSixBit:
+            return ExternalCoreMLTranscriptionProvider(modelOverride: model)
         case .qwen3Asr:
             // Qwen support removed; route legacy requests to Parakeet v3.
             return FluidAudioProvider(modelOverride: .parakeetTDT, configureWordBoosting: false)
@@ -323,6 +406,8 @@ final class ASRService: ObservableObject {
 
         // Reset cached providers to force re-initialization with new settings
         self.fluidAudioProvider = nil
+        self.parakeetRealtimeProvider = nil
+        self.externalCoreMLProvider = nil
         self.whisperProvider = nil
         self.appleSpeechProvider = nil
         self._appleSpeechAnalyzerProvider = nil
@@ -381,7 +466,6 @@ final class ASRService: ObservableObject {
     // Streaming transcription state (no VAD)
     private var streamingTask: Task<Void, Never>?
     private var lastProcessedSampleCount: Int = 0
-    private let chunkDurationSeconds: Double = 0.6 // Fast interval - TranscriptionExecutor actor handles CoreML serialization
     private var isProcessingChunk: Bool = false
     private var skipNextChunk: Bool = false
     private var previousFullTranscription: String = ""
@@ -394,6 +478,14 @@ final class ASRService: ObservableObject {
     private var audioLevelSubject = PassthroughSubject<CGFloat, Never>()
     var audioLevelPublisher: AnyPublisher<CGFloat, Never> { self.audioLevelSubject.eraseToAnyPublisher() }
     private var lastAudioLevelSentAt: TimeInterval = 0
+
+    private var streamingChunkDurationSeconds: Double {
+        SettingsStore.shared.selectedSpeechModel.streamingPreviewIntervalSeconds
+    }
+
+    private var minimumStreamingPreviewSamples: Int {
+        Int(SettingsStore.shared.selectedSpeechModel.minimumStreamingPreviewSeconds * 16_000)
+    }
 
     /// Handles AVAudioEngine tap processing off the @MainActor to avoid touching main-actor state
     /// from CoreAudio's realtime callback thread.
@@ -440,7 +532,7 @@ final class ASRService: ObservableObject {
     @MainActor
     private func handleParakeetVocabularyDidChange() {
         let model = SettingsStore.shared.selectedSpeechModel
-        guard model == .parakeetTDT || model == .parakeetTDTv2 else { return }
+        guard model.supportsCustomVocabulary else { return }
         guard self.isRunning == false else {
             self.hasPendingParakeetVocabularyReload = true
             DebugLogger.shared.info(
@@ -459,7 +551,7 @@ final class ASRService: ObservableObject {
 
         self.hasPendingParakeetVocabularyReload = false
         let model = SettingsStore.shared.selectedSpeechModel
-        guard model == .parakeetTDT || model == .parakeetTDTv2 else { return }
+        guard model.supportsCustomVocabulary else { return }
 
         DebugLogger.shared.info(
             "ASRService: Applying queued vocabulary reload after recording stopped.",
@@ -470,7 +562,7 @@ final class ASRService: ObservableObject {
 
     private func refreshWordBoostStatus() {
         let model = SettingsStore.shared.selectedSpeechModel
-        guard model == .parakeetTDT || model == .parakeetTDTv2,
+        guard model.supportsCustomVocabulary,
               let provider = self.fluidAudioProvider,
               provider.isReady
         else {
@@ -492,7 +584,7 @@ final class ASRService: ObservableObject {
 
     private func recordWordBoostHitIfAny(transcribedText: String) {
         let model = SettingsStore.shared.selectedSpeechModel
-        guard model == .parakeetTDT || model == .parakeetTDTv2,
+        guard model.supportsCustomVocabulary,
               let provider = self.fluidAudioProvider,
               provider.isWordBoostingActive
         else { return }
@@ -2061,7 +2153,7 @@ final class ASRService: ObservableObject {
 
     private func startParakeetDownloadProgressMonitor() {
         let model = SettingsStore.shared.selectedSpeechModel
-        guard model == .parakeetTDT || model == .parakeetTDTv2 else { return }
+        guard model == .parakeetTDT || model == .parakeetTDTv2 || model == .parakeetRealtime else { return }
         guard let modelDir = self.parakeetCacheDirectory(for: model) else { return }
 
         self.stopDownloadProgressMonitor()
@@ -2091,7 +2183,15 @@ final class ASRService: ObservableObject {
     private func parakeetCacheDirectory(for model: SettingsStore.SpeechModel) -> URL? {
         #if arch(arm64)
         let baseCacheDir = AsrModels.defaultCacheDirectory().deletingLastPathComponent()
-        let folder = (model == .parakeetTDTv2) ? "parakeet-tdt-0.6b-v2-coreml" : "parakeet-tdt-0.6b-v3-coreml"
+        let folder: String
+        switch model {
+        case .parakeetTDTv2:
+            folder = "parakeet-tdt-0.6b-v2-coreml"
+        case .parakeetRealtime:
+            folder = "parakeet-eou-streaming"
+        default:
+            folder = "parakeet-tdt-0.6b-v3-coreml"
+        }
         return baseCacheDir.appendingPathComponent(folder)
         #else
         return nil
@@ -2103,6 +2203,8 @@ final class ASRService: ObservableObject {
         switch model {
         case .parakeetTDT, .parakeetTDTv2:
             return 520 * 1024 * 1024
+        case .parakeetRealtime:
+            return 250 * 1024 * 1024
         default:
             return 0
         }
@@ -2173,7 +2275,10 @@ final class ASRService: ObservableObject {
         self.streamingTask?.cancel()
         guard self.isAsrReady else { return }
 
-        DebugLogger.shared.debug("Starting streaming transcription task (interval: \(self.chunkDurationSeconds)s)", source: "ASRService")
+        DebugLogger.shared.debug(
+            "Starting streaming transcription task (interval: \(self.streamingChunkDurationSeconds)s, minSamples: \(self.minimumStreamingPreviewSamples))",
+            source: "ASRService"
+        )
 
         self.streamingTask = Task { [weak self] in
             await self?.runStreamingLoop()
@@ -2234,7 +2339,7 @@ final class ASRService: ObservableObject {
             }
 
             do {
-                try await Task.sleep(nanoseconds: UInt64(self.chunkDurationSeconds * 1_000_000_000))
+                try await Task.sleep(nanoseconds: UInt64(self.streamingChunkDurationSeconds * 1_000_000_000))
             } catch {
                 DebugLogger.shared.debug("Streaming transcription task cancelled", source: "ASRService")
                 break
@@ -2264,7 +2369,7 @@ final class ASRService: ObservableObject {
         // Thread-safe count check
         let currentSampleCount = self.audioBuffer.count
         // Most ASR models require at least 1 second of 16kHz audio (16,000 samples) to transcribe
-        let minSamples = 16_000 // 1 second minimum required by transcription providers
+        let minSamples = self.minimumStreamingPreviewSamples
         guard currentSampleCount >= minSamples else {
             // Only log once per recording session to avoid spam
             if currentSampleCount > 0, self.lastProcessedSampleCount == 0 {
@@ -2297,6 +2402,12 @@ final class ASRService: ObservableObject {
             }
 
             let duration = Date().timeIntervalSince(startTime)
+            let latencyMs = Int((duration * 1000).rounded())
+            self.captureStreamingChunkAnalytics(
+                success: true,
+                chunkSampleCount: chunk.count,
+                latencyMs: latencyMs
+            )
             DebugLogger.shared.debug(
                 "Streaming chunk transcription finished in \(String(format: "%.2f", duration))s",
                 source: "ASRService"
@@ -2325,11 +2436,22 @@ final class ASRService: ObservableObject {
 
             // If transcription takes longer than the interval, skip next to prevent queue buildup
             // This allows slower machines to still work without overwhelming the system
-            if duration > self.chunkDurationSeconds {
-                DebugLogger.shared.debug("⚠️ Transcription slow (\(String(format: "%.2f", duration))s > \(self.chunkDurationSeconds)s), skipping next chunk", source: "ASRService")
+            if duration > self.streamingChunkDurationSeconds {
+                DebugLogger.shared.debug(
+                    "⚠️ Transcription slow (\(String(format: "%.2f", duration))s > \(self.streamingChunkDurationSeconds)s), skipping next chunk",
+                    source: "ASRService"
+                )
                 self.skipNextChunk = true
             }
         } catch {
+            let duration = Date().timeIntervalSince(startTime)
+            let latencyMs = Int((duration * 1000).rounded())
+            self.captureStreamingChunkAnalytics(
+                success: false,
+                chunkSampleCount: chunk.count,
+                latencyMs: latencyMs,
+                error: error
+            )
             DebugLogger.shared.error("❌ Streaming failed: \(error)", source: "ASRService")
             self.skipNextChunk = true
         }

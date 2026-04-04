@@ -3,26 +3,14 @@ import Foundation
 /// Shared gating logic for whether dictation AI post-processing is usable/configured.
 enum DictationAIPostProcessingGate {
     /// Returns true if dictation AI post-processing should be allowed, given current settings.
-    /// - Requires `SettingsStore.shared.enableAIProcessing == true`
+    /// - Requires dictation prompt selection to not be `Off`
     /// - For Apple Intelligence: requires `AppleIntelligenceService.isAvailable`
     /// - For other providers: requires a local endpoint OR a non-empty API key
     static func isConfigured() -> Bool {
         let settings = SettingsStore.shared
-        let hasCustomPrompt = settings.selectedPromptID(for: .dictate) != nil
-        guard settings.enableAIProcessing || hasCustomPrompt else { return false }
+        guard !settings.isDictationPromptOff else { return false }
 
-        let providerID = settings.selectedProviderID
-        if providerID == "apple-intelligence" {
-            return AppleIntelligenceService.isAvailable
-        }
-
-        let baseURL = self.baseURL(for: providerID, settings: settings)
-        if self.isLocalEndpoint(baseURL) {
-            return true
-        }
-
-        let apiKey = (settings.getAPIKey(for: providerID) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return !apiKey.isEmpty
+        return self.isProviderConfigured()
     }
 
     /// Returns true if the selected AI provider is reachable/configured (API key or local endpoint),

@@ -192,7 +192,7 @@ struct MeetingTranscriptionView: View {
                         Text("Choose Audio or Video File")
                             .font(.headline)
 
-                        Text("Supported: WAV, MP3, M4A, MP4, MOV, and more")
+                        Text(MeetingTranscriptionService.supportedFormatsDescription)
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -221,14 +221,7 @@ struct MeetingTranscriptionView: View {
         }
         .fileImporter(
             isPresented: self.$showingFilePicker,
-            allowedContentTypes: [
-                .audio,
-                .movie,
-                .mpeg4Movie,
-                UTType(filenameExtension: "wav") ?? .audio,
-                UTType(filenameExtension: "mp3") ?? .audio,
-                UTType(filenameExtension: "m4a") ?? .audio,
-            ],
+            allowedContentTypes: MeetingTranscriptionService.allowedContentTypes,
             allowsMultipleSelection: false
         ) { result in
             switch result {
@@ -544,9 +537,9 @@ struct MeetingTranscriptionView: View {
 
     // MARK: - Helper Functions
 
-    private static let supportedFileExtensions = ["wav", "mp3", "m4a", "aac", "flac", "aiff", "caf", "mp4", "mov"]
+    private static let supportedFileExtensions = MeetingTranscriptionService.supportedFileExtensions
 
-    private static let dropErrorCopy = "Accepted file types: WAV, MP3, M4A, MP4, MOV, and more."
+    private static let dropErrorCopy = MeetingTranscriptionService.dropErrorCopy
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }

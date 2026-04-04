@@ -67,76 +67,68 @@ extension AIEnhancementSettingsView {
                             Image(systemName: "brain")
                                 .font(.title3)
                                 .foregroundStyle(self.theme.palette.accent)
-                            Text("AI Enhancement")
+                            Text("AI Setup")
                                 .font(.title3)
                                 .fontWeight(.semibold)
                         }
                         Spacer()
-                        Toggle("", isOn: self.$viewModel.enableAIProcessing)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                            .tint(self.theme.palette.accent)
                     }
 
-                    if self.viewModel.enableAIProcessing {
-                        Divider()
-                            .background(self.theme.palette.separator.opacity(0.5))
+                    Divider()
+                        .background(self.theme.palette.separator.opacity(0.5))
 
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("FluidVoice can clean up or rewrite your transcription using AI.")
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Choose a provider, model, and dictation prompt. Select `Off` in Dictate prompts for raw transcription.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        self.aiOnboardingInfoRow("Local models run on your Mac. Examples: Ollama and LM Studio.")
+                        self.aiOnboardingInfoRow("Cloud models use a provider of your choice. Examples: OpenAI, Anthropic, Groq, and OpenRouter.")
+                        self.aiOnboardingInfoRow("Dictation uses AI when Dictate prompt is `Default` or a custom prompt.")
+                    }
+
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Providers")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("Configure your AI provider")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-
-                            self.aiOnboardingInfoRow("Local models run on your Mac. Examples: Ollama and LM Studio.")
-                            self.aiOnboardingInfoRow("Cloud models use a provider of your choice. Examples: OpenAI, Anthropic, Groq, and OpenRouter.")
-                            self.aiOnboardingInfoRow("If you do not want to choose right now, FluidVoice still works without AI.")
                         }
 
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Providers")
-                                    .font(.system(size: 14, weight: .semibold))
-                                Text("Configure your AI provider")
+                        Spacer()
+
+                        Button(action: { self.viewModel.showHelp.toggle() }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: self.viewModel.showHelp ? "questionmark.circle.fill" : "questionmark.circle")
+                                    .font(.system(size: 14))
+                                Text("Help")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .fontWeight(.medium)
                             }
-
-                            Spacer()
-
-                            Button(action: { self.viewModel.showHelp.toggle() }) {
-                                HStack(spacing: 5) {
-                                    Image(systemName: self.viewModel.showHelp ? "questionmark.circle.fill" : "questionmark.circle")
-                                        .font(.system(size: 14))
-                                    Text("Help")
-                                        .font(.caption)
-                                        .fontWeight(.medium)
-                                }
-                                .foregroundStyle(self.viewModel.showHelp ? self.theme.palette.accent : .secondary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(
-                                    Capsule()
-                                        .fill(self.viewModel.showHelp ? self.theme.palette.accent.opacity(0.12) : self.theme.palette.cardBackground.opacity(0.8))
-                                        .overlay(
-                                            Capsule()
-                                                .stroke(self.viewModel.showHelp ? self.theme.palette.accent.opacity(0.3) : self.theme.palette.cardBorder.opacity(0.4), lineWidth: 1)
-                                        )
-                                )
-                            }
-                            .buttonStyle(.plain)
+                            .foregroundStyle(self.viewModel.showHelp ? self.theme.palette.accent : .secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(self.viewModel.showHelp ? self.theme.palette.accent.opacity(0.12) : self.theme.palette.cardBackground.opacity(0.8))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(self.viewModel.showHelp ? self.theme.palette.accent.opacity(0.3) : self.theme.palette.cardBorder.opacity(0.4), lineWidth: 1)
+                                    )
+                            )
                         }
-
-                        if self.viewModel.showHelp { self.helpSectionView }
-
-                        self.providerStepContent
-
-                        Divider()
-                            .background(self.theme.palette.separator.opacity(0.5))
-
-                        self.promptsStepContent
-                    } else {
-                        self.setupDisabledInfo
+                        .buttonStyle(.plain)
                     }
+
+                    if self.viewModel.showHelp { self.helpSectionView }
+
+                    self.providerStepContent
+
+                    Divider()
+                        .background(self.theme.palette.separator.opacity(0.5))
+
+                    self.promptsStepContent
                 }
                 .padding(16)
             }
@@ -171,12 +163,11 @@ extension AIEnhancementSettingsView {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                self.helpStep("1", "Enable AI enhancement", "power")
-                self.helpStep("2", "Choose a provider", "building.2")
-                self.helpStep("3", "Add an API key if needed", "key")
-                self.helpStep("4", "Pick the model you want", "cpu")
-                self.helpStep("5", "Verify the connection", "checkmark.shield")
-                self.helpStep("6", "Customize your prompt", "text.bubble")
+                self.helpStep("1", "Choose a provider", "building.2")
+                self.helpStep("2", "Add an API key if needed", "key")
+                self.helpStep("3", "Pick the model you want", "cpu")
+                self.helpStep("4", "Verify the connection", "checkmark.shield")
+                self.helpStep("5", "Set Dictate to Off, Default, or a custom prompt", "text.bubble")
             }
         }
         .padding(14)
@@ -210,35 +201,6 @@ extension AIEnhancementSettingsView {
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         }
-    }
-
-    var setupDisabledInfo: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 24))
-                .foregroundStyle(self.theme.palette.accent.opacity(0.5))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("AI Enhancement Disabled")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
-                Text("Turn this on to enable AI-powered cleanup. We'll guide you through setup in a few short steps.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(2)
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(self.theme.palette.contentBackground.opacity(0.5))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(self.theme.palette.cardBorder.opacity(0.25), lineWidth: 1)
-                )
-        )
-        .padding(.top, 4)
     }
 
     var providerStepContent: some View {

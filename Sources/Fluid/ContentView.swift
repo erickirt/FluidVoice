@@ -723,6 +723,14 @@ struct ContentView: View {
         return (provider: providerOut, model: modelOut)
     }
 
+    private func currentTranscriptionModelInfo() -> (provider: String, model: String) {
+        let selectedModel = SettingsStore.shared.selectedSpeechModel
+        return (
+            provider: selectedModel.provider.rawValue.lowercased(),
+            model: selectedModel.rawValue
+        )
+    }
+
     // MARK: - Mode Transition Handler
 
     /// Centralized handler for sidebar mode transitions to ensure proper cleanup and state management
@@ -976,7 +984,7 @@ struct ContentView: View {
             accessibilityEnabled: self.accessibilityEnabled,
             markAISkipped: {
                 self.settings.onboardingAISkipped = true
-                self.menuBarManager.setAIProcessingEnabled(false)
+                self.settings.setDictationPromptSelection(.off)
             },
             markPlaygroundValidated: {
                 self.settings.onboardingPlaygroundValidated = true
@@ -1700,8 +1708,8 @@ struct ContentView: View {
             promptTest.lastOutputText = ""
             promptTest.lastError = ""
 
-            guard DictationAIPostProcessingGate.isConfigured() else {
-                promptTest.lastError = "AI post-processing is not configured. Enable AI Enhancement and configure a provider/model (and API key for non-local endpoints)."
+            guard DictationAIPostProcessingGate.isProviderConfigured() else {
+                promptTest.lastError = "AI post-processing is not configured. Configure a provider/model (and API key for non-local endpoints) to test prompts."
                 self.menuBarManager.setProcessing(false)
                 return
             }
@@ -1752,11 +1760,17 @@ struct ContentView: View {
 
         var finalText: String
 
-        // Check if we should use AI processing
-        let shouldUseAI = DictationAIPostProcessingGate.isConfigured() || (promptOverride != nil && DictationAIPostProcessingGate.isProviderConfigured())
+        // Check if we should use AI processing.
+        // Prompt mode can still use AI when a provider is configured even if the global gate is off.
+        let shouldUseAI = DictationAIPostProcessingGate.isConfigured() ||
+            (promptOverride != nil && DictationAIPostProcessingGate.isProviderConfigured())
+        let transcriptionModelInfo = self.currentTranscriptionModelInfo()
 
         if shouldUseAI {
             DebugLogger.shared.debug("Routing transcription through AI post-processing", source: "ContentView")
+            let postProcessingModelInfo = self.currentDictationAIModelInfo()
+            let postProcessingInputChars = transcribedText.count
+            let postProcessingStart = Date()
 
             // Update overlay text to show we're now refining (processing already true)
             NotchOverlayManager.shared.updateTranscriptionText("Refining...")
@@ -1765,6 +1779,18 @@ struct ContentView: View {
             await Task.yield()
 
             finalText = await self.processTextWithAI(transcribedText, overrideSystemPrompt: promptOverride)
+            let postProcessingLatencyMs = Int((Date().timeIntervalSince(postProcessingStart) * 1000).rounded())
+            AnalyticsService.shared.capture(
+                .dictationPostProcessingCompleted,
+                properties: [
+                    "latency_ms": postProcessingLatencyMs,
+                    "input_chars": postProcessingInputChars,
+                    "post_processing_provider": postProcessingModelInfo.provider ?? "unknown",
+                    "post_processing_model": postProcessingModelInfo.model ?? "unknown",
+                    "transcription_provider": transcriptionModelInfo.provider,
+                    "transcription_model": transcriptionModelInfo.model,
+                ]
+            )
 
             // Clear transient status text before leaving processing state to avoid
             // a brief non-shimmer "Refining..." preview flash.
@@ -1792,6 +1818,8 @@ struct ContentView: View {
                 "words_bucket": AnalyticsBuckets.bucketWords(AnalyticsBuckets.wordCount(in: finalText)),
                 "ai_used": shouldUseAI,
                 "ai_changed_text": transcribedText != finalText,
+                "transcription_provider": transcriptionModelInfo.provider,
+                "transcription_model": transcriptionModelInfo.model,
             ]
         )
 
@@ -2368,69 +2396,6 @@ struct ContentView: View {
         self.newModelName = ""
     }
 
-    // MARK: - OpenAI-compatible call for playground
-
-    private func callOpenAIChat() async {
-        guard !self.isCallingAI else { return }
-        await MainActor.run { self.isCallingAI = true }
-        defer { Task { await MainActor.run { isCallingAI = false } } }
-
-        let result = await processTextWithAI(aiInputText)
-        await MainActor.run { self.aiOutputText = result }
-    }
-
-    private func getModelStatusText() -> String {
-        if self.asr.isLoadingModel {
-            return "Loading model into memory... (30-60 sec)"
-        } else if self.asr.isDownloadingModel {
-            return "Downloading model... Please wait."
-        } else if self.asr.isAsrReady {
-            return "Model is ready to use!"
-        } else if self.asr.modelsExistOnDisk {
-            return "Model cached. Will load on first use."
-        } else {
-            return "Model will download when needed."
-        }
-    }
-
-    private var onboardingVoiceModelReady: Bool {
-        self.asr.isAsrReady || self.asr.modelsExistOnDisk || SettingsStore.shared.selectedSpeechModel.isInstalled
-    }
-
-    private var onboardingMicrophoneReady: Bool {
-        self.asr.micStatus == .authorized
-    }
-
-    private var onboardingAccessibilityReady: Bool {
-        self.accessibilityEnabled
-    }
-
-    private var onboardingAIReady: Bool {
-        self.settings.onboardingAISkipped || DictationAIPostProcessingGate.isConfigured()
-    }
-
-    private var onboardingPlaygroundReady: Bool {
-        self.settings.onboardingPlaygroundValidated
-    }
-
-    private var canCompleteOnboarding: Bool {
-        self.onboardingVoiceModelReady &&
-            self.onboardingMicrophoneReady &&
-            self.onboardingAccessibilityReady &&
-            self.onboardingAIReady &&
-            self.onboardingPlaygroundReady
-    }
-
-    @MainActor
-    private func revealAppInFinder() {
-        let appPath = Bundle.main.bundlePath
-        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: appPath)])
-    }
-
-    private func openApplicationsFolder() {
-        NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications"))
-    }
-
     private func initializeHotkeyManagerIfNeeded() {
         NotchContentState.shared.onPromptModeSwitchRequested = { mode in
             self.handleLivePromptModeSwitch(mode)
@@ -2446,9 +2411,6 @@ struct ContentView: View {
         }
         NotchContentState.shared.onUndoLastAIRequested = {
             self.undoLastAIProcessingFromHistory()
-        }
-        NotchContentState.shared.onToggleAIProcessingRequested = {
-            _ = self.menuBarManager.toggleAIProcessingEnabled()
         }
         NotchContentState.shared.onOpenPreferencesRequested = {
             self.menuBarManager.openPreferencesFromUI()
@@ -2731,6 +2693,71 @@ struct ContentView: View {
 // SidebarItem enum moved to top of file
 
 // AudioDevice and AudioHardwareObserver moved to Services/AudioDeviceService.swift
+
+// MARK: - ContentView Playground & Onboarding Helpers
+
+extension ContentView {
+    private func callOpenAIChat() async {
+        guard !self.isCallingAI else { return }
+        await MainActor.run { self.isCallingAI = true }
+        defer { Task { await MainActor.run { isCallingAI = false } } }
+
+        let result = await processTextWithAI(aiInputText)
+        await MainActor.run { self.aiOutputText = result }
+    }
+
+    private func getModelStatusText() -> String {
+        if self.asr.isLoadingModel {
+            return "Loading model into memory... (30-60 sec)"
+        } else if self.asr.isDownloadingModel {
+            return "Downloading model... Please wait."
+        } else if self.asr.isAsrReady {
+            return "Model is ready to use!"
+        } else if self.asr.modelsExistOnDisk {
+            return "Model cached. Will load on first use."
+        } else {
+            return "Model will download when needed."
+        }
+    }
+
+    private var onboardingVoiceModelReady: Bool {
+        self.asr.isAsrReady || self.asr.modelsExistOnDisk || SettingsStore.shared.selectedSpeechModel.isInstalled
+    }
+
+    private var onboardingMicrophoneReady: Bool {
+        self.asr.micStatus == .authorized
+    }
+
+    private var onboardingAccessibilityReady: Bool {
+        self.accessibilityEnabled
+    }
+
+    private var onboardingAIReady: Bool {
+        self.settings.onboardingAISkipped || DictationAIPostProcessingGate.isConfigured()
+    }
+
+    private var onboardingPlaygroundReady: Bool {
+        self.settings.onboardingPlaygroundValidated
+    }
+
+    private var canCompleteOnboarding: Bool {
+        self.onboardingVoiceModelReady &&
+            self.onboardingMicrophoneReady &&
+            self.onboardingAccessibilityReady &&
+            self.onboardingAIReady &&
+            self.onboardingPlaygroundReady
+    }
+
+    @MainActor
+    private func revealAppInFinder() {
+        let appPath = Bundle.main.bundlePath
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: appPath)])
+    }
+
+    private func openApplicationsFolder() {
+        NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications"))
+    }
+}
 
 // MARK: - ContentView Accessibility & Lifecycle Helpers
 

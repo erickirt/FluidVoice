@@ -23,6 +23,7 @@ final class HuggingFaceModelDownloader {
     private let owner: String
     private let repo: String
     private let revision: String
+    private let requiredItemsList: [ModelItem]
 
     private var baseApiURL: URL
     private var baseResolveURL: URL
@@ -32,6 +33,12 @@ final class HuggingFaceModelDownloader {
         self.owner = "FluidInference"
         self.repo = "parakeet-tdt-0.6b-v3-coreml"
         self.revision = "main"
+        self.requiredItemsList = [
+            ModelItem(path: "MelEncoder.mlmodelc", isDirectory: true),
+            ModelItem(path: "Decoder.mlmodelc", isDirectory: true),
+            ModelItem(path: "JointDecision.mlmodelc", isDirectory: true),
+            ModelItem(path: "parakeet_v3_vocab.json", isDirectory: false),
+        ]
         guard var apiBase = URL(string: "https://huggingface.co/api/models/") else {
             preconditionFailure("Invalid base Hugging Face API URL")
         }
@@ -56,10 +63,18 @@ final class HuggingFaceModelDownloader {
     ///   - owner: Hugging Face username or organization
     ///   - repo: Repository name containing the models
     ///   - revision: Branch or commit hash (default: "main")
-    init(owner: String, repo: String, revision: String = "main") {
+    init(owner: String, repo: String, revision: String = "main", requiredItems: [ModelItem] = []) {
         self.owner = owner
         self.repo = repo
         self.revision = revision
+        self.requiredItemsList = requiredItems.isEmpty
+            ? [
+                ModelItem(path: "MelEncoder.mlmodelc", isDirectory: true),
+                ModelItem(path: "Decoder.mlmodelc", isDirectory: true),
+                ModelItem(path: "JointDecision.mlmodelc", isDirectory: true),
+                ModelItem(path: "parakeet_v3_vocab.json", isDirectory: false),
+            ]
+            : requiredItems
         guard var apiBase = URL(string: "https://huggingface.co/api/models/") else {
             preconditionFailure("Invalid base Hugging Face API URL")
         }
@@ -152,13 +167,7 @@ final class HuggingFaceModelDownloader {
     }
 
     private func requiredItems() -> [ModelItem] {
-        return [
-            // Preferred v3 unified model file names used by FluidAudio 0.5+
-            ModelItem(path: "MelEncoder.mlmodelc", isDirectory: true),
-            ModelItem(path: "Decoder.mlmodelc", isDirectory: true),
-            ModelItem(path: "JointDecision.mlmodelc", isDirectory: true),
-            ModelItem(path: "parakeet_v3_vocab.json", isDirectory: false),
-        ]
+        self.requiredItemsList
     }
 
     private func downloadDirectory(relativePath: String, to destination: URL) async throws {

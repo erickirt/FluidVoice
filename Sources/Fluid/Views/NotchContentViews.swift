@@ -141,8 +141,6 @@ class NotchContentState: ObservableObject {
     var onCopyLastRequested: (() -> Void)?
     /// Called when the user requests undoing AI processing for the latest entry.
     var onUndoLastAIRequested: (() -> Void)?
-    /// Called when the user requests toggling dictation AI enhancement.
-    var onToggleAIProcessingRequested: (() -> Void)?
     /// Called when the user requests opening Preferences.
     var onOpenPreferencesRequested: (() -> Void)?
 
@@ -352,6 +350,12 @@ struct NotchExpandedView: View {
 
     private var isAppPromptOverrideActive: Bool {
         guard let activePromptMode else { return false }
+        if activePromptMode.normalized == .dictate &&
+            self.settings.isDictationPromptOff &&
+            !self.contentState.isPromptModeActive
+        {
+            return false
+        }
         return self.settings.hasAppPromptBinding(
             for: activePromptMode,
             appBundleID: self.promptResolutionBundleID
@@ -363,6 +367,12 @@ struct NotchExpandedView: View {
             return overrideName
         }
         guard let activePromptMode else { return "N/A" }
+        if activePromptMode.normalized == .dictate &&
+            self.settings.isDictationPromptOff &&
+            !self.contentState.isPromptModeActive
+        {
+            return "Off"
+        }
         if let profile = self.settings.resolvedPromptProfile(
             for: activePromptMode,
             appBundleID: self.promptResolutionBundleID
@@ -513,11 +523,41 @@ struct NotchExpandedView: View {
         let isInPromptMode = self.contentState.isPromptModeActive
 
         return VStack(alignment: .leading, spacing: 0) {
+            if promptMode.normalized == .dictate && !isInPromptMode {
+                Button(action: {
+                    self.settings.setDictationPromptSelection(.off)
+                    let pid = NotchContentState.shared.recordingTargetPID
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        if let pid { _ = TypingService.activateApp(pid: pid) }
+                    }
+                    self.showPromptHoverMenu = false
+                }) {
+                    HStack {
+                        Text("Off")
+                        Spacer()
+                        let isSelected = !isInPromptMode && self.settings.isDictationPromptOff
+                        if isSelected {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, 4)
+
+                Divider()
+                    .padding(.vertical, 4)
+            }
+
             Button(action: {
                 if isInPromptMode {
                     self.contentState.onPromptModeProfileChangeRequested?(nil)
                 } else {
-                    self.settings.setSelectedPromptID(nil, for: promptMode)
+                    if promptMode.normalized == .dictate {
+                        self.settings.setDictationPromptSelection(.default)
+                    } else {
+                        self.settings.setSelectedPromptID(nil, for: promptMode)
+                    }
                 }
                 let pid = NotchContentState.shared.recordingTargetPID
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -530,7 +570,7 @@ struct NotchExpandedView: View {
                     Spacer()
                     let isSelected = isInPromptMode
                         ? (self.contentState.promptModeOverrideProfileID == nil)
-                        : (self.settings.selectedPromptID(for: promptMode) == nil)
+                        : (!self.settings.isDictationPromptOff && self.settings.selectedPromptID(for: promptMode) == nil)
                     if isSelected {
                         Image(systemName: "checkmark")
                             .font(.system(size: 10, weight: .semibold))
@@ -692,31 +732,6 @@ struct NotchExpandedView: View {
                         self.showPromptHoverMenu = false
                         self.showActionsMenu = false
                         self.showModeMenu.toggle()
-                    }
-
-                    // AI toggle chip
-                    let aiEnabled = self.settings.enableAIProcessing
-                    HStack(spacing: 4) {
-                        Text("AI:")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.5))
-                        Text(aiEnabled ? "On" : "Off")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(aiEnabled ? .white.opacity(0.82) : .white.opacity(0.55))
-                        Image(systemName: aiEnabled ? "brain.fill" : "brain")
-                            .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(aiEnabled ? .white.opacity(0.65) : .white.opacity(0.4))
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(Color.white.opacity(0.07))
-                    .cornerRadius(5)
-                    .onTapGesture {
-                        guard !self.contentState.isProcessing else { return }
-                        self.showActionsMenu = false
-                        self.showPromptHoverMenu = false
-                        self.showModeMenu = false
-                        self.contentState.onToggleAIProcessingRequested?()
                     }
 
                     // Actions chip

@@ -589,10 +589,10 @@
 /* Begin XCRemoteSwiftPackageReference section */
 		7C078DA32E3B386A00FB7CAC /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
+			repositoryURL = "https://github.com/altic-dev/FluidAudio.git";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.7.9;
+				branch = "B/cohere-coreml-asr";
+				kind = branch;
 			};
 		};
 		7C1C72F02EECBD1300E3BF4D /* XCRemoteSwiftPackageReference "SwiftWhisper" */ = {

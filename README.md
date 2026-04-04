@@ -1,6 +1,6 @@
 # FluidVoice
 
-[![Supported Models](https://img.shields.io/badge/Models-Parakeet%20v3%20%26%20v2%20%7C%20Apple%20Speech%20%7C%20Whisper-blue)](https://github.com/altic-dev/Fluid-oss)
+[![Supported Models](https://img.shields.io/badge/Models-Parakeet%20v3%20%26%20v2%20%7C%20Cohere%20Transcribe%20%7C%20Apple%20Speech%20%7C%20Whisper-blue)](https://github.com/altic-dev/Fluid-oss)
 
 Fully open source voice-to-text dictation app for macOS with AI enhancement.
 
@@ -8,6 +8,12 @@ Fully open source voice-to-text dictation app for macOS with AI enhancement.
 
 > [!IMPORTANT]
 > This project is completely free and open source. If you find FluidVoice useful, please star the repository. It helps with visibility and motivates continued development. Your support means a lot.
+
+## Latest Update
+
+- Added **Cohere Transcribe** support for higher-accuracy multilingual dictation on Apple Silicon
+- Expanded the offline voice engine lineup with **Parakeet v3/v2, Cohere, Apple Speech, and Whisper**
+- Continued improving the multilingual dictation experience for users who switch between languages often
 
 ## Star History
 
@@ -49,7 +55,7 @@ https://github.com/user-attachments/assets/c57ef6d5-f0a1-4a3f-a121-637533442c24
 
 ## Features
 - **Live Preview Mode**: Real-time transcription preview in overlay
-- **Multiple Speech Models**: Parakeet TDT v3 & v2, Apple Speech, and Whisper
+- **Multiple Speech Models**: Parakeet TDT v3 & v2, Cohere Transcribe, Apple Speech, and Whisper
 - **Real-time transcription** with extremely low latency
 - **AI enhancement** with OpenAI, Groq, and custom providers
 - **Global hotkey** for instant voice capture
@@ -60,18 +66,36 @@ https://github.com/user-attachments/assets/c57ef6d5-f0a1-4a3f-a121-637533442c24
 
 ## Supported Models
 
-### Parakeet TDT v3 (Default)
-Optimized for Apple Silicon. Supports 25 languages with auto-detection:
-**Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Slovak, Slovenian, Spanish, Swedish, Russian, Ukrainian.**
+| Model | Best for | Language support | Download size | Hardware |
+| --- | --- | --- | --- | --- |
+| Parakeet TDT v3 | Fast default multilingual dictation | [25 languages](#parakeet-tdt-v3-languages) | ~500 MB | Apple Silicon |
+| Parakeet TDT v2 | Fastest English-only dictation | [English only](#parakeet-tdt-v2-languages) | ~500 MB | Apple Silicon |
+| Cohere Transcribe | High-accuracy multilingual dictation | [14 languages](#cohere-transcribe-languages) | ~1.4 GB | Apple Silicon |
+| Apple Speech | Zero-download native macOS speech recognition | [System languages](#apple-speech-languages) | Built-in | Apple Silicon + Intel |
+| Whisper Tiny / Base / Small / Medium / Large | Broad compatibility, including Intel Macs | [99 languages](#whisper-language-support) | ~75 MB to ~2.9 GB | Apple Silicon + Intel |
 
-### Parakeet TDT v2
-English-only model optimized for higher accuracy and consistency on Apple Silicon.
+Notes:
+Parakeet TDT v3 is the default on Apple Silicon. Cohere is the stronger pick if you want a larger multilingual model with higher displayed accuracy. Whisper remains the fallback for Intel Macs and the widest language coverage.
 
-### Apple Speech
-Uses the native macOS Speech Recognition engine and Speech Analyzer API (macOS 26+).
+### Parakeet TDT v3 Languages
 
-### Whisper
-Universal support (runs on Intel & Apple Silicon). Supports 99 languages.
+Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Russian, Slovak, Slovenian, Spanish, Swedish, and Ukrainian.
+
+### Parakeet TDT v2 Languages
+
+English.
+
+### Cohere Transcribe Languages
+
+English, French, German, Italian, Spanish, Portuguese, Greek, Dutch, Polish, Mandarin, Japanese, Korean, Vietnamese, and Arabic.
+
+### Apple Speech Languages
+
+System language support depends on the macOS speech recognition languages available on your machine.
+
+### Whisper Language Support
+
+Whisper supports up to 99 languages, depending on the model size you choose.
 
 ## Quick Start
 
@@ -144,6 +168,10 @@ Contributions are welcome! Please create an issue first to discuss any major cha
 ### Pull Request Guidelines
 
 - **Keep changes focused and atomic** - one feature or fix per PR
+- **Create an issue before raising a PR** so the work is easy to track and validate before review starts
+- **Discuss before raising a PR** for anything non-trivial so it is easier to merge and review tradeoffs up front
+- **Explain the pros and cons** of your approach when discussing larger changes
+- **Follow the PR template** when opening your pull request
 - **Update documentation** if adding new features
 - **Test thoroughly** on your machine before submitting
 - **Never commit personal team IDs or API keys** to `project.pbxproj`

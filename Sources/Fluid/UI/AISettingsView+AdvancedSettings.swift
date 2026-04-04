@@ -65,7 +65,7 @@ extension AIEnhancementSettingsView {
         mode: SettingsStore.PromptMode,
         isSelected: Bool,
         onUse: @escaping () -> Void,
-        onManage: @escaping () -> Void,
+        onManage: (() -> Void)? = nil,
         onResetDefault: (() -> Void)? = nil,
         canResetDefault: Bool = false,
         onDelete: (() -> Void)? = nil
@@ -116,29 +116,33 @@ extension AIEnhancementSettingsView {
                     .foregroundStyle(isSelected ? tone : self.theme.palette.secondaryText.opacity(0.35))
                     .frame(width: 18, height: 18)
 
-                Menu {
-                    Button("Edit Prompt") { onManage() }
-                    if mode == .edit {
-                        Divider()
-                        Text("Selected text context is added automatically when text is selected.")
-                    }
-                    if let onDelete {
-                        Divider()
-                        Button(role: .destructive, action: { onDelete() }) {
-                            Label("Delete Prompt", systemImage: "trash")
+                if onManage != nil || onResetDefault != nil || onDelete != nil {
+                    Menu {
+                        if let onManage {
+                            Button("Edit Prompt") { onManage() }
                         }
-                    } else if let onResetDefault {
-                        Divider()
-                        Button("Reset to Built-in Default", role: .destructive) { onResetDefault() }
-                            .disabled(!canResetDefault)
+                        if mode == .edit {
+                            Divider()
+                            Text("Selected text context is added automatically when text is selected.")
+                        }
+                        if let onDelete {
+                            Divider()
+                            Button(role: .destructive, action: { onDelete() }) {
+                                Label("Delete Prompt", systemImage: "trash")
+                            }
+                        } else if let onResetDefault {
+                            Divider()
+                            Button("Reset to Built-in Default", role: .destructive) { onResetDefault() }
+                                .disabled(!canResetDefault)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: AISettingsLayout.controlHeight, height: AISettingsLayout.controlHeight)
                     }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(width: AISettingsLayout.controlHeight, height: AISettingsLayout.controlHeight)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(self.theme.palette.secondaryText)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(self.theme.palette.secondaryText)
             }
         }
         .padding(12)
@@ -194,12 +198,25 @@ extension AIEnhancementSettingsView {
                 self.editModeProviderModelRow
             }
 
+            if mode.normalized == .dictate {
+                self.promptProfileCard(
+                    cardKey: "\(mode.normalized.rawValue)-off",
+                    title: "Off",
+                    subtitle: "Use raw transcription for normal dictation with no AI post-processing.",
+                    mode: mode,
+                    isSelected: self.viewModel.isPromptSelectionOff(for: mode),
+                    onUse: {
+                        self.viewModel.selectPromptOff(for: mode)
+                    }
+                )
+            }
+
             self.promptProfileCard(
                 cardKey: "\(mode.normalized.rawValue)-default",
                 title: "Default \(self.friendlyModeName(mode))",
                 subtitle: self.viewModel.promptPreview(self.viewModel.defaultPromptBodyPreview(for: mode)),
                 mode: mode,
-                isSelected: self.viewModel.selectedPromptID(for: mode) == nil,
+                isSelected: !self.viewModel.isPromptSelectionOff(for: mode) && self.viewModel.selectedPromptID(for: mode) == nil,
                 onUse: {
                     self.viewModel.setSelectedPromptID(nil, for: mode)
                 },
@@ -900,9 +917,6 @@ extension AIEnhancementSettingsView {
         .frame(minWidth: 520, minHeight: 420)
         .onDisappear {
             self.promptTest.deactivate()
-        }
-        .onChange(of: self.viewModel.enableAIProcessing) { _, _ in
-            self.autoDisablePromptTestIfNeeded()
         }
         .onChange(of: self.viewModel.selectedProviderID) { _, _ in
             self.autoDisablePromptTestIfNeeded()

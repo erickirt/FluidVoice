@@ -16,7 +16,6 @@ final class MenuBarManager: ObservableObject {
 
     // Cached menu items to avoid rebuilding entire menu
     private var statusMenuItem: NSMenuItem?
-    private var aiMenuItem: NSMenuItem?
     private var rollbackMenuItem: NSMenuItem?
 
     // References to app state
@@ -32,7 +31,6 @@ final class MenuBarManager: ObservableObject {
     private var isProcessingActive: Bool = false
 
     @Published var isRecording: Bool = false
-    @Published var aiProcessingEnabled: Bool = false
 
     /// One-shot navigation requests from the menu bar into the main window UI.
     /// `ContentView` consumes this and clears it.
@@ -50,15 +48,6 @@ final class MenuBarManager: ObservableObject {
 
     init() {
         // Don't setup menu bar immediately - defer until app is ready
-        // Initialize from persisted setting
-        self.aiProcessingEnabled = SettingsStore.shared.enableAIProcessing
-        // Reflect changes to menu when toggled from elsewhere (e.g., General tab)
-        self.$aiProcessingEnabled
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.updateMenu()
-            }
-            .store(in: &self.cancellables)
     }
 
     func initializeMenuBar() {
@@ -102,9 +91,6 @@ final class MenuBarManager: ObservableObject {
                 }
             }
             .store(in: &self.cancellables)
-
-        // Subscribe to AI processing state
-        self.aiProcessingEnabled = SettingsStore.shared.enableAIProcessing
     }
 
     private func handleOverlayState(isRunning: Bool, asrService: ASRService) {
@@ -322,15 +308,6 @@ final class MenuBarManager: ObservableObject {
 
         menu.addItem(.separator())
 
-        // AI Processing Toggle
-        self.aiMenuItem = NSMenuItem(title: "", action: #selector(self.toggleAIProcessing), keyEquivalent: "")
-        self.aiMenuItem?.target = self
-        if let aiItem = aiMenuItem {
-            menu.addItem(aiItem)
-        }
-
-        menu.addItem(.separator())
-
         // Open Main Window
         let openItem = NSMenuItem(title: "Open Fluid Voice", action: #selector(openMainWindow), keyEquivalent: "")
         openItem.target = self
@@ -395,37 +372,8 @@ final class MenuBarManager: ObservableObject {
         let statusTitle = self.isRecording ? "Recording...\(hotkeyInfo)" : "Ready to Record\(hotkeyInfo)"
         self.statusMenuItem?.title = statusTitle
 
-        // Update AI toggle text
-        let aiTitle = self.aiProcessingEnabled ? "Disable AI Processing" : "Enable AI Processing"
-        self.aiMenuItem?.title = aiTitle
-
         // Update rollback availability text
         self.rollbackMenuItem?.isEnabled = SimpleUpdater.shared.hasRollbackBackup()
-    }
-
-    /// Centralized entry point to update AI post-processing enablement.
-    /// Use this instead of writing `aiProcessingEnabled` directly so all state stays in sync.
-    func setAIProcessingEnabled(_ enabled: Bool) {
-        guard self.aiProcessingEnabled != enabled else {
-            // Ensure menu text stays correct even if caller repeats the same value.
-            self.updateMenu()
-            return
-        }
-        self.aiProcessingEnabled = enabled
-        SettingsStore.shared.enableAIProcessing = enabled
-        self.updateMenu()
-    }
-
-    /// Toggle AI post-processing and return the new value.
-    @discardableResult
-    func toggleAIProcessingEnabled() -> Bool {
-        let next = !self.aiProcessingEnabled
-        self.setAIProcessingEnabled(next)
-        return next
-    }
-
-    @objc private func toggleAIProcessing() {
-        _ = self.toggleAIProcessingEnabled()
     }
 
     @objc private func checkForUpdates(_ sender: Any?) {

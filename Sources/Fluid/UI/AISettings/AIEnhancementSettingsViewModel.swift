@@ -13,14 +13,7 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
 
     @Published var appear: Bool = false
     @Published var openAIBaseURL: String
-    @Published var enableAIProcessing: Bool {
-        didSet {
-            guard self.enableAIProcessing != oldValue else { return }
-            // Route through MenuBarManager so all UI surfaces (menu, settings, future overlay)
-            // share one callable code path.
-            self.menuBarManager.setAIProcessingEnabled(self.enableAIProcessing)
-        }
-    }
+    @Published var isDictationPromptOff: Bool = false
 
     // Model Management
     @Published var availableModelsByProvider: [String: [String]] = [:]
@@ -129,7 +122,6 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         self.menuBarManager = menuBarManager
         self.promptTest = promptTest
         self.openAIBaseURL = ModelRepository.shared.defaultBaseURL(for: "openai")
-        self.enableAIProcessing = settings.enableAIProcessing
         self.selectedProviderID = settings.selectedProviderID
     }
 
@@ -143,7 +135,6 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
     func loadSettings() {
         self.selectedProviderID = self.settings.selectedProviderID
 
-        self.enableAIProcessing = self.settings.enableAIProcessing
         self.availableModelsByProvider = self.settings.availableModelsByProvider
         self.selectedModelByProvider = self.settings.selectedModelByProvider
         self.appleIntelligenceAvailable = AppleIntelligenceService.isAvailable
@@ -153,6 +144,7 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         self.appPromptBindings = self.settings.appPromptBindings
         self.selectedDictationPromptID = self.settings.selectedDictationPromptID
         self.selectedEditPromptID = self.settings.selectedEditPromptID
+        self.isDictationPromptOff = self.settings.isDictationPromptOff
 
         // Normalize provider keys
         var normalized: [String: [String]] = [:]
@@ -1276,7 +1268,7 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
     }
 
     func isAIPostProcessingConfiguredForDictation() -> Bool {
-        DictationAIPostProcessingGate.isConfigured()
+        DictationAIPostProcessingGate.isProviderConfigured()
     }
 
     func openDefaultPromptViewer(for mode: SettingsStore.PromptMode) {
@@ -1502,6 +1494,17 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         return trimmed.isEmpty ? "Untitled Prompt" : trimmed
     }
 
+    func isPromptSelectionOff(for mode: SettingsStore.PromptMode) -> Bool {
+        mode.normalized == .dictate && self.settings.isDictationPromptOff
+    }
+
+    func selectPromptOff(for mode: SettingsStore.PromptMode) {
+        guard mode.normalized == .dictate else { return }
+        self.settings.setDictationPromptSelection(.off)
+        self.selectedDictationPromptID = self.settings.selectedDictationPromptID
+        self.isDictationPromptOff = self.settings.isDictationPromptOff
+    }
+
     private func resolveBindingTargetApp() -> (name: String, bundleID: String)? {
         if let pid = NotchContentState.shared.recordingTargetPID,
            let app = NSRunningApplication(processIdentifier: pid),
@@ -1582,9 +1585,18 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
     }
 
     func setSelectedPromptID(_ id: String?, for mode: SettingsStore.PromptMode) {
-        self.settings.setSelectedPromptID(id, for: mode.normalized)
+        if mode.normalized == .dictate {
+            if let id {
+                self.settings.setDictationPromptSelection(.profile(id))
+            } else {
+                self.settings.setDictationPromptSelection(.default)
+            }
+        } else {
+            self.settings.setSelectedPromptID(id, for: mode.normalized)
+        }
         self.selectedDictationPromptID = self.settings.selectedDictationPromptID
         self.selectedEditPromptID = self.settings.selectedEditPromptID
+        self.isDictationPromptOff = self.settings.isDictationPromptOff
     }
 
     func hasDefaultPromptOverride(for mode: SettingsStore.PromptMode) -> Bool {

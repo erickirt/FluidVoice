@@ -164,7 +164,7 @@ extension VoiceEngineSettingsView {
     /// Stats panel showing speed/accuracy bars that animate when model changes
     var modelStatsPanel: some View {
         let model = self.viewModel.previewSpeechModel
-        let supportsParakeetCustomWords = model == .parakeetTDT || model == .parakeetTDTv2
+        let supportsCustomWords = model.supportsCustomVocabulary
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 20) {
@@ -270,7 +270,54 @@ extension VoiceEngineSettingsView {
                 .animation(.spring(response: 0.5, dampingFraction: 0.7), value: model.id)
             }
 
-            if supportsParakeetCustomWords {
+            if model == .cohereTranscribeSixBit {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .center, spacing: 10) {
+                        Image(systemName: "globe")
+                            .font(.caption)
+                            .foregroundStyle(self.theme.palette.accent)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Select Language Manually")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                            Text("Choose the language token injected into Cohere's transcription prompt.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Picker("Cohere Language", selection: Binding(
+                            get: { self.settings.selectedCohereLanguage },
+                            set: { newValue in
+                                guard newValue != self.settings.selectedCohereLanguage else { return }
+                                self.settings.selectedCohereLanguage = newValue
+                            }
+                        )) {
+                            ForEach(SettingsStore.CohereLanguage.allCases) { language in
+                                Text(language.displayName).tag(language)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .disabled(self.viewModel.asr.isRunning)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(self.theme.palette.accent.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(self.theme.palette.accent.opacity(0.20), lineWidth: 1)
+                        )
+                )
+            }
+
+            if supportsCustomWords {
                 HStack(alignment: .center, spacing: 10) {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.caption)
@@ -448,23 +495,50 @@ extension VoiceEngineSettingsView {
                 }
             } else {
                 ZStack(alignment: .trailing) {
-                    Text("Not downloaded")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .opacity(isSelected ? 0 : 1)
+                    if model.requiresExternalArtifacts {
+                        HStack(spacing: 8) {
+                            if model.externalCoreMLSpec?.sourceURL != nil {
+                                Button {
+                                    self.viewModel.openExternalModelSource(for: model)
+                                } label: {
+                                    Image(systemName: "arrow.up.right.square")
+                                        .font(.system(size: 14))
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(.secondary)
+                                .disabled(self.viewModel.asr.isRunning || self.viewModel.downloadingModel != nil)
+                            }
 
-                    Button("Download") {
-                        self.viewModel.previewSpeechModel = model
-                        self.viewModel.downloadSpeechModel(model)
+                            Button("Download") {
+                                self.viewModel.previewSpeechModel = model
+                                self.viewModel.downloadSpeechModel(model)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .tint(.blue)
+                            .disabled(self.viewModel.asr.isRunning || self.viewModel.downloadingModel != nil)
+                        }
+                        .offset(x: isSelected ? 0 : 16)
+                        .opacity(isSelected ? 1 : 0)
+                    } else {
+                        Text("Not downloaded")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .opacity(isSelected ? 0 : 1)
+
+                        Button("Download") {
+                            self.viewModel.previewSpeechModel = model
+                            self.viewModel.downloadSpeechModel(model)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .tint(.blue)
+                        .disabled(self.viewModel.asr.isRunning || self.viewModel.downloadingModel != nil)
+                        .offset(x: isSelected ? 0 : 16)
+                        .opacity(isSelected ? 1 : 0)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .tint(.blue)
-                    .disabled(self.viewModel.asr.isRunning || self.viewModel.downloadingModel != nil)
-                    .offset(x: isSelected ? 0 : 16)
-                    .opacity(isSelected ? 1 : 0)
                 }
-                .frame(width: 120, alignment: .trailing)
+                .frame(width: model.requiresExternalArtifacts ? 150 : 120, alignment: .trailing)
             }
         }
         .padding(.horizontal, 12)
@@ -523,7 +597,9 @@ extension VoiceEngineSettingsView {
                 .buttonStyle(.plain)
             } else if self.viewModel.asr.modelsExistOnDisk {
                 Image(systemName: "doc.fill").foregroundStyle(self.theme.palette.accent).font(.caption)
-                Text("Cached").font(.caption).foregroundStyle(.secondary)
+                Text("Cached")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 Button(action: { Task { await self.viewModel.deleteModels() } }) {
                     HStack(spacing: 4) {
@@ -535,16 +611,32 @@ extension VoiceEngineSettingsView {
                 }
                 .buttonStyle(.plain)
             } else {
-                Button(action: { Task { await self.viewModel.downloadModels() } }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.down.circle.fill")
-                        Text("Download")
+                HStack(spacing: 8) {
+                    if self.settings.selectedSpeechModel.requiresExternalArtifacts,
+                       self.settings.selectedSpeechModel.externalCoreMLSpec?.sourceURL != nil
+                    {
+                        Button(action: { self.viewModel.openExternalModelSource(for: self.settings.selectedSpeechModel) }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.up.right.square")
+                                Text("Hugging Face")
+                            }
+                            .font(.caption)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(self.theme.palette.accent)
                     }
-                    .font(.caption)
+
+                    Button(action: { Task { await self.viewModel.downloadModels() } }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.down.circle.fill")
+                            Text("Download")
+                        }
+                        .font(.caption)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .tint(.blue)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .tint(.blue)
             }
         }
         .padding(.horizontal, 12)
@@ -627,6 +719,9 @@ extension VoiceEngineSettingsView {
 
         if brand.contains("nvidia") {
             return "Provider_NVIDIA"
+        }
+        if brand.contains("cohere") {
+            return "Provider_Cohere"
         }
         if brand.contains("openai") || brand.contains("whisper") {
             return "Provider_OpenAI"

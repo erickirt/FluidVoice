@@ -1233,10 +1233,40 @@ private struct BottomOverlayPromptMenuView: View {
     }
 
     @ViewBuilder
-    private func defaultRow(selectedID: String?) -> some View {
-        let isSelected = selectedID == nil
+    private func offRow() -> some View {
+        let isSelected = self.settings.isDictationPromptOff
         Button(action: {
-            self.settings.setSelectedPromptID(nil, for: self.promptMode)
+            self.settings.setDictationPromptSelection(.off)
+            self.restoreTypingTargetApp()
+            self.onDismissRequested()
+        }) {
+            HStack {
+                Text("Off")
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(self.rowBackground(isSelected: isSelected, rowID: "off"))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            self.hoveredRowID = hovering ? "off" : nil
+        }
+    }
+
+    @ViewBuilder
+    private func defaultRow(selectedID: String?) -> some View {
+        let isSelected = !self.settings.isDictationPromptOff && selectedID == nil
+        Button(action: {
+            if self.promptMode.normalized == .dictate {
+                self.settings.setDictationPromptSelection(.default)
+            } else {
+                self.settings.setSelectedPromptID(nil, for: self.promptMode)
+            }
             self.restoreTypingTargetApp()
             self.onDismissRequested()
         }) {
@@ -1289,6 +1319,13 @@ private struct BottomOverlayPromptMenuView: View {
         let profiles = self.settings.promptProfiles(for: self.promptMode)
 
         VStack(alignment: .leading, spacing: 0) {
+            if self.promptMode.normalized == .dictate {
+                self.offRow()
+
+                Divider()
+                    .padding(.vertical, 4)
+            }
+
             self.defaultRow(selectedID: selectedID)
 
             if !profiles.isEmpty {
@@ -1572,7 +1609,6 @@ struct BottomOverlayView: View {
     @Environment(\.theme) private var theme
     @State private var isHoveringModeChip = false
     @State private var isHoveringPromptChip = false
-    @State private var isHoveringAIToggleChip = false
     @State private var isHoveringActionsChip = false
     @State private var isHoveringSettingsChip = false
     @State private var modeSelectorFrameInScreen: CGRect = .zero
@@ -1757,6 +1793,12 @@ struct BottomOverlayView: View {
 
     private var isAppPromptOverrideActive: Bool {
         guard let activePromptMode else { return false }
+        if activePromptMode.normalized == .dictate &&
+            self.settings.isDictationPromptOff &&
+            !self.contentState.isPromptModeActive
+        {
+            return false
+        }
         return self.settings.hasAppPromptBinding(
             for: activePromptMode,
             appBundleID: self.promptResolutionBundleID
@@ -1768,6 +1810,12 @@ struct BottomOverlayView: View {
             return overrideName
         }
         guard let activePromptMode else { return "N/A" }
+        if activePromptMode.normalized == .dictate &&
+            self.settings.isDictationPromptOff &&
+            !self.contentState.isPromptModeActive
+        {
+            return "Off"
+        }
         if let profile = self.settings.resolvedPromptProfile(
             for: activePromptMode,
             appBundleID: self.promptResolutionBundleID
@@ -2124,53 +2172,6 @@ struct BottomOverlayView: View {
         )
     }
 
-    private var aiToggleChip: some View {
-        let disabled = self.contentState.isProcessing
-        let isEnabled = self.settings.enableAIProcessing
-        return HStack(spacing: self.isCompactControls ? 0 : 5) {
-            if self.isCompactControls {
-                Text(isEnabled ? "AI On" : "AI Off")
-                    .font(.system(size: self.promptSelectorFontSize, weight: .semibold))
-                    .foregroundStyle(isEnabled ? .white.opacity(0.82) : .white.opacity(0.7))
-                    .lineLimit(1)
-            } else {
-                Text("AI:")
-                    .font(.system(size: self.promptSelectorFontSize, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .lineLimit(1)
-                Text(isEnabled ? "On" : "Off")
-                    .font(.system(size: self.promptSelectorFontSize, weight: .semibold))
-                    .foregroundStyle(isEnabled ? .white.opacity(0.82) : .white.opacity(0.7))
-                    .lineLimit(1)
-                Image(systemName: isEnabled ? "brain.fill" : "brain")
-                    .font(.system(size: max(self.promptSelectorFontSize - 1, 8), weight: .semibold))
-                    .foregroundStyle(isEnabled ? .white.opacity(0.65) : .white.opacity(0.45))
-            }
-        }
-        .fixedSize(horizontal: true, vertical: false)
-        .padding(.horizontal, 8)
-        .padding(.vertical, self.promptSelectorVerticalPadding)
-        .background(
-            self.chipBackground(
-                isHovered: self.isHoveringAIToggleChip,
-                disabled: disabled
-            )
-        )
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            self.isHoveringAIToggleChip = hovering && !disabled
-        }
-        .onTapGesture {
-            guard !disabled else { return }
-            self.closePromptMenu()
-            self.closeModeMenu()
-            self.closeActionsMenu()
-            self.contentState.onToggleAIProcessingRequested?()
-        }
-        .help("Toggle AI enhancement for dictation")
-        .opacity(disabled ? 0.65 : 1)
-    }
-
     private var actionsSelectorView: some View {
         let actionsDisabled = self.historyStore.entries.isEmpty || self.contentState.isProcessing
         return self.actionsSelectorTrigger
@@ -2239,7 +2240,6 @@ struct BottomOverlayView: View {
                     self.modeSelectorView
                     self.promptSelectorView
                     Spacer(minLength: 4)
-                    self.aiToggleChip
                     self.actionsSelectorView
                     if !self.isCompactControls {
                         self.settingsChip
@@ -2456,7 +2456,6 @@ struct BottomOverlayView: View {
             self.closeActionsMenu()
             self.isHoveringModeChip = false
             self.isHoveringPromptChip = false
-            self.isHoveringAIToggleChip = false
             self.isHoveringActionsChip = false
             self.isHoveringSettingsChip = false
             switch self.contentState.mode {
@@ -2476,7 +2475,6 @@ struct BottomOverlayView: View {
             }
             self.isHoveringModeChip = false
             self.isHoveringPromptChip = false
-            self.isHoveringAIToggleChip = false
             self.isHoveringActionsChip = false
             self.isHoveringSettingsChip = false
             if !self.layout.usesFixedCanvas {
@@ -2489,7 +2487,6 @@ struct BottomOverlayView: View {
             self.closeActionsMenu()
             self.isHoveringModeChip = false
             self.isHoveringPromptChip = false
-            self.isHoveringAIToggleChip = false
             self.isHoveringActionsChip = false
             self.isHoveringSettingsChip = false
         }

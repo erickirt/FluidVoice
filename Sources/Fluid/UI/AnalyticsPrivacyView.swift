@@ -30,9 +30,10 @@ struct AnalyticsPrivacyView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     self.sectionTitle("We collect")
-                    self.bullet("Basic app/device info (app version, macOS version, etc.)")
+                    self.bullet("Basic app/device info (app version, macOS version, CPU family/chip class, etc.)")
                     self.bullet("Which features were used (for example: dictation, Command Mode etc.)")
-                    self.bullet("Approximate ranges only (not exact values), such as duration or word count.")
+                    self.bullet("Performance metrics such as transcription chunk latency and AI post-processing latency (milliseconds).")
+                    self.bullet("Model/provider metadata and post-processing input length (character count only, not text content).")
                     self.bullet("Whether something worked and high-level error info.")
 
                     self.sectionTitle("We do NOT collect")
