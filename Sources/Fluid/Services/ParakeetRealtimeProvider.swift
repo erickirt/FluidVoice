@@ -23,14 +23,75 @@ final class ParakeetRealtimeProvider: TranscriptionProvider {
     func prepare(progressHandler: ((Double) -> Void)? = nil) async throws {
         guard self.isReady == false else { return }
 
+        let modelDirectory = self.modelDirectory()
+        let missingBefore = self.missingRequiredModelFiles()
+        DebugLogger.shared.info(
+            "ParakeetRealtimeProvider.prepare: cacheRoot=\(Self.cacheRootDirectory().path), modelDir=\(modelDirectory.path), chunkSize=\(self.chunkSize.modelSubdirectory)",
+            source: "ParakeetRealtimeProvider"
+        )
+        if missingBefore.isEmpty {
+            DebugLogger.shared.info(
+                "ParakeetRealtimeProvider.prepare: all required Flash files already present on disk",
+                source: "ParakeetRealtimeProvider"
+            )
+        } else {
+            DebugLogger.shared.warning(
+                "ParakeetRealtimeProvider.prepare: missing required Flash files before load: \(missingBefore.joined(separator: ", "))",
+                source: "ParakeetRealtimeProvider"
+            )
+            DebugLogger.shared.debug(
+                "ParakeetRealtimeProvider.prepare: cache snapshot before load: \(self.cacheSnapshotDescription())",
+                source: "ParakeetRealtimeProvider"
+            )
+        }
+
         let configuration = MLModelConfiguration()
         configuration.computeUnits = .cpuAndNeuralEngine
         configuration.allowLowPrecisionAccumulationOnGPU = true
 
         let engine = StreamingEouAsrManager(configuration: configuration, chunkSize: self.chunkSize)
-        try await engine.loadModelsFromHuggingFace(progressHandler: { progress in
-            progressHandler?(max(0.0, min(1.0, progress.fractionCompleted)))
-        })
+        do {
+            try await engine.loadModelsFromHuggingFace(progressHandler: { progress in
+                progressHandler?(max(0.0, min(1.0, progress.fractionCompleted)))
+            })
+        } catch {
+            let missingAfterFailure = self.missingRequiredModelFiles()
+            DebugLogger.shared.error(
+                "ParakeetRealtimeProvider.prepare: Flash load failed. modelDir=\(modelDirectory.path), missingAfterFailure=\(missingAfterFailure.joined(separator: ", "))",
+                source: "ParakeetRealtimeProvider"
+            )
+            DebugLogger.shared.debug(
+                "ParakeetRealtimeProvider.prepare: cache snapshot after failure: \(self.cacheSnapshotDescription())",
+                source: "ParakeetRealtimeProvider"
+            )
+            throw error
+        }
+
+        let missingAfter = self.missingRequiredModelFiles()
+        guard missingAfter.isEmpty else {
+            DebugLogger.shared.error(
+                "ParakeetRealtimeProvider.prepare: Flash load returned, but required files are still missing: \(missingAfter.joined(separator: ", "))",
+                source: "ParakeetRealtimeProvider"
+            )
+            DebugLogger.shared.debug(
+                "ParakeetRealtimeProvider.prepare: cache snapshot after load: \(self.cacheSnapshotDescription())",
+                source: "ParakeetRealtimeProvider"
+            )
+            throw NSError(
+                domain: "ParakeetRealtimeProvider",
+                code: -3,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Parakeet Flash models are incomplete after load",
+                    "modelDirectory": modelDirectory.path,
+                    "missingFiles": missingAfter.joined(separator: ", "),
+                ]
+            )
+        }
+
+        DebugLogger.shared.info(
+            "ParakeetRealtimeProvider.prepare: Flash models verified at \(modelDirectory.path)",
+            source: "ParakeetRealtimeProvider"
+        )
 
         self.engine = engine
         self.streamedSampleCount = 0
@@ -67,10 +128,7 @@ final class ParakeetRealtimeProvider: TranscriptionProvider {
     }
 
     func modelsExistOnDisk() -> Bool {
-        let modelDirectory = Self.cacheRootDirectory().appendingPathComponent(Repo.parakeetEou160.folderName, isDirectory: true)
-        return ModelNames.ParakeetEOU.requiredModels.allSatisfy { fileName in
-            FileManager.default.fileExists(atPath: modelDirectory.appendingPathComponent(fileName).path)
-        }
+        self.missingRequiredModelFiles().isEmpty
     }
 
     func clearCache() async throws {
@@ -132,6 +190,30 @@ final class ParakeetRealtimeProvider: TranscriptionProvider {
             channelData[0].update(from: baseAddress, count: samples.count)
         }
         return buffer
+    }
+
+    private func modelDirectory() -> URL {
+        Self.cacheRootDirectory().appendingPathComponent(Repo.parakeetEou160.folderName, isDirectory: true)
+    }
+
+    private func missingRequiredModelFiles() -> [String] {
+        let modelDirectory = self.modelDirectory()
+        return ModelNames.ParakeetEOU.requiredModels
+            .sorted()
+            .filter { fileName in
+                !FileManager.default.fileExists(atPath: modelDirectory.appendingPathComponent(fileName).path)
+            }
+    }
+
+    private func cacheSnapshotDescription() -> String {
+        let fm = FileManager.default
+        let modelDirectory = self.modelDirectory()
+        let rootDirectory = Self.cacheRootDirectory()
+        let rootContents = (try? fm.contentsOfDirectory(atPath: rootDirectory.path).sorted()) ?? []
+        let modelContents = (try? fm.contentsOfDirectory(atPath: modelDirectory.path).sorted()) ?? []
+        let rootExists = fm.fileExists(atPath: rootDirectory.path)
+        let modelExists = fm.fileExists(atPath: modelDirectory.path)
+        return "rootExists=\(rootExists), modelExists=\(modelExists), rootContents=\(rootContents), modelContents=\(modelContents)"
     }
 
     private static func cacheRootDirectory() -> URL {

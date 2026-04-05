@@ -2036,7 +2036,7 @@ final class ASRService: ObservableObject {
                     self.isDownloadingModel = true
                     self.isLoadingModel = false
                     self.downloadProgress = nil
-                    self.stopDownloadProgressMonitor()
+                    self.startParakeetDownloadProgressMonitor()
                     DebugLogger.shared.info("⬇️ DOWNLOADING model...", source: "ASRService")
                 }
             }
