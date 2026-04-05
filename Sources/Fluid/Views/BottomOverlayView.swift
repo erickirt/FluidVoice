@@ -1235,10 +1235,11 @@ private struct BottomOverlayPromptMenuView: View {
 
     @ViewBuilder
     private func offRow() -> some View {
-        let isSelected = self.settings.isDictationPromptOff
+        let activeSlot = self.contentState.activeDictationShortcutSlot ?? .primary
+        let isSelected = self.settings.dictationPromptSelection(for: activeSlot) == .off
         Button(action: {
-            if self.contentState.isPromptModeActive, self.promptMode.normalized == .dictate {
-                self.contentState.onPromptModeProfileChangeRequested?(nil)
+            if self.promptMode.normalized == .dictate {
+                self.contentState.onDictationPromptSelectionRequested?(.off)
             } else {
                 self.settings.setDictationPromptSelection(.off)
             }
@@ -1265,12 +1266,13 @@ private struct BottomOverlayPromptMenuView: View {
 
     @ViewBuilder
     private func defaultRow(selectedID: String?) -> some View {
-        let isSelected = !self.settings.isDictationPromptOff && selectedID == nil
+        let activeSlot = self.contentState.activeDictationShortcutSlot ?? .primary
+        let isSelected = self.promptMode.normalized == .dictate
+            ? (self.settings.dictationPromptSelection(for: activeSlot) == .default)
+            : (selectedID == nil)
         Button(action: {
-            if self.contentState.isPromptModeActive, self.promptMode.normalized == .dictate {
-                self.contentState.onPromptModeProfileChangeRequested?(nil)
-            } else if self.promptMode.normalized == .dictate {
-                self.settings.setDictationPromptSelection(.default)
+            if self.promptMode.normalized == .dictate {
+                self.contentState.onDictationPromptSelectionRequested?(.default)
             } else {
                 self.settings.setSelectedPromptID(nil, for: self.promptMode)
             }
@@ -1297,10 +1299,13 @@ private struct BottomOverlayPromptMenuView: View {
 
     @ViewBuilder
     private func profileRow(_ profile: SettingsStore.DictationPromptProfile, selectedID: String?) -> some View {
-        let isSelected = selectedID == profile.id
+        let activeSlot = self.contentState.activeDictationShortcutSlot ?? .primary
+        let isSelected = self.promptMode.normalized == .dictate
+            ? (self.settings.dictationPromptSelection(for: activeSlot) == .profile(profile.id))
+            : (selectedID == profile.id)
         Button(action: {
-            if self.contentState.isPromptModeActive, self.promptMode.normalized == .dictate {
-                self.contentState.onPromptModeProfileChangeRequested?(profile)
+            if self.promptMode.normalized == .dictate {
+                self.contentState.onDictationPromptSelectionRequested?(.profile(profile.id))
             } else {
                 self.settings.setSelectedPromptID(profile.id, for: self.promptMode)
             }
@@ -1802,13 +1807,17 @@ struct BottomOverlayView: View {
         self.activeAppMonitor.activeAppBundleID
     }
 
+    private var activeDictationShortcutSlot: SettingsStore.DictationShortcutSlot {
+        self.contentState.activeDictationShortcutSlot ?? .primary
+    }
+
     private var isAppPromptOverrideActive: Bool {
         guard let activePromptMode else { return false }
-        if activePromptMode.normalized == .dictate &&
-            self.settings.isDictationPromptOff &&
-            !self.contentState.isPromptModeActive
-        {
-            return false
+        if activePromptMode.normalized == .dictate {
+            return self.settings.isAppDictationPromptBindingActive(
+                for: self.activeDictationShortcutSlot,
+                appBundleID: self.promptResolutionBundleID
+            )
         }
         return self.settings.hasAppPromptBinding(
             for: activePromptMode,
@@ -1817,15 +1826,12 @@ struct BottomOverlayView: View {
     }
 
     private var selectedPromptLabel: String {
-        if let overrideName = self.contentState.promptModeOverrideProfileName {
-            return overrideName
-        }
         guard let activePromptMode else { return "N/A" }
-        if activePromptMode.normalized == .dictate &&
-            self.settings.isDictationPromptOff &&
-            !self.contentState.isPromptModeActive
-        {
-            return "Off"
+        if activePromptMode.normalized == .dictate {
+            return self.settings.dictationPromptDisplayName(
+                for: self.activeDictationShortcutSlot,
+                appBundleID: self.promptResolutionBundleID
+            )
         }
         if let profile = self.settings.resolvedPromptProfile(
             for: activePromptMode,
@@ -2086,7 +2092,7 @@ struct BottomOverlayView: View {
 
     private var promptSelectorTrigger: some View {
         HStack(spacing: 5) {
-            Text("AI:")
+            Text("AI Prompt:")
                 .font(.system(size: self.promptSelectorFontSize, weight: .medium))
                 .foregroundStyle(.white.opacity(0.5))
                 .lineLimit(1)

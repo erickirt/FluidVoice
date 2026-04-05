@@ -74,6 +74,10 @@ final class AnalyticsService {
 
         let settings = SettingsStore.shared
 
+        let anyDictationShortcutUsesAI =
+            settings.dictationPromptSelection(for: .primary) != .off ||
+            settings.dictationPromptSelection(for: .secondary) != .off
+
         var properties: [String: Any] = [
             "app_version": version,
             "app_build": build,
@@ -82,7 +86,7 @@ final class AnalyticsService {
             "environment": environment,
 
             // Low-cardinality settings snapshot
-            "ai_processing_enabled": !settings.isDictationPromptOff,
+            "ai_processing_enabled": anyDictationShortcutUsesAI,
             "streaming_preview_enabled": settings.enableStreamingPreview,
             "press_and_hold_mode": settings.pressAndHoldMode,
             "copy_to_clipboard_enabled": settings.copyTranscriptionToClipboard,

@@ -88,6 +88,22 @@ final class SettingsStore: ObservableObject {
         }
     }
 
+    enum DictationShortcutSlot: String, Codable, CaseIterable, Identifiable {
+        case primary
+        case secondary
+
+        var id: String { self.rawValue }
+
+        var displayName: String {
+            switch self {
+            case .primary:
+                return "Primary Dictation Shortcut"
+            case .secondary:
+                return "Secondary Dictation Shortcut"
+            }
+        }
+    }
+
     enum DictationPromptSelection: Equatable {
         case off
         case `default`
@@ -287,26 +303,34 @@ final class SettingsStore: ObservableObject {
     }
 
     var dictationPromptSelection: DictationPromptSelection {
-        if self.isDictationPromptOff {
+        self.dictationPromptSelection(for: .primary)
+    }
+
+    func setDictationPromptSelection(_ selection: DictationPromptSelection) {
+        self.setDictationPromptSelection(selection, for: .primary)
+    }
+
+    func dictationPromptSelection(for slot: DictationShortcutSlot) -> DictationPromptSelection {
+        if self.isDictationPromptOff(for: slot) {
             return .off
         }
-        if let promptID = self.selectedDictationPromptID {
+        if let promptID = self.selectedDictationPromptID(for: slot) {
             return .profile(promptID)
         }
         return .default
     }
 
-    func setDictationPromptSelection(_ selection: DictationPromptSelection) {
+    func setDictationPromptSelection(_ selection: DictationPromptSelection, for slot: DictationShortcutSlot) {
         switch selection {
         case .off:
-            self.isDictationPromptOff = true
-            self.selectedDictationPromptID = nil
+            self.setDictationPromptOff(true, for: slot)
+            self.setSelectedDictationPromptID(nil, for: slot)
         case .default:
-            self.isDictationPromptOff = false
-            self.selectedDictationPromptID = nil
+            self.setDictationPromptOff(false, for: slot)
+            self.setSelectedDictationPromptID(nil, for: slot)
         case let .profile(promptID):
-            self.isDictationPromptOff = false
-            self.selectedDictationPromptID = promptID
+            self.setDictationPromptOff(false, for: slot)
+            self.setSelectedDictationPromptID(promptID, for: slot)
         }
     }
 
@@ -368,6 +392,86 @@ final class SettingsStore: ObservableObject {
             return self.selectedEditPromptID
         case .write, .rewrite:
             return self.selectedEditPromptID
+        }
+    }
+
+    func selectedDictationPromptID(for slot: DictationShortcutSlot) -> String? {
+        switch slot {
+        case .primary:
+            return self.selectedDictationPromptID
+        case .secondary:
+            return self.promptModeSelectedPromptID
+        }
+    }
+
+    func setSelectedDictationPromptID(_ id: String?, for slot: DictationShortcutSlot) {
+        switch slot {
+        case .primary:
+            self.selectedDictationPromptID = id
+        case .secondary:
+            self.promptModeSelectedPromptID = id
+        }
+    }
+
+    func isDictationPromptOff(for slot: DictationShortcutSlot) -> Bool {
+        switch slot {
+        case .primary:
+            return self.isDictationPromptOff
+        case .secondary:
+            return self.isSecondaryDictationPromptOff
+        }
+    }
+
+    func setDictationPromptOff(_ isOff: Bool, for slot: DictationShortcutSlot) {
+        switch slot {
+        case .primary:
+            self.isDictationPromptOff = isOff
+        case .secondary:
+            self.isSecondaryDictationPromptOff = isOff
+        }
+    }
+
+    func selectedDictationPromptProfile(for slot: DictationShortcutSlot) -> DictationPromptProfile? {
+        guard let id = self.selectedDictationPromptID(for: slot) else { return nil }
+        return self.dictationPromptProfiles.first(where: { $0.id == id && $0.mode.normalized == .dictate })
+    }
+
+    func resolvedDictationPromptProfile(for slot: DictationShortcutSlot, appBundleID: String?) -> DictationPromptProfile? {
+        switch self.dictationPromptSelection(for: slot) {
+        case .off:
+            return nil
+        case let .profile(promptID):
+            return self.dictationPromptProfiles.first(where: { $0.id == promptID && $0.mode.normalized == .dictate })
+        case .default:
+            guard let binding = self.appPromptBinding(for: .dictate, appBundleID: appBundleID) else { return nil }
+            let promptID = binding.promptID
+            return self.dictationPromptProfiles.first {
+                $0.id == promptID && $0.mode.normalized == .dictate
+            }
+        }
+    }
+
+    func isAppDictationPromptBindingActive(for slot: DictationShortcutSlot, appBundleID: String?) -> Bool {
+        guard self.dictationPromptSelection(for: slot) == .default else { return false }
+        return self.hasAppPromptBinding(for: .dictate, appBundleID: appBundleID)
+    }
+
+    func dictationPromptDisplayName(for slot: DictationShortcutSlot, appBundleID: String?) -> String {
+        switch self.dictationPromptSelection(for: slot) {
+        case .off:
+            return "Off"
+        case .default:
+            if let profile = self.resolvedDictationPromptProfile(for: slot, appBundleID: appBundleID) {
+                let name = profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                return name.isEmpty ? "Untitled" : name
+            }
+            return "Default"
+        case let .profile(promptID):
+            guard let profile = self.dictationPromptProfiles.first(where: { $0.id == promptID && $0.mode.normalized == .dictate }) else {
+                return "Default"
+            }
+            let name = profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? "Untitled" : name
         }
     }
 
@@ -800,6 +904,40 @@ final class SettingsStore: ObservableObject {
 
     func resolvedPromptProfile(for mode: PromptMode, appBundleID: String? = nil) -> DictationPromptProfile? {
         self.promptResolution(for: mode, appBundleID: appBundleID).profile
+    }
+
+    func effectiveDictationPromptBody(for slot: DictationShortcutSlot, appBundleID: String? = nil) -> String {
+        switch self.dictationPromptSelection(for: slot) {
+        case .off:
+            return ""
+        case .default:
+            return self.effectivePromptBody(for: .dictate, appBundleID: appBundleID)
+        case let .profile(promptID):
+            guard let profile = self.dictationPromptProfiles.first(where: { $0.id == promptID && $0.mode.normalized == .dictate }) else {
+                return self.effectivePromptBody(for: .dictate, appBundleID: appBundleID)
+            }
+            let body = Self.stripBasePrompt(for: .dictate, from: profile.prompt)
+            if !body.isEmpty {
+                return body
+            }
+            return self.effectivePromptBody(for: .dictate, appBundleID: appBundleID)
+        }
+    }
+
+    func effectiveDictationSystemPrompt(for slot: DictationShortcutSlot, appBundleID: String? = nil) -> String {
+        switch self.dictationPromptSelection(for: slot) {
+        case .off, .default:
+            return self.effectiveSystemPrompt(for: .dictate, appBundleID: appBundleID)
+        case let .profile(promptID):
+            guard let profile = self.dictationPromptProfiles.first(where: { $0.id == promptID && $0.mode.normalized == .dictate }) else {
+                return self.effectiveSystemPrompt(for: .dictate, appBundleID: appBundleID)
+            }
+            let body = Self.stripBasePrompt(for: .dictate, from: profile.prompt)
+            if !body.isEmpty {
+                return Self.combineBasePrompt(for: .dictate, with: body)
+            }
+            return self.effectiveSystemPrompt(for: .dictate, appBundleID: appBundleID)
+        }
     }
 
     func effectivePromptBody(for mode: PromptMode, appBundleID: String? = nil) -> String {
@@ -1692,6 +1830,17 @@ final class SettingsStore: ObservableObject {
         }
     }
 
+    var isSecondaryDictationPromptOff: Bool {
+        get {
+            let value = self.defaults.object(forKey: Keys.secondaryDictationPromptOff)
+            return value as? Bool ?? false
+        }
+        set {
+            objectWillChange.send()
+            self.defaults.set(newValue, forKey: Keys.secondaryDictationPromptOff)
+        }
+    }
+
     var commandModeShortcutEnabled: Bool {
         get {
             let value = self.defaults.object(forKey: Keys.commandModeShortcutEnabled)
@@ -1993,6 +2142,7 @@ final class SettingsStore: ObservableObject {
             promptModeHotkeyShortcut: self.promptModeHotkeyShortcut,
             promptModeShortcutEnabled: self.promptModeShortcutEnabled,
             promptModeSelectedPromptID: self.promptModeSelectedPromptID,
+            secondaryDictationPromptOff: self.isSecondaryDictationPromptOff,
             commandModeHotkeyShortcut: self.commandModeHotkeyShortcut,
             commandModeShortcutEnabled: self.commandModeShortcutEnabled,
             commandModeSelectedModel: self.commandModeSelectedModel,
@@ -2037,6 +2187,7 @@ final class SettingsStore: ObservableObject {
             vocabularyBoostingEnabled: self.vocabularyBoostingEnabled,
             customDictionaryEntries: self.customDictionaryEntries,
             selectedDictationPromptID: self.selectedDictationPromptID,
+            dictationPromptOff: self.isDictationPromptOff,
             selectedEditPromptID: self.selectedEditPromptID,
             defaultDictationPromptOverride: self.defaultDictationPromptOverride,
             defaultEditPromptOverride: self.defaultEditPromptOverride
@@ -2108,10 +2259,12 @@ final class SettingsStore: ObservableObject {
         self.dictationPromptProfiles = promptProfiles
         self.appPromptBindings = appPromptBindings
         self.selectedDictationPromptID = payload.selectedDictationPromptID
+        self.isDictationPromptOff = payload.dictationPromptOff ?? self.isDictationPromptOff
         self.selectedEditPromptID = payload.selectedEditPromptID
         self.defaultDictationPromptOverride = payload.defaultDictationPromptOverride
         self.defaultEditPromptOverride = payload.defaultEditPromptOverride
         self.promptModeSelectedPromptID = payload.promptModeSelectedPromptID
+        self.isSecondaryDictationPromptOff = payload.secondaryDictationPromptOff ?? false
         self.normalizePromptSelectionsIfNeeded()
     }
 
@@ -2207,13 +2360,17 @@ final class SettingsStore: ObservableObject {
         } else if self.defaults.object(forKey: Keys.enableAIProcessing) != nil {
             shouldStartOff = !self.defaults.bool(forKey: Keys.enableAIProcessing)
         } else {
-            shouldStartOff = false
+            shouldStartOff = true
         }
 
         self.defaults.set(shouldStartOff, forKey: Keys.dictationPromptOff)
     }
 
     private func normalizePromptSelectionsIfNeeded() {
+        if self.defaults.object(forKey: Keys.secondaryDictationPromptOff) == nil {
+            self.defaults.set(false, forKey: Keys.secondaryDictationPromptOff)
+        }
+
         // One-time migration to unified edit keys.
         if self.defaults.object(forKey: Keys.selectedEditPromptID) == nil,
            let migratedSelectedEditID = self.selectedEditPromptID
@@ -3385,6 +3542,7 @@ private extension SettingsStore {
         static let promptModeHotkeyShortcut = "PromptModeHotkeyShortcut"
         static let promptModeShortcutEnabled = "PromptModeShortcutEnabled"
         static let promptModeSelectedPromptID = "PromptModeSelectedPromptID"
+        static let secondaryDictationPromptOff = "SecondaryDictationPromptOff"
 
         // Rewrite Mode Keys
         static let rewriteModeHotkeyShortcut = "RewriteModeHotkeyShortcut"

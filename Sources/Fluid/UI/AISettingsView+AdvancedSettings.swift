@@ -20,7 +20,7 @@ extension AIEnhancementSettingsView {
                             Text("Prompt Profiles")
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(self.theme.palette.primaryText)
-                            Text(" - Pick one prompt for Dictate and one for Edit Text.")
+                            Text(" - Manage prompt bodies here. Shortcut assignment lives in Keyboard Shortcuts.")
                                 .font(.system(size: 13))
                                 .foregroundStyle(self.theme.palette.secondaryText)
                         }
@@ -182,7 +182,7 @@ extension AIEnhancementSettingsView {
                     .frame(width: 20, height: 20)
                     .background(Circle().fill(tone.opacity(mode.normalized == .dictate ? 0.85 : 0.65)))
                 HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    Text(mode.normalized == .dictate ? "Dictate Mode" : "Edit Text Mode")
+                    Text(mode.normalized == .dictate ? "Dictation Prompt Profiles" : "Edit Text Mode")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(self.theme.palette.primaryText)
                     Text(" - \(self.promptSectionDescription(for: mode))")
@@ -194,6 +194,13 @@ extension AIEnhancementSettingsView {
             }
             .padding(.horizontal, 2)
 
+            if mode.normalized == .dictate {
+                Text("Selection indicators here preview the primary dictation shortcut. Assign each shortcut in Keyboard Shortcuts.")
+                    .font(.caption2)
+                    .foregroundStyle(self.theme.palette.secondaryText)
+                    .padding(.horizontal, 4)
+            }
+
             if mode.normalized == .edit {
                 self.editModeProviderModelRow
             }
@@ -202,21 +209,23 @@ extension AIEnhancementSettingsView {
                 self.promptProfileCard(
                     cardKey: "\(mode.normalized.rawValue)-off",
                     title: "Off",
-                    subtitle: "Use raw transcription for normal dictation with no AI post-processing.",
+                    subtitle: "Use raw transcription for the primary dictation shortcut with no AI post-processing.",
                     mode: mode,
-                    isSelected: self.viewModel.isPromptSelectionOff(for: mode),
+                    isSelected: self.viewModel.isPrimaryDictationPromptSelectionOff(),
                     onUse: {
-                        self.viewModel.selectPromptOff(for: mode)
+                        self.viewModel.selectPrimaryDictationPromptOff()
                     }
                 )
             }
 
             self.promptProfileCard(
                 cardKey: "\(mode.normalized.rawValue)-default",
-                title: "Default \(self.friendlyModeName(mode))",
+                title: mode.normalized == .dictate ? "Default Dictation Prompt" : "Default \(self.friendlyModeName(mode))",
                 subtitle: self.viewModel.promptPreview(self.viewModel.defaultPromptBodyPreview(for: mode)),
                 mode: mode,
-                isSelected: !self.viewModel.isPromptSelectionOff(for: mode) && self.viewModel.selectedPromptID(for: mode) == nil,
+                isSelected: mode.normalized == .dictate
+                    ? (!self.viewModel.isPrimaryDictationPromptSelectionOff() && self.viewModel.selectedPromptID(for: mode) == nil)
+                    : self.viewModel.selectedPromptID(for: mode) == nil,
                 onUse: {
                     self.viewModel.setSelectedPromptID(nil, for: mode)
                 },
@@ -646,7 +655,7 @@ extension AIEnhancementSettingsView {
     private func promptSectionDescription(for mode: SettingsStore.PromptMode) -> String {
         switch mode {
         case .dictate:
-            return "No selected-text context - Process raw voice text - clean, write into email, convert terminal commands, translate etc."
+            return "Create dictation prompt bodies here. The primary shortcut preview is shown here; both shortcut assignments are set in Keyboard Shortcuts."
         case .edit, .write, .rewrite:
             return "Uses selected text as context (when text is selected) - Edit or rewrite selected text - answer questions, summarize, convert to bullets etc."
         }

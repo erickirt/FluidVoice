@@ -1494,12 +1494,11 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         return trimmed.isEmpty ? "Untitled Prompt" : trimmed
     }
 
-    func isPromptSelectionOff(for mode: SettingsStore.PromptMode) -> Bool {
-        mode.normalized == .dictate && self.settings.isDictationPromptOff
+    func isPrimaryDictationPromptSelectionOff() -> Bool {
+        self.settings.isDictationPromptOff
     }
 
-    func selectPromptOff(for mode: SettingsStore.PromptMode) {
-        guard mode.normalized == .dictate else { return }
+    func selectPrimaryDictationPromptOff() {
         self.settings.setDictationPromptSelection(.off)
         self.selectedDictationPromptID = self.settings.selectedDictationPromptID
         self.isDictationPromptOff = self.settings.isDictationPromptOff

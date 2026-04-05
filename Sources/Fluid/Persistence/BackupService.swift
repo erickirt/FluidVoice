@@ -18,6 +18,7 @@ struct SettingsBackupPayload: Codable, Equatable {
     let promptModeHotkeyShortcut: HotkeyShortcut
     let promptModeShortcutEnabled: Bool
     let promptModeSelectedPromptID: String?
+    let secondaryDictationPromptOff: Bool?
     let commandModeHotkeyShortcut: HotkeyShortcut
     let commandModeShortcutEnabled: Bool
     let commandModeSelectedModel: String?
@@ -62,6 +63,7 @@ struct SettingsBackupPayload: Codable, Equatable {
     let vocabularyBoostingEnabled: Bool
     let customDictionaryEntries: [SettingsStore.CustomDictionaryEntry]
     let selectedDictationPromptID: String?
+    let dictationPromptOff: Bool?
     let selectedEditPromptID: String?
     let defaultDictationPromptOverride: String?
     let defaultEditPromptOverride: String?

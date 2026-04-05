@@ -117,6 +117,52 @@ struct SettingsView: View {
         )
     }
 
+    private func dictationPromptSelectionBinding(for slot: SettingsStore.DictationShortcutSlot) -> Binding<String> {
+        Binding(
+            get: {
+                switch self.settings.dictationPromptSelection(for: slot) {
+                case .off:
+                    return "__OFF__"
+                case .default:
+                    return "__DEFAULT__"
+                case let .profile(id):
+                    return id
+                }
+            },
+            set: { newValue in
+                switch newValue {
+                case "__OFF__":
+                    self.settings.setDictationPromptSelection(.off, for: slot)
+                case "__DEFAULT__":
+                    self.settings.setDictationPromptSelection(.default, for: slot)
+                default:
+                    self.settings.setDictationPromptSelection(.profile(newValue), for: slot)
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func dictationPromptPicker(for slot: SettingsStore.DictationShortcutSlot) -> some View {
+        let profiles = self.settings.promptProfiles(for: .dictate)
+        HStack {
+            Text("AI Prompt")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 30)
+            Spacer()
+            Picker("", selection: self.dictationPromptSelectionBinding(for: slot)) {
+                Text("Off").tag("__OFF__")
+                Text("Default").tag("__DEFAULT__")
+                ForEach(profiles) { profile in
+                    Text(profile.name.isEmpty ? "Untitled" : profile.name).tag(profile.id)
+                }
+            }
+            .frame(width: 190)
+        }
+        .padding(.bottom, 4)
+    }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 16) {
@@ -524,7 +570,7 @@ struct SettingsView: View {
                             Spacer()
 
                             if self.accessibilityEnabled {
-                                if self.isRecordingShortcut || self.isRecordingCommandModeShortcut || self.isRecordingRewriteShortcut || self.isRecordingCancelShortcut {
+                                if self.isRecordingShortcut || self.isRecordingPromptModeShortcut || self.isRecordingCommandModeShortcut || self.isRecordingRewriteShortcut || self.isRecordingCancelShortcut {
                                     Text("Recording…")
                                         .font(.caption.weight(.semibold))
                                         .foregroundStyle(.orange)
@@ -547,7 +593,7 @@ struct SettingsView: View {
 
                         if self.accessibilityEnabled {
                             VStack(alignment: .leading, spacing: 12) {
-                                if self.isRecordingShortcut || self.isRecordingCommandModeShortcut || self.isRecordingRewriteShortcut || self.isRecordingCancelShortcut {
+                                if self.isRecordingShortcut || self.isRecordingPromptModeShortcut || self.isRecordingCommandModeShortcut || self.isRecordingRewriteShortcut || self.isRecordingCancelShortcut {
                                     HStack(spacing: 8) {
                                         Image(systemName: "hand.point.up.left.fill")
                                             .foregroundStyle(.orange)
@@ -580,8 +626,8 @@ struct SettingsView: View {
                                     self.shortcutRow(
                                         icon: "mic.fill",
                                         iconColor: .secondary,
-                                        title: "Transcribe Mode",
-                                        description: "Dictate text anywhere",
+                                        title: "Primary Dictation Shortcut",
+                                        description: "Defaults to raw transcription, but can use Off, Default, or any custom prompt.",
                                         shortcut: self.hotkeyShortcut,
                                         isRecording: self.isRecordingShortcut,
                                         onChangePressed: {
@@ -589,13 +635,14 @@ struct SettingsView: View {
                                             self.isRecordingShortcut = true
                                         }
                                     )
+                                    self.dictationPromptPicker(for: .primary)
                                     Divider().opacity(0.2).padding(.vertical, 4)
 
                                     self.shortcutRow(
                                         icon: "text.bubble.fill",
                                         iconColor: .secondary,
-                                        title: "Transcribe with Prompt",
-                                        description: "Dictate with a specific AI prompt",
+                                        title: "Secondary Dictation Shortcut",
+                                        description: "Defaults to Default cleanup, but can use Off, Default, or any custom prompt.",
                                         shortcut: self.promptModeShortcut,
                                         isRecording: self.isRecordingPromptModeShortcut,
                                         isEnabled: self.$promptModeShortcutEnabled,
@@ -606,35 +653,7 @@ struct SettingsView: View {
                                     )
 
                                     if self.promptModeShortcutEnabled {
-                                        let profiles = self.settings.promptProfiles(for: .dictate)
-                                        if !profiles.isEmpty {
-                                            HStack {
-                                                Text("Prompt")
-                                                    .font(.subheadline)
-                                                    .foregroundStyle(.secondary)
-                                                    .padding(.leading, 30)
-                                                Spacer()
-                                                Picker("", selection: Binding(
-                                                    get: { self.settings.promptModeSelectedPromptID ?? "" },
-                                                    set: { newValue in
-                                                        self.settings.promptModeSelectedPromptID = newValue.isEmpty ? nil : newValue
-                                                    }
-                                                )) {
-                                                    Text("Select a prompt...").tag("")
-                                                    ForEach(profiles) { profile in
-                                                        Text(profile.name.isEmpty ? "Untitled" : profile.name).tag(profile.id)
-                                                    }
-                                                }
-                                                .frame(width: 170)
-                                            }
-                                            .padding(.bottom, 4)
-                                        } else {
-                                            Text("Add prompts in AI Enhancements → Prompt Profiles")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                                .padding(.leading, 30)
-                                                .padding(.bottom, 4)
-                                        }
+                                        self.dictationPromptPicker(for: .secondary)
                                     }
 
                                     Divider().opacity(0.2).padding(.vertical, 4)

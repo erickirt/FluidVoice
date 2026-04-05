@@ -20,12 +20,13 @@ class NotchContentState: ObservableObject {
     @Published var mode: OverlayMode = .dictation
     @Published var promptPickerMode: SettingsStore.PromptMode = .dictate
     @Published var isProcessing: Bool = false // AI processing state
+    @Published var activeDictationShortcutSlot: SettingsStore.DictationShortcutSlot? = nil
     @Published var promptModeOverrideProfileName: String? = nil // Name shown in overlay when prompt mode hotkey is active
     @Published var promptModeOverrideProfileID: String? = nil // ID of the active override profile (for checkmark in menu)
     @Published var isPromptModeActive: Bool = false // True for the entire prompt-mode session, even when no profile is selected
 
-    /// Called when the user picks a different prompt from the overlay during prompt mode recording.
-    var onPromptModeProfileChangeRequested: ((SettingsStore.DictationPromptProfile?) -> Void)?
+    /// Called when the user picks a different dictation prompt from the overlay during recording.
+    var onDictationPromptSelectionRequested: ((SettingsStore.DictationPromptSelection) -> Void)?
 
     /// Icon of the target app (where text will be typed)
     @Published var targetAppIcon: NSImage?
@@ -347,13 +348,17 @@ struct NotchExpandedView: View {
         self.activeAppMonitor.activeAppBundleID
     }
 
+    private var activeDictationShortcutSlot: SettingsStore.DictationShortcutSlot {
+        self.contentState.activeDictationShortcutSlot ?? .primary
+    }
+
     private var isAppPromptOverrideActive: Bool {
         guard let activePromptMode else { return false }
-        if activePromptMode.normalized == .dictate &&
-            self.settings.isDictationPromptOff &&
-            !self.contentState.isPromptModeActive
-        {
-            return false
+        if activePromptMode.normalized == .dictate {
+            return self.settings.isAppDictationPromptBindingActive(
+                for: self.activeDictationShortcutSlot,
+                appBundleID: self.promptResolutionBundleID
+            )
         }
         return self.settings.hasAppPromptBinding(
             for: activePromptMode,
@@ -362,15 +367,12 @@ struct NotchExpandedView: View {
     }
 
     private var selectedPromptLabel: String {
-        if let overrideName = self.contentState.promptModeOverrideProfileName {
-            return overrideName
-        }
         guard let activePromptMode else { return "N/A" }
-        if activePromptMode.normalized == .dictate &&
-            self.settings.isDictationPromptOff &&
-            !self.contentState.isPromptModeActive
-        {
-            return "Off"
+        if activePromptMode.normalized == .dictate {
+            return self.settings.dictationPromptDisplayName(
+                for: self.activeDictationShortcutSlot,
+                appBundleID: self.promptResolutionBundleID
+            )
         }
         if let profile = self.settings.resolvedPromptProfile(
             for: activePromptMode,
@@ -405,13 +407,12 @@ struct NotchExpandedView: View {
 
     private func promptMenuContent() -> some View {
         let promptMode = self.activePromptMode ?? .dictate
-        // During prompt mode recording, selections update the live override instead of the global prompt.
-        let isInPromptMode = self.contentState.isPromptModeActive
+        let activeDictationSlot = self.activeDictationShortcutSlot
 
         return VStack(alignment: .leading, spacing: 0) {
-            if promptMode.normalized == .dictate && !isInPromptMode {
+            if promptMode.normalized == .dictate {
                 Button(action: {
-                    self.settings.setDictationPromptSelection(.off)
+                    self.contentState.onDictationPromptSelectionRequested?(.off)
                     let pid = NotchContentState.shared.recordingTargetPID
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                         if let pid { _ = TypingService.activateApp(pid: pid) }
@@ -421,7 +422,7 @@ struct NotchExpandedView: View {
                     HStack {
                         Text("Off")
                         Spacer()
-                        let isSelected = !isInPromptMode && self.settings.isDictationPromptOff
+                        let isSelected = self.settings.dictationPromptSelection(for: activeDictationSlot) == .off
                         if isSelected {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 10, weight: .semibold))
@@ -436,14 +437,10 @@ struct NotchExpandedView: View {
             }
 
             Button(action: {
-                if isInPromptMode {
-                    self.contentState.onPromptModeProfileChangeRequested?(nil)
+                if promptMode.normalized == .dictate {
+                    self.contentState.onDictationPromptSelectionRequested?(.default)
                 } else {
-                    if promptMode.normalized == .dictate {
-                        self.settings.setDictationPromptSelection(.default)
-                    } else {
-                        self.settings.setSelectedPromptID(nil, for: promptMode)
-                    }
+                    self.settings.setSelectedPromptID(nil, for: promptMode)
                 }
                 let pid = NotchContentState.shared.recordingTargetPID
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -454,9 +451,9 @@ struct NotchExpandedView: View {
                 HStack {
                     Text("Default")
                     Spacer()
-                    let isSelected = isInPromptMode
-                        ? (self.contentState.promptModeOverrideProfileID == nil)
-                        : (!self.settings.isDictationPromptOff && self.settings.selectedPromptID(for: promptMode) == nil)
+                    let isSelected = promptMode.normalized == .dictate
+                        ? (self.settings.dictationPromptSelection(for: activeDictationSlot) == .default)
+                        : (self.settings.selectedPromptID(for: promptMode) == nil)
                     if isSelected {
                         Image(systemName: "checkmark")
                             .font(.system(size: 10, weight: .semibold))
@@ -472,8 +469,8 @@ struct NotchExpandedView: View {
 
                 ForEach(self.settings.promptProfiles(for: promptMode)) { profile in
                     Button(action: {
-                        if isInPromptMode {
-                            self.contentState.onPromptModeProfileChangeRequested?(profile)
+                        if promptMode.normalized == .dictate {
+                            self.contentState.onDictationPromptSelectionRequested?(.profile(profile.id))
                         } else {
                             self.settings.setSelectedPromptID(profile.id, for: promptMode)
                         }
@@ -486,8 +483,8 @@ struct NotchExpandedView: View {
                         HStack {
                             Text(profile.name.isEmpty ? "Untitled" : profile.name)
                             Spacer()
-                            let isSelected = isInPromptMode
-                                ? (self.contentState.promptModeOverrideProfileID == profile.id)
+                            let isSelected = promptMode.normalized == .dictate
+                                ? (self.settings.dictationPromptSelection(for: activeDictationSlot) == .profile(profile.id))
                                 : (self.settings.selectedPromptID(for: promptMode) == profile.id)
                             if isSelected {
                                 Image(systemName: "checkmark")
@@ -552,7 +549,7 @@ struct NotchExpandedView: View {
             if !self.contentState.isProcessing {
                 ZStack(alignment: .top) {
                     HStack(spacing: 6) {
-                        Text("AI:")
+                        Text("AI Prompt:")
                             .font(.system(size: 9, weight: .medium))
                             .foregroundStyle(.white.opacity(0.5))
                         Text(self.selectedPromptLabel)

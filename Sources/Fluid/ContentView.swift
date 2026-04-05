@@ -87,6 +87,7 @@ struct ContentView: View {
     @State private var isRecordingForRewrite: Bool = false // Track if current recording is for rewrite mode
     @State private var isRecordingForCommand: Bool = false // Track if current recording is for command mode
     @State private var promptModeOverrideText: String? // System prompt text to use when in prompt mode
+    @State private var activeDictationShortcutSlot: SettingsStore.DictationShortcutSlot? = nil
     @State private var activeRecordingMode: ActiveRecordingMode = .none
     @State private var isRecordingShortcut = false
     @State private var isRecordingPromptModeShortcut = false
@@ -1395,64 +1396,15 @@ struct ContentView: View {
      }
      */
 
-    /// Build a general system prompt with voice editing commands support
-    private func buildSystemPrompt(appInfo: (name: String, bundleId: String, windowTitle: String)) -> String {
-        return SettingsStore.shared.effectiveSystemPrompt(
-            for: .dictate,
-            appBundleID: appInfo.bundleId
-        )
-    }
-
-    private var shouldTracePromptProcessing: Bool {
-        self.forcePromptTraceToConsole ||
-            UserDefaults.standard.bool(forKey: "EnableDebugLogs")
-    }
-
-    private var forcePromptTraceToConsole: Bool {
-        ProcessInfo.processInfo.environment["FLUID_PROMPT_TRACE"] == "1"
-    }
-
-    private func logDictationPromptTrace(_ title: String, value: String) {
-        let line = "[PromptTrace][Dictate] \(title):\n\(value)"
-        if self.forcePromptTraceToConsole {
-            print(line)
-        }
-        DebugLogger.shared.debug(line, source: "ContentView")
-    }
-
-    private func customPromptAnalyticsProperties(promptSource: String, overrideEmpty: Bool?) -> [String: Any] {
-        let providerID = SettingsStore.shared.selectedProviderID
-        let providerKey = self.providerKey(for: providerID)
-        let selectedModel = SettingsStore.shared.selectedModelByProvider[providerKey] ?? SettingsStore.shared.selectedModel ?? ""
-        let isCustomProvider = !ModelRepository.shared.isBuiltIn(providerID)
-        let providerName = isCustomProvider ? "Custom Provider" : ModelRepository.shared.displayName(for: providerID)
-
-        var properties: [String: Any] = [
-            "prompt_source": promptSource,
-            "provider_id": isCustomProvider ? "custom" : providerID,
-            "provider_name": providerName,
-            "provider_type": isCustomProvider ? "custom" : "built_in",
-        ]
-        if !selectedModel.isEmpty {
-            properties["model"] = isCustomProvider ? "custom" : selectedModel
-        }
-        if let overrideEmpty {
-            properties["override_empty"] = overrideEmpty
-        }
-        return properties
-    }
-
-    // MARK: - Local Endpoint Detection
-
-    private func isLocalEndpoint(_ urlString: String) -> Bool {
-        return ModelRepository.shared.isLocalEndpoint(urlString)
-    }
-
     // NOTE: Thinking token filtering is now handled by LLMClient.stripThinkingTags()
 
     // MARK: - Modular AI Processing
 
-    private func processTextWithAI(_ inputText: String, overrideSystemPrompt: String? = nil) async -> String {
+    private func processTextWithAI(
+        _ inputText: String,
+        overrideSystemPrompt: String? = nil,
+        dictationSlot: SettingsStore.DictationShortcutSlot? = nil
+    ) async -> String {
         // CRITICAL FIX: Read current settings from SettingsStore, not stale @State copies
         // This ensures AI provider/model changes in AISettingsView take effect immediately
         let currentSelectedProviderID = SettingsStore.shared.selectedProviderID
@@ -1491,7 +1443,7 @@ struct ContentView: View {
         let systemPrompt: String = {
             let override = overrideSystemPrompt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !override.isEmpty { return override }
-            return self.buildSystemPrompt(appInfo: appInfo)
+            return self.buildSystemPrompt(appInfo: appInfo, dictationSlot: dictationSlot)
         }()
 
         // Route to Apple Intelligence if selected
@@ -1500,20 +1452,24 @@ struct ContentView: View {
             if #available(macOS 26.0, *) {
                 let provider = AppleIntelligenceProvider()
                 if self.shouldTracePromptProcessing {
-                    let selectedProfile = SettingsStore.shared.resolvedPromptProfile(
-                        for: .dictate,
+                    let activeSlot = dictationSlot ?? self.currentDictationShortcutSlot(for: self.activeRecordingMode) ?? .primary
+                    let selectedProfile = SettingsStore.shared.resolvedDictationPromptProfile(
+                        for: activeSlot,
                         appBundleID: appInfo.bundleId
                     )
                     let selectedPromptName: String = {
+                        if SettingsStore.shared.dictationPromptSelection(for: activeSlot) == .off {
+                            return "Off"
+                        }
                         if let profile = selectedProfile {
                             return profile.name.isEmpty ? "Untitled Prompt" : profile.name
                         }
-                        return "Default Dictate"
+                        return "Default"
                     }()
                     self.logDictationPromptTrace("Selected prompt profile", value: selectedPromptName)
                     self.logDictationPromptTrace(
                         "Prompt body (custom/default body)",
-                        value: SettingsStore.shared.effectivePromptBody(for: .dictate, appBundleID: appInfo.bundleId)
+                        value: SettingsStore.shared.effectiveDictationPromptBody(for: activeSlot, appBundleID: appInfo.bundleId)
                     )
                     self.logDictationPromptTrace("Built-in default system prompt (baseline)", value: SettingsStore.defaultSystemPromptText(for: .dictate))
                     self.logDictationPromptTrace("Final system prompt sent to model", value: systemPrompt)
@@ -1543,20 +1499,24 @@ struct ContentView: View {
 
         DebugLogger.shared.debug("Using app context for AI: app=\(appInfo.name), bundleId=\(appInfo.bundleId), title=\(appInfo.windowTitle)", source: "ContentView")
         if self.shouldTracePromptProcessing {
-            let selectedProfile = SettingsStore.shared.resolvedPromptProfile(
-                for: .dictate,
+            let activeSlot = dictationSlot ?? self.currentDictationShortcutSlot(for: self.activeRecordingMode) ?? .primary
+            let selectedProfile = SettingsStore.shared.resolvedDictationPromptProfile(
+                for: activeSlot,
                 appBundleID: appInfo.bundleId
             )
             let selectedPromptName: String = {
+                if SettingsStore.shared.dictationPromptSelection(for: activeSlot) == .off {
+                    return "Off"
+                }
                 if let profile = selectedProfile {
                     return profile.name.isEmpty ? "Untitled Prompt" : profile.name
                 }
-                return "Default Dictate"
+                return "Default"
             }()
             self.logDictationPromptTrace("Selected prompt profile", value: selectedPromptName)
             self.logDictationPromptTrace(
                 "Prompt body (custom/default body)",
-                value: SettingsStore.shared.effectivePromptBody(for: .dictate, appBundleID: appInfo.bundleId)
+                value: SettingsStore.shared.effectiveDictationPromptBody(for: activeSlot, appBundleID: appInfo.bundleId)
             )
             self.logDictationPromptTrace("Built-in default system prompt (baseline)", value: SettingsStore.defaultSystemPromptText(for: .dictate))
             self.logDictationPromptTrace("Prompt override in use", value: (overrideSystemPrompt?.isEmpty == false) ? "yes" : "no")
@@ -1656,6 +1616,7 @@ struct ContentView: View {
         let modeAtStop = self.activeRecordingMode
         let wasRewriteMode = modeAtStop == .edit || self.isRecordingForRewrite
         let wasCommandMode = modeAtStop == .command || self.isRecordingForCommand
+        let activeDictationSlot = self.currentDictationShortcutSlot(for: modeAtStop)
         let promptOverride = self.promptModeOverrideText
         DebugLogger.shared.info(
             "Routing decision snapshot | activeMode=\(modeAtStop.rawValue) | rewrite=\(wasRewriteMode) | command=\(wasCommandMode) | overlay=\(NotchContentState.shared.mode.rawValue)",
@@ -1748,10 +1709,8 @@ struct ContentView: View {
 
         var finalText: String
 
-        // Check if we should use AI processing.
-        // Prompt mode can still use AI when a provider is configured even if the global gate is off.
-        let shouldUseAI = DictationAIPostProcessingGate.isConfigured() ||
-            (promptOverride != nil && DictationAIPostProcessingGate.isProviderConfigured())
+        let shouldUseAI = activeDictationSlot.map { DictationAIPostProcessingGate.isConfigured(for: $0) } ??
+            DictationAIPostProcessingGate.isConfigured()
         let transcriptionModelInfo = self.currentTranscriptionModelInfo()
 
         if shouldUseAI {
@@ -1766,7 +1725,11 @@ struct ContentView: View {
             // Ensure the status label becomes visible immediately.
             await Task.yield()
 
-            finalText = await self.processTextWithAI(transcribedText, overrideSystemPrompt: promptOverride)
+            finalText = await self.processTextWithAI(
+                transcribedText,
+                overrideSystemPrompt: promptOverride,
+                dictationSlot: activeDictationSlot
+            )
             let postProcessingLatencyMs = Int((Date().timeIntervalSince(postProcessingStart) * 1000).rounded())
             AnalyticsService.shared.capture(
                 .dictationPostProcessingCompleted,
@@ -2158,11 +2121,8 @@ struct ContentView: View {
     }
 
     private func setActiveRecordingMode(_ mode: ActiveRecordingMode) {
-        if mode != .promptMode {
-            self.promptModeOverrideText = nil
-            NotchContentState.shared.promptModeOverrideProfileName = nil
-            NotchContentState.shared.promptModeOverrideProfileID = nil
-            NotchContentState.shared.isPromptModeActive = false
+        if mode != .dictate, mode != .promptMode {
+            self.clearActiveDictationShortcutState()
         }
         self.activeRecordingMode = mode
         switch mode {
@@ -2406,21 +2366,10 @@ struct ContentView: View {
         NotchContentState.shared.onCancelRequested = {
             _ = self.handleCancelShortcut()
         }
-        NotchContentState.shared.onPromptModeProfileChangeRequested = { profile in
-            if let p = profile {
-                self.promptModeOverrideText = SettingsStore.combineBasePrompt(
-                    for: .dictate,
-                    with: SettingsStore.stripBasePrompt(for: .dictate, from: p.prompt)
-                )
-                NotchContentState.shared.promptModeOverrideProfileName = p.name
-                NotchContentState.shared.promptModeOverrideProfileID = p.id
-                SettingsStore.shared.promptModeSelectedPromptID = p.id
-            } else {
-                self.promptModeOverrideText = nil
-                NotchContentState.shared.promptModeOverrideProfileName = nil
-                NotchContentState.shared.promptModeOverrideProfileID = nil
-                SettingsStore.shared.promptModeSelectedPromptID = nil
-            }
+        NotchContentState.shared.onDictationPromptSelectionRequested = { selection in
+            let slot = self.activeDictationShortcutSlot ?? .primary
+            SettingsStore.shared.setDictationPromptSelection(selection, for: slot)
+            self.applyDictationShortcutSelectionContext(for: slot)
         }
 
         guard self.hotkeyManager == nil else { return }
@@ -2444,18 +2393,7 @@ struct ContentView: View {
                     "ContentView: selected model for dictate hotkey=\(SettingsStore.shared.selectedSpeechModel.displayName)",
                     source: "ContentView"
                 )
-                self.captureRecordingContext()
-                self.setActiveRecordingMode(.dictate)
-                self.rewriteModeService.clearState()
-                self.menuBarManager.setOverlayMode(.dictation)
-
-                guard !self.asr.isRunning else { return }
-                if SettingsStore.shared.enableTranscriptionSounds {
-                    TranscriptionSoundPlayer.shared.playStartSound()
-                }
-                Task {
-                    await self.asr.start()
-                }
+                self.beginDictationRecording(for: .primary, mode: .dictate)
             },
             stopAndProcessCallback: {
                 let route = self.currentDictationOutputRouteForHotkeyStop()
@@ -2464,30 +2402,7 @@ struct ContentView: View {
             },
             promptModeCallback: {
                 DebugLogger.shared.info("Prompt mode triggered", source: "ContentView")
-                self.captureRecordingContext()
-
-                // Resolve the full system prompt for the selected profile
-                let settings = SettingsStore.shared
-                if let promptID = settings.promptModeSelectedPromptID,
-                   let profile = settings.dictationPromptProfiles.first(where: { $0.id == promptID })
-                {
-                    self.promptModeOverrideText = SettingsStore.combineBasePrompt(for: .dictate, with: SettingsStore.stripBasePrompt(for: .dictate, from: profile.prompt))
-                    NotchContentState.shared.promptModeOverrideProfileName = profile.name
-                    NotchContentState.shared.promptModeOverrideProfileID = profile.id
-                }
-
-                NotchContentState.shared.isPromptModeActive = true
-                self.setActiveRecordingMode(.promptMode)
-                self.rewriteModeService.clearState()
-                self.menuBarManager.setOverlayMode(.dictation)
-
-                guard !self.asr.isRunning else { return }
-                if settings.enableTranscriptionSounds {
-                    TranscriptionSoundPlayer.shared.playStartSound()
-                }
-                Task {
-                    await self.asr.start()
-                }
+                self.beginDictationRecording(for: .secondary, mode: .promptMode)
             },
             commandModeCallback: {
                 DebugLogger.shared.info("Command mode triggered", source: "ContentView")
@@ -2721,6 +2636,127 @@ struct ContentView: View {
 // MARK: - ContentView Playground & Onboarding Helpers
 
 extension ContentView {
+    private func buildSystemPrompt(
+        appInfo: (name: String, bundleId: String, windowTitle: String),
+        dictationSlot: SettingsStore.DictationShortcutSlot? = nil
+    ) -> String {
+        if let slot = dictationSlot ?? self.currentDictationShortcutSlot(for: self.activeRecordingMode) {
+            return SettingsStore.shared.effectiveDictationSystemPrompt(for: slot, appBundleID: appInfo.bundleId)
+        }
+        return SettingsStore.shared.effectiveSystemPrompt(for: .dictate, appBundleID: appInfo.bundleId)
+    }
+
+    private var shouldTracePromptProcessing: Bool {
+        self.forcePromptTraceToConsole ||
+            UserDefaults.standard.bool(forKey: "EnableDebugLogs")
+    }
+
+    private var forcePromptTraceToConsole: Bool {
+        ProcessInfo.processInfo.environment["FLUID_PROMPT_TRACE"] == "1"
+    }
+
+    private func logDictationPromptTrace(_ title: String, value: String) {
+        let line = "[PromptTrace][Dictate] \(title):\n\(value)"
+        if self.forcePromptTraceToConsole {
+            print(line)
+        }
+        DebugLogger.shared.debug(line, source: "ContentView")
+    }
+
+    private func customPromptAnalyticsProperties(promptSource: String, overrideEmpty: Bool?) -> [String: Any] {
+        let providerID = SettingsStore.shared.selectedProviderID
+        let providerKey = self.providerKey(for: providerID)
+        let selectedModel = SettingsStore.shared.selectedModelByProvider[providerKey] ?? SettingsStore.shared.selectedModel ?? ""
+        let isCustomProvider = !ModelRepository.shared.isBuiltIn(providerID)
+        let providerName = isCustomProvider ? "Custom Provider" : ModelRepository.shared.displayName(for: providerID)
+
+        var properties: [String: Any] = [
+            "prompt_source": promptSource,
+            "provider_id": isCustomProvider ? "custom" : providerID,
+            "provider_name": providerName,
+            "provider_type": isCustomProvider ? "custom" : "built_in",
+        ]
+        if !selectedModel.isEmpty {
+            properties["model"] = isCustomProvider ? "custom" : selectedModel
+        }
+        if let overrideEmpty {
+            properties["override_empty"] = overrideEmpty
+        }
+        return properties
+    }
+
+    private func isLocalEndpoint(_ urlString: String) -> Bool {
+        ModelRepository.shared.isLocalEndpoint(urlString)
+    }
+
+    private func currentDictationShortcutSlot(for mode: ActiveRecordingMode) -> SettingsStore.DictationShortcutSlot? {
+        switch mode {
+        case .dictate:
+            return self.activeDictationShortcutSlot ?? .primary
+        case .promptMode:
+            return self.activeDictationShortcutSlot ?? .secondary
+        case .none, .edit, .command:
+            return nil
+        }
+    }
+
+    private func clearActiveDictationShortcutState() {
+        self.activeDictationShortcutSlot = nil
+        self.promptModeOverrideText = nil
+        NotchContentState.shared.activeDictationShortcutSlot = nil
+        NotchContentState.shared.promptModeOverrideProfileName = nil
+        NotchContentState.shared.promptModeOverrideProfileID = nil
+        NotchContentState.shared.isPromptModeActive = false
+    }
+
+    private func applyDictationShortcutSelectionContext(for slot: SettingsStore.DictationShortcutSlot) {
+        let settings = SettingsStore.shared
+        self.activeDictationShortcutSlot = slot
+        NotchContentState.shared.activeDictationShortcutSlot = slot
+        NotchContentState.shared.isPromptModeActive = (slot == .secondary)
+
+        switch settings.dictationPromptSelection(for: slot) {
+        case .off, .default:
+            self.promptModeOverrideText = nil
+            NotchContentState.shared.promptModeOverrideProfileName = nil
+            NotchContentState.shared.promptModeOverrideProfileID = nil
+        case let .profile(profileID):
+            guard let profile = settings.selectedDictationPromptProfile(for: slot) ?? settings.dictationPromptProfiles.first(where: {
+                $0.id == profileID && $0.mode.normalized == .dictate
+            }) else {
+                settings.setDictationPromptSelection(.default, for: slot)
+                self.promptModeOverrideText = nil
+                NotchContentState.shared.promptModeOverrideProfileName = nil
+                NotchContentState.shared.promptModeOverrideProfileID = nil
+                return
+            }
+
+            self.promptModeOverrideText = SettingsStore.combineBasePrompt(
+                for: .dictate,
+                with: SettingsStore.stripBasePrompt(for: .dictate, from: profile.prompt)
+            )
+            NotchContentState.shared.promptModeOverrideProfileName = profile.name
+            NotchContentState.shared.promptModeOverrideProfileID = profile.id
+        }
+    }
+
+    private func beginDictationRecording(for slot: SettingsStore.DictationShortcutSlot, mode: ActiveRecordingMode) {
+        DebugLogger.shared.debug("Begin dictation recording for slot \(slot.rawValue)", source: "ContentView")
+        self.captureRecordingContext()
+        self.applyDictationShortcutSelectionContext(for: slot)
+        self.setActiveRecordingMode(mode)
+        self.rewriteModeService.clearState()
+        self.menuBarManager.setOverlayMode(.dictation)
+
+        guard !self.asr.isRunning else { return }
+        if SettingsStore.shared.enableTranscriptionSounds {
+            TranscriptionSoundPlayer.shared.playStartSound()
+        }
+        Task {
+            await self.asr.start()
+        }
+    }
+
     private func callOpenAIChat() async {
         guard !self.isCallingAI else { return }
         await MainActor.run { self.isCallingAI = true }

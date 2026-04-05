@@ -7,8 +7,12 @@ enum DictationAIPostProcessingGate {
     /// - For Apple Intelligence: requires `AppleIntelligenceService.isAvailable`
     /// - For other providers: requires a local endpoint OR a non-empty API key
     static func isConfigured() -> Bool {
+        self.isConfigured(for: .primary)
+    }
+
+    static func isConfigured(for slot: SettingsStore.DictationShortcutSlot) -> Bool {
         let settings = SettingsStore.shared
-        guard !settings.isDictationPromptOff else { return false }
+        guard settings.dictationPromptSelection(for: slot) != .off else { return false }
 
         return self.isProviderConfigured()
     }
