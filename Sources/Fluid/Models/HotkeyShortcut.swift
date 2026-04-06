@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import Foundation
 
 struct HotkeyShortcut: Codable, Equatable {
@@ -15,8 +16,10 @@ struct HotkeyShortcut: Codable, Equatable {
         if self.modifierFlags.contains(.shift) { parts.append("⇧") }
         if let key = Self.keyCodeToString(keyCode) {
             parts.append(key)
+        } else if let key = Self.characterForKeyCode(keyCode) {
+            parts.append(key)
         } else {
-            parts.append(String(Character(UnicodeScalar(self.keyCode) ?? "?")))
+            parts.append("?")
         }
 
         if self.modifierFlags.isEmpty {
@@ -95,6 +98,41 @@ struct HotkeyShortcut: Codable, Equatable {
         case 44: return "/"
         case 50: return "`"
         default: return nil
+        }
+    }
+
+    /// Uses the current keyboard layout to resolve a key code to its displayed character.
+    private static func characterForKeyCode(_ keyCode: UInt16) -> String? {
+        guard let sourceRef = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+              let rawPtr = TISGetInputSourceProperty(sourceRef, kTISPropertyUnicodeKeyLayoutData)
+        else { return nil }
+
+        let layoutData = Unmanaged<CFData>.fromOpaque(rawPtr).takeUnretainedValue() as Data
+        return layoutData.withUnsafeBytes { buffer -> String? in
+            guard let layoutPtr = buffer.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else {
+                return nil
+            }
+            var deadKeyState: UInt32 = 0
+            var chars = [UniChar](repeating: 0, count: 4)
+            var length = 0
+            let status = UCKeyTranslate(
+                layoutPtr,
+                keyCode,
+                UInt16(kUCKeyActionDisplay),
+                0,
+                UInt32(LMGetKbdType()),
+                UInt32(kUCKeyTranslateNoDeadKeysMask),
+                &deadKeyState,
+                chars.count,
+                &length,
+                &chars
+            )
+            guard status == noErr, length > 0 else { return nil }
+            let result = String(utf16CodeUnits: chars, count: length).uppercased()
+            guard !result.isEmpty, !result.unicodeScalars.contains(where: { $0.value < 0x20 }) else {
+                return nil
+            }
+            return result
         }
     }
 }
