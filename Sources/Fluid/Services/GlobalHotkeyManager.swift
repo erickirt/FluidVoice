@@ -358,6 +358,7 @@ final class GlobalHotkeyManager: NSObject {
         }
 
         if self.isShortcutCaptureActiveProvider?() ?? false {
+            self.resetModifierOnlyShortcutTracking()
             return Unmanaged.passUnretained(event)
         }
 
@@ -684,6 +685,7 @@ final class GlobalHotkeyManager: NSObject {
 
         let reason = (type == .tapDisabledByTimeout) ? "timeout" : "user input"
         DebugLogger.shared.warning("Event tap disabled by \(reason) — attempting immediate re-enable", source: "GlobalHotkeyManager")
+        self.resetModifierOnlyShortcutTracking()
 
         if let tap = self.eventTap {
             CGEvent.tapEnable(tap: tap, enable: true)
@@ -695,6 +697,20 @@ final class GlobalHotkeyManager: NSObject {
         }
 
         return Unmanaged.passUnretained(event)
+    }
+
+    func resetModifierOnlyShortcutTracking() {
+        self.pressedModifierKeyCodes = []
+        self.modifierOnlyKeyDown = false
+        self.otherKeyPressedDuringModifier = false
+        self.modifierPressStartTime = nil
+        self.pendingHoldModeStart?.cancel()
+        self.pendingHoldModeStart = nil
+        self.pendingHoldModeType = nil
+        self.isKeyPressed = false
+        self.isPromptModeKeyPressed = false
+        self.isCommandModeKeyPressed = false
+        self.isRewriteKeyPressed = false
     }
 
     private func handlePromptModeKeyDown(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool {
@@ -1096,6 +1112,7 @@ final class GlobalHotkeyManager: NSObject {
 
         self.initializationTask?.cancel()
         self.healthCheckTask?.cancel()
+        self.resetModifierOnlyShortcutTracking()
         self.isInitialized = false
         self.initializeWithDelay()
     }

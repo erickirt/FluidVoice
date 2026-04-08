@@ -521,6 +521,9 @@ struct ContentView: View {
         .onChange(of: self.selectedProviderID) { _, newValue in
             SettingsStore.shared.selectedProviderID = newValue
         }
+        .onChange(of: self.activeShortcutRecordingTarget) { _, _ in
+            self.hotkeyManager?.resetModifierOnlyShortcutTracking()
+        }
         .onChange(of: self.isPromptModeShortcutEnabled) { newValue in
             SettingsStore.shared.promptModeShortcutEnabled = newValue
             self.hotkeyManager?.updatePromptModeShortcutEnabled(newValue)
