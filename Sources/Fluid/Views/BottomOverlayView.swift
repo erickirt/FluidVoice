@@ -1770,7 +1770,8 @@ struct BottomOverlayView: View {
     /// (e.g. "Transcribing...", "Refining..."). Prefer that when present.
     private var processingStatusText: String {
         let t = self.contentState.transcriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.isEmpty ? self.processingLabel : t
+        guard Self.transientOverlayStatusTexts.contains(t) else { return self.processingLabel }
+        return t
     }
 
     private var hasTranscription: Bool {

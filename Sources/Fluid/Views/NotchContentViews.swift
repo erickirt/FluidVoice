@@ -300,17 +300,25 @@ struct NotchExpandedView: View {
 
     private var processingLabel: String {
         switch self.contentState.mode {
-        case .dictation: return "Refining..."
-        case .edit, .rewrite, .write: return "Thinking..."
-        case .command: return "Working..."
+        case .dictation: return "Refining"
+        case .edit, .rewrite, .write: return "Thinking"
+        case .command: return "Working"
         }
     }
+
+    private static let transientOverlayStatusTexts: Set<String> = [
+        "Transcribing...",
+        "Refining...",
+        "Thinking...",
+        "Working...",
+    ]
 
     /// ContentView writes transient status strings into transcriptionText while processing
     /// (e.g. "Transcribing...", "Refining..."). Prefer that when present.
     private var processingStatusText: String {
         let t = self.contentState.transcriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.isEmpty ? self.processingLabel : t
+        guard Self.transientOverlayStatusTexts.contains(t) else { return self.processingLabel }
+        return t
     }
 
     private var hasTranscription: Bool {
@@ -397,6 +405,14 @@ struct NotchExpandedView: View {
 
     private var previewMaxWidth: CGFloat {
         180
+    }
+
+    private var statusLabelWidth: CGFloat {
+        74
+    }
+
+    private var notchContentWidth: CGFloat {
+        216
     }
 
     private func handlePromptHover(_ hovering: Bool) {
@@ -519,11 +535,67 @@ struct NotchExpandedView: View {
         }
     }
 
+    @ViewBuilder
+    private var promptSelectorControl: some View {
+        if self.presentationPolicy.showsPromptSelector {
+            ZStack(alignment: .topLeading) {
+                HStack(spacing: 6) {
+                    Text("AI Prompt:")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text(self.selectedPromptLabel)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(1)
+                    if self.isAppPromptOverrideActive {
+                        Text("App")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white.opacity(0.15))
+                            )
+                    }
+                    ZStack {
+                        Circle()
+                            .fill(Color.white.opacity(0.08))
+                            .frame(width: 14, height: 14)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 6, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(Color.clear)
+                .cornerRadius(6)
+                .opacity(self.isPromptSelectableMode ? (self.contentState.isProcessing ? 0.7 : 1.0) : 0.6)
+                .allowsHitTesting(self.isPromptSelectableMode && !self.contentState.isProcessing)
+                .onHover { hovering in
+                    self.handlePromptHover(hovering)
+                }
+                .onTapGesture {
+                    guard self.isPromptSelectableMode, !self.contentState.isProcessing else { return }
+                    self.showPromptHoverMenu.toggle()
+                }
+
+                if self.showPromptHoverMenu {
+                    self.promptMenuContent()
+                        .padding(.top, 26)
+                        .transition(.opacity)
+                        .zIndex(10)
+                }
+            }
+            .frame(width: 140, alignment: .leading)
+            .transition(.opacity)
+        }
+    }
+
     var body: some View {
-        VStack(spacing: 4) {
-            // Visualization + Mode label row
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                // Target app icon (the app where text will be typed)
                 if let appIcon = self.contentState.targetAppIcon {
                     Image(nsImage: appIcon)
                         .resizable()
@@ -538,68 +610,22 @@ struct NotchExpandedView: View {
                 )
                 .frame(width: 80, height: 22)
 
-                // Mode label - shimmer effect when processing
                 if self.presentationPolicy.showsModeLabel {
                     if self.contentState.isProcessing {
                         ShimmerText(text: self.processingStatusText, color: self.modeColor)
+                            .frame(width: self.statusLabelWidth, alignment: .center)
                     } else {
                         Text(self.modeLabel)
                             .font(.system(size: 9, weight: .medium))
                             .foregroundStyle(self.modeColor)
                             .opacity(0.9)
-                            .onHover { hovering in
-                                self.handlePromptHover(hovering)
-                            }
+                            .frame(width: self.statusLabelWidth, alignment: .center)
                     }
                 }
             }
 
-            // Prompt selector
-            if self.presentationPolicy.showsPromptSelector && !self.contentState.isProcessing {
-                ZStack(alignment: .top) {
-                    HStack(spacing: 6) {
-                        Text("AI Prompt:")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.5))
-                        Text(self.selectedPromptLabel)
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.75))
-                            .lineLimit(1)
-                        if self.isAppPromptOverrideActive {
-                            Text("App")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.9))
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.white.opacity(0.15))
-                                )
-                        }
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.45))
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.00))
-                    .cornerRadius(6)
-                    .opacity(self.isPromptSelectableMode ? 1.0 : 0.6)
-                    .onTapGesture {
-                        guard self.isPromptSelectableMode, !self.contentState.isProcessing else { return }
-                        self.showPromptHoverMenu.toggle()
-                    }
-
-                    if self.showPromptHoverMenu {
-                        self.promptMenuContent()
-                            .padding(.top, 26)
-                            .transition(.opacity)
-                            .zIndex(10)
-                    }
-                }
-                .frame(maxWidth: 180, alignment: .top)
-                .transition(.opacity)
-            }
+            self.promptSelectorControl
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             // Transcription preview (wrapped, fixed width)
             if self.presentationPolicy.showsStreamingPreview && self.hasTranscription && !self.contentState.isProcessing {
@@ -630,11 +656,12 @@ struct NotchExpandedView: View {
                             }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
             }
         }
-        .frame(width: 216) // Fixed width prevents notch from resizing and causing edge artifacts
+        .frame(width: self.notchContentWidth)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(Color.black) // Must be pure black to blend with macOS notch
