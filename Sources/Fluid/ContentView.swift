@@ -1741,6 +1741,7 @@ struct ContentView: View {
             DebugLogger.shared.debug("Transcription returned empty text", source: "ContentView")
             // Hide processing state when returning early
             self.menuBarManager.setProcessing(false)
+            NotchOverlayManager.shared.hide()
             return
         }
 
@@ -1963,6 +1964,10 @@ struct ContentView: View {
                     "method": AnalyticsOutputMethod.historyOnly.rawValue,
                 ]
             )
+        }
+
+        if !didTypeExternally {
+            NotchOverlayManager.shared.hide()
         }
     }
 
