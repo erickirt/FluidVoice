@@ -285,12 +285,37 @@ final class ASRService: ObservableObject {
         }
     }
 
+    private func shouldCaptureStreamingChunkAnalytics(success: Bool) -> Bool {
+        if success {
+            self.streamingChunkAnalyticsSuccessCount += 1
+            if self.streamingChunkAnalyticsSuccessCount == 1 {
+                return true
+            }
+            return self.streamingChunkAnalyticsSuccessCount % self.streamingChunkAnalyticsSuccessSampleRate == 0
+        }
+
+        let now = Date()
+        guard let lastFailureCaptureAt = self.lastStreamingChunkFailureAnalyticsAt else {
+            self.lastStreamingChunkFailureAnalyticsAt = now
+            return true
+        }
+
+        guard now.timeIntervalSince(lastFailureCaptureAt) >= self.streamingChunkFailureMinIntervalSeconds else {
+            return false
+        }
+
+        self.lastStreamingChunkFailureAnalyticsAt = now
+        return true
+    }
+
     private func captureStreamingChunkAnalytics(
         success: Bool,
         chunkSampleCount: Int,
         latencyMs: Int,
         error: Error? = nil
     ) {
+        guard self.shouldCaptureStreamingChunkAnalytics(success: success) else { return }
+
         let dims = self.currentTranscriptionAnalyticsDimensions()
         var properties: [String: Any] = [
             "success": success,
@@ -299,6 +324,8 @@ final class ASRService: ObservableObject {
             "chunk_audio_seconds": Double(chunkSampleCount) / 16_000.0,
             "transcription_provider": dims.provider,
             "transcription_model": dims.model,
+            "success_sample_rate_chunks": self.streamingChunkAnalyticsSuccessSampleRate,
+            "failure_min_interval_seconds": self.streamingChunkFailureMinIntervalSeconds,
         ]
 
         if let error {
@@ -469,6 +496,10 @@ final class ASRService: ObservableObject {
     private var isProcessingChunk: Bool = false
     private var skipNextChunk: Bool = false
     private var previousFullTranscription: String = ""
+    private let streamingChunkAnalyticsSuccessSampleRate: Int = 50
+    private let streamingChunkFailureMinIntervalSeconds: TimeInterval = 15
+    private var streamingChunkAnalyticsSuccessCount: Int = 0
+    private var lastStreamingChunkFailureAnalyticsAt: Date?
     private let transcriptionExecutor = TranscriptionExecutor() // Serializes all CoreML access
 
     /// Tracks whether we paused system media for this recording session.
@@ -724,6 +755,8 @@ final class ASRService: ObservableObject {
         self.lastProcessedSampleCount = 0
         self.isProcessingChunk = false
         self.skipNextChunk = false
+        self.streamingChunkAnalyticsSuccessCount = 0
+        self.lastStreamingChunkFailureAnalyticsAt = nil
         self.audioCapturePipeline.setRecordingEnabled(true)
         self.refreshWordBoostStatus()
         DebugLogger.shared.debug("✅ Buffers cleared", source: "ASRService")
@@ -889,6 +922,8 @@ final class ASRService: ObservableObject {
         self.isProcessingChunk = false
         self.skipNextChunk = false
         self.previousFullTranscription.removeAll()
+        self.streamingChunkAnalyticsSuccessCount = 0
+        self.lastStreamingChunkFailureAnalyticsAt = nil
 
         // NOW it's safe to access the buffer - all pending tasks have completed
         // Thread-safe copy of recorded audio
@@ -1038,6 +1073,8 @@ final class ASRService: ObservableObject {
         self.lastProcessedSampleCount = 0
         self.isProcessingChunk = false
         self.skipNextChunk = false
+        self.streamingChunkAnalyticsSuccessCount = 0
+        self.lastStreamingChunkFailureAnalyticsAt = nil
         self.refreshWordBoostStatus()
 
         // Resume media playback if we paused it
