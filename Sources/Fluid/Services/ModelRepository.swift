@@ -106,7 +106,7 @@ final class ModelRepository {
         case "openai":
             return ("https://platform.openai.com/api-keys", "Get API Key")
         case "anthropic":
-            return ("https://console.anthropic.com/settings/keys", "Get API Key")
+            return ("https://platform.claude.com/settings/keys", "Get API Key")
         case "xai":
             return ("https://console.x.ai/", "Get API Key")
         case "groq":
