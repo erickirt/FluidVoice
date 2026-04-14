@@ -927,22 +927,35 @@ final class ASRService: ObservableObject {
 
         // NOW it's safe to access the buffer - all pending tasks have completed
         // Thread-safe copy of recorded audio
-        let pcm = self.audioBuffer.getAll()
+        var pcm = self.audioBuffer.getAll()
         self.audioBuffer.clear()
 
-        // Avoid whisper.cpp assertions by skipping too-short audio buffers
-        let minSamples = 16_000
-        guard pcm.count >= minSamples else {
+        // Drop recordings with no audio at all — nothing to transcribe.
+        guard !pcm.isEmpty else {
             DebugLogger.shared.debug(
-                "stop(): insufficient audio for transcription (\(pcm.count)/\(minSamples) samples)",
+                "stop(): no audio captured, skipping transcription",
                 source: "ASRService"
             )
-            // Resume media playback if we paused it
             if shouldResumeMedia {
                 await MediaPlaybackService.shared.resumeIfWePaused(true)
-                DebugLogger.shared.info("🎵 Resumed system media after insufficient audio", source: "ASRService")
+                DebugLogger.shared.info("🎵 Resumed system media after empty audio", source: "ASRService")
             }
             return ""
+        }
+
+        // Pad sub-1s buffers with trailing silence so short utterances (e.g.
+        // "yes", "stop") still transcribe. whisper.cpp asserts on buffers
+        // shorter than 1s; every other provider handles silence padding
+        // without issue, so we pad unconditionally rather than branching per
+        // provider.
+        let minSamples = 16_000
+        if pcm.count < minSamples {
+            let originalCount = pcm.count
+            pcm.append(contentsOf: repeatElement(0.0, count: minSamples - pcm.count))
+            DebugLogger.shared.debug(
+                "stop(): padded short audio with silence (\(originalCount) → \(pcm.count) samples)",
+                source: "ASRService"
+            )
         }
 
         do {
