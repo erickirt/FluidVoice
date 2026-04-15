@@ -118,7 +118,7 @@ final class ModelRepository {
         case "openrouter":
             return ("https://openrouter.ai/settings/keys", "Get API Key")
         case "ollama":
-            return ("https://github.com/ollama/ollama/blob/main/docs/openai.md", "Setup Guide")
+            return ("https://docs.ollama.com/api/openai-compatibility", "Setup Guide")
         case "lmstudio":
             return ("https://lmstudio.ai/docs/local-server", "Setup Guide")
         default:
