@@ -314,6 +314,7 @@ final class RewriteModeService: ObservableObject {
 
         // Reasoning models (o1, o3, gpt-5) don't support temperature parameter at all
         let isReasoningModel = settings.isReasoningModel(model)
+        let isTemperatureUnsupported = settings.isTemperatureUnsupported(model)
 
         // Get reasoning config for this model (e.g., reasoning_effort, enable_thinking)
         let reasoningConfig = settings.getReasoningConfig(forModel: model, provider: providerID)
@@ -335,7 +336,7 @@ final class RewriteModeService: ObservableObject {
             apiKey: apiKey,
             streaming: enableStreaming,
             tools: [],
-            temperature: isReasoningModel ? nil : 0.7,
+            temperature: isTemperatureUnsupported ? nil : 0.7,
             maxTokens: isReasoningModel ? 32_000 : nil, // Reasoning models like o1 need a large budget for extended thought chains
             extraParameters: extraParams
         )

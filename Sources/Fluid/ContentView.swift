@@ -1615,9 +1615,8 @@ struct ContentView: View {
             self.logDictationPromptTrace("Selected context text", value: "<none (dictation mode)>")
         }
 
-        // Check if this is a reasoning model that doesn't support temperature parameter
-        let modelLower = derivedSelectedModel.lowercased()
-        let isReasoningModel = modelLower.hasPrefix("o1") || modelLower.hasPrefix("o3") || modelLower.hasPrefix("gpt-5")
+        // Check if this model doesn't support the temperature parameter
+        let isTemperatureUnsupported = SettingsStore.shared.isTemperatureUnsupported(derivedSelectedModel)
 
         // Get reasoning config for this model (uses per-model settings or auto-detection)
         // This handles custom parameters like reasoning_effort, enable_thinking, etc.
@@ -1661,7 +1660,7 @@ struct ContentView: View {
             apiKey: apiKey,
             streaming: enableStreaming,
             tools: [],
-            temperature: isReasoningModel ? nil : 0.2,
+            temperature: isTemperatureUnsupported ? nil : 0.2,
             extraParameters: extraParams
         )
 

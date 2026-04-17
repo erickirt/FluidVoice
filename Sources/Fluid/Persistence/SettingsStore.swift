@@ -2047,6 +2047,15 @@ final class SettingsStore: ObservableObject {
             (modelLower.contains("deepseek") && modelLower.contains("reasoner"))
     }
 
+    /// Whether the model rejects the `temperature` parameter.
+    /// Covers reasoning models plus Anthropic models that have deprecated temperature
+    /// (Claude Opus 4.7+, which use extended thinking by default).
+    func isTemperatureUnsupported(_ model: String) -> Bool {
+        if self.isReasoningModel(model) { return true }
+        let modelLower = model.lowercased()
+        return modelLower.contains("claude-opus-4-7")
+    }
+
     /// Whether to display thinking tokens in the UI (Command Mode, Rewrite Mode)
     /// If false, thinking tokens are extracted but not shown to user
     var showThinkingTokens: Bool {
