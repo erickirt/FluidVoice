@@ -205,6 +205,54 @@ final class DictationE2ETests: XCTestCase {
         }
     }
 
+    func testRollbackBackupsPreferFilenameTimestampOverModificationDate() {
+        let firstBackupWithNewestModificationDate = URL(
+            fileURLWithPath: "/tmp/FluidVoice-1.5.11-beta.1-100.app"
+        )
+        let secondBackup = URL(
+            fileURLWithPath: "/tmp/FluidVoice-1.5.11-beta.2-150.app"
+        )
+        let thirdBackup = URL(
+            fileURLWithPath: "/tmp/FluidVoice-1.5.11-beta.3-rollback-200.app"
+        )
+        let fourthBackupWithOldestModificationDate = URL(
+            fileURLWithPath: "/tmp/FluidVoice-1.5.11-beta.4-rollback-300.app"
+        )
+        let modificationDates = [
+            firstBackupWithNewestModificationDate: Date(timeIntervalSince1970: 500),
+            secondBackup: Date(timeIntervalSince1970: 300),
+            thirdBackup: Date(timeIntervalSince1970: 50),
+            fourthBackupWithOldestModificationDate: Date(timeIntervalSince1970: 10),
+        ]
+
+        let sorted = SimpleUpdater.sortedRollbackBackups(
+            [
+                firstBackupWithNewestModificationDate,
+                secondBackup,
+                thirdBackup,
+                fourthBackupWithOldestModificationDate,
+            ]
+        ) { url in
+            modificationDates[url]
+        }
+
+        XCTAssertEqual(
+            sorted,
+            [
+                fourthBackupWithOldestModificationDate,
+                thirdBackup,
+                secondBackup,
+                firstBackupWithNewestModificationDate,
+            ]
+        )
+    }
+
+    func testRollbackVersionIgnoresCurrentAppVersion() {
+        XCTAssertFalse(SimpleUpdater.isRollbackVersion("1.5.11-beta.3", differentFrom: "1.5.11-beta.3"))
+        XCTAssertTrue(SimpleUpdater.isRollbackVersion("1.5.11-beta.2", differentFrom: "1.5.11-beta.3"))
+        XCTAssertFalse(SimpleUpdater.isRollbackVersion(nil, differentFrom: "1.5.11-beta.3"))
+    }
+
     private static func modelDirectoryForRun() -> URL {
         // Use a stable path on CI so GitHub Actions cache can speed up runs.
         if ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true" ||

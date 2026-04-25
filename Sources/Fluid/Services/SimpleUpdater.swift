@@ -110,8 +110,12 @@ final class SimpleUpdater {
         return Bundle.main.bundleURL.deletingPathExtension().lastPathComponent
     }
 
+    private var currentAppVersion: String {
+        return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }
+
     func hasRollbackBackup() -> Bool {
-        return !self.availableRollbackBackups().isEmpty
+        return self.latestRollbackBackup() != nil
     }
 
     func latestRollbackVersion() -> String? {
@@ -445,17 +449,16 @@ final class SimpleUpdater {
             return []
         }
 
-        return urls
-            .filter { $0.pathExtension == "app" }
-            .compactMap { url in
-                (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate.map { (url, $0) }
-            }
-            .sorted { $0.1 > $1.1 }
-            .map { $0.0 }
+        return Self.sortedRollbackBackups(urls.filter { $0.pathExtension == "app" }) { url in
+            (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        }
     }
 
     private func latestRollbackBackup() -> URL? {
-        return self.availableRollbackBackups().first
+        let currentVersion = self.currentAppVersion
+        return self.availableRollbackBackups().first {
+            Self.isRollbackVersion(self.versionString(for: $0), differentFrom: currentVersion)
+        }
     }
 
     private func versionString(for appURL: URL) -> String? {
@@ -471,7 +474,7 @@ final class SimpleUpdater {
     }
 
     private func createRollbackBackup(beforeRollback: Bool) {
-        let currentAppVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        let currentAppVersion = self.currentAppVersion
         let appURL = Bundle.main.bundleURL
         let backupRoot = self.rollbackRootDirectory()
 
@@ -494,6 +497,10 @@ final class SimpleUpdater {
 
         do {
             try self.fileManager.copyItem(at: appURL, to: backupURL)
+            try? self.fileManager.setAttributes(
+                [.modificationDate: Date()],
+                ofItemAtPath: backupURL.path
+            )
             self.pruneRollbackBackups()
             DebugLogger.shared.info(
                 "SimpleUpdater: Created rollback backup at \(backupURL.path)",
@@ -521,6 +528,51 @@ final class SimpleUpdater {
                 )
             }
         }
+    }
+
+    static func sortedRollbackBackups(
+        _ urls: [URL],
+        modificationDate: (URL) -> Date?
+    ) -> [URL] {
+        return urls
+            .compactMap { url -> (URL, Date)? in
+                guard let createdAt = self.rollbackBackupCreationDate(
+                    from: url,
+                    fallbackModificationDate: modificationDate(url)
+                ) else {
+                    return nil
+                }
+                return (url, createdAt)
+            }
+            .sorted { $0.1 > $1.1 }
+            .map { $0.0 }
+    }
+
+    static func isRollbackVersion(_ version: String?, differentFrom currentVersion: String) -> Bool {
+        guard let version else { return false }
+        return version != currentVersion
+    }
+
+    private static func rollbackBackupCreationDate(
+        from url: URL,
+        fallbackModificationDate: Date?
+    ) -> Date? {
+        if let timestamp = self.rollbackBackupTimestamp(from: url) {
+            return Date(timeIntervalSince1970: timestamp)
+        }
+
+        return fallbackModificationDate
+    }
+
+    private static func rollbackBackupTimestamp(from url: URL) -> TimeInterval? {
+        let name = url.deletingPathExtension().lastPathComponent
+        guard let suffix = name.split(separator: "-").last,
+              let timestamp = TimeInterval(suffix)
+        else {
+            return nil
+        }
+
+        return timestamp
     }
 
     private func parseSemanticVersion(_ version: String) -> SemanticVersion? {
