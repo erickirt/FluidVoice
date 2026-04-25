@@ -33,6 +33,7 @@ final class BottomOverlayWindowController {
     private var pendingResizeWorkItem: DispatchWorkItem?
     private var localMouseDownMonitor: Any?
     private var globalMouseDownMonitor: Any?
+    private var targetScreen: NSScreen?
 
     private init() {
         NotificationCenter.default.addObserver(forName: NSNotification.Name("OverlayOffsetChanged"), object: nil, queue: .main) { [weak self] _ in
@@ -78,7 +79,7 @@ final class BottomOverlayWindowController {
             self.createWindow()
         }
 
-        // Position at bottom center of main screen
+        self.targetScreen = OverlayScreenResolver.screenForCurrentPointer()
         self.positionWindow()
 
         // Show with animation
@@ -98,6 +99,7 @@ final class BottomOverlayWindowController {
         self.audioSubscription = nil
         self.pendingResizeWorkItem?.cancel()
         self.pendingResizeWorkItem = nil
+        self.targetScreen = nil
         self.removeMouseDownMonitors()
         BottomOverlayPromptMenuController.shared.hide()
         BottomOverlayModeMenuController.shared.hide()
@@ -247,8 +249,7 @@ final class BottomOverlayWindowController {
         // Safe check for window and screen availability
         guard let window = window else { return }
 
-        // Use the screen that contains the window, or fallback to the main screen
-        let screen = window.screen ?? NSScreen.main
+        let screen = self.targetScreen ?? window.screen ?? OverlayScreenResolver.screenForCurrentPointer()
         guard let screen = screen else { return }
 
         let fullFrame = screen.frame
