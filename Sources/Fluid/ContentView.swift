@@ -13,6 +13,22 @@ import CoreGraphics
 import Security
 import SwiftUI
 
+// MARK: - AI Processing Errors
+
+enum AIProcessingError: LocalizedError {
+    case missingAPIKey(provider: String)
+    case emptyResponse
+
+    var errorDescription: String? {
+        switch self {
+        case let .missingAPIKey(provider):
+            return "API key not set for \(provider)"
+        case .emptyResponse:
+            return "AI returned an empty response"
+        }
+    }
+}
+
 // MARK: - Sidebar Item Enum
 
 enum SidebarItem: Hashable {
@@ -69,6 +85,7 @@ enum ShortcutRecordingTarget: String, Hashable {
 
 // NOTE: Streaming and AI response parsing is now handled by LLMClient
 
+// swiftlint:disable type_body_length
 struct ContentView: View {
     private enum ActiveRecordingMode: String {
         case none
@@ -1499,7 +1516,7 @@ struct ContentView: View {
         _ inputText: String,
         overrideSystemPrompt: String? = nil,
         dictationSlot: SettingsStore.DictationShortcutSlot? = nil
-    ) async -> String {
+    ) async throws -> String {
         // CRITICAL FIX: Read current settings from SettingsStore, not stale @State copies
         // This ensures AI provider/model changes in AISettingsView take effect immediately
         let currentSelectedProviderID = SettingsStore.shared.selectedProviderID
@@ -1595,7 +1612,7 @@ struct ContentView: View {
                     self.logDictationPromptTrace("Selected context text", value: "<none (dictation mode)>")
                 }
                 DebugLogger.shared.debug("Using Apple Intelligence for transcription cleanup", source: "ContentView")
-                let output = await provider.process(systemPrompt: systemPrompt, userText: userMessageContent)
+                let output = try await provider.process(systemPrompt: systemPrompt, userText: userMessageContent)
                 if self.shouldTracePromptProcessing {
                     self.logDictationPromptTrace("Model answer (A)", value: output)
                 }
@@ -1611,7 +1628,7 @@ struct ContentView: View {
 
         if !isLocal {
             guard !apiKey.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty else {
-                return "Error: API Key not set for \(derivedCurrentProvider)"
+                throw AIProcessingError.missingAPIKey(provider: derivedCurrentProvider)
             }
         }
 
@@ -1704,26 +1721,24 @@ struct ContentView: View {
 
         DebugLogger.shared.info("Using LLMClient for transcription (streaming=\(enableStreaming))", source: "ContentView")
 
-        do {
-            let response = try await LLMClient.shared.call(config)
+        let response = try await LLMClient.shared.call(config)
 
-            // Log thinking if present (for debugging)
-            if let thinking = response.thinking {
-                DebugLogger.shared.debug("LLM thinking tokens extracted (\(thinking.count) chars)", source: "ContentView")
-                if self.shouldTracePromptProcessing {
-                    self.logDictationPromptTrace("Model thinking", value: thinking)
-                }
-            }
-
+        // Log thinking if present (for debugging)
+        if let thinking = response.thinking {
+            DebugLogger.shared.debug("LLM thinking tokens extracted (\(thinking.count) chars)", source: "ContentView")
             if self.shouldTracePromptProcessing {
-                self.logDictationPromptTrace("Model answer (A)", value: response.content)
+                self.logDictationPromptTrace("Model thinking", value: thinking)
             }
-
-            return response.content.isEmpty ? "<no content>" : response.content
-        } catch {
-            DebugLogger.shared.error("AI API error: \(error.localizedDescription)", source: "ContentView")
-            return "Error: \(error.localizedDescription)"
         }
+
+        if self.shouldTracePromptProcessing {
+            self.logDictationPromptTrace("Model answer (A)", value: response.content)
+        }
+
+        guard !response.content.isEmpty else {
+            throw AIProcessingError.emptyResponse
+        }
+        return response.content
     }
 
     // MARK: - Streaming Response Handler (DEPRECATED - Now handled by LLMClient)
@@ -1794,9 +1809,13 @@ struct ContentView: View {
                 promptTest.isProcessing = false
             }
 
-            let result = await self.processTextWithAI(transcribedText, overrideSystemPrompt: promptTest.draftPromptText)
-            let finalText = ASRService.applyGAAVFormatting(result)
-            promptTest.lastOutputText = finalText
+            do {
+                let result = try await self.processTextWithAI(transcribedText, overrideSystemPrompt: promptTest.draftPromptText)
+                promptTest.lastOutputText = ASRService.applyGAAVFormatting(result)
+            } catch {
+                DebugLogger.shared.error("Prompt test AI call failed: \(error.localizedDescription)", source: "ContentView")
+                promptTest.lastError = error.localizedDescription
+            }
             return
         }
 
@@ -1849,11 +1868,21 @@ struct ContentView: View {
             // Ensure the status label becomes visible immediately.
             await Task.yield()
 
-            finalText = await self.processTextWithAI(
-                transcribedText,
-                overrideSystemPrompt: promptOverride,
-                dictationSlot: activeDictationSlot
-            )
+            do {
+                finalText = try await self.processTextWithAI(
+                    transcribedText,
+                    overrideSystemPrompt: promptOverride,
+                    dictationSlot: activeDictationSlot
+                )
+            } catch {
+                // Fall back to the raw transcription so the user still gets
+                // their words typed instead of an error string.
+                DebugLogger.shared.error(
+                    "AI post-processing failed, falling back to raw transcription: \(error.localizedDescription)",
+                    source: "ContentView"
+                )
+                finalText = transcribedText
+            }
             let postProcessingLatencyMs = Int((Date().timeIntervalSince(postProcessingStart) * 1000).rounded())
             AnalyticsService.shared.capture(
                 .dictationPostProcessingCompleted,
@@ -2129,7 +2158,15 @@ struct ContentView: View {
         var finalText = transcribedText
         let shouldUseAI = DictationAIPostProcessingGate.isConfigured()
         if shouldUseAI {
-            finalText = await self.processTextWithAI(transcribedText)
+            do {
+                finalText = try await self.processTextWithAI(transcribedText)
+            } catch {
+                DebugLogger.shared.error(
+                    "AI reprocess failed, falling back to raw transcription: \(error.localizedDescription)",
+                    source: "ContentView"
+                )
+                finalText = transcribedText
+            }
         }
 
         NotchOverlayManager.shared.updateTranscriptionText("")
@@ -2889,8 +2926,13 @@ extension ContentView {
         await MainActor.run { self.isCallingAI = true }
         defer { Task { await MainActor.run { isCallingAI = false } } }
 
-        let result = await processTextWithAI(aiInputText)
-        await MainActor.run { self.aiOutputText = result }
+        do {
+            let result = try await processTextWithAI(aiInputText)
+            await MainActor.run { self.aiOutputText = result }
+        } catch {
+            DebugLogger.shared.error("callOpenAIChat failed: \(error.localizedDescription)", source: "ContentView")
+            await MainActor.run { self.aiOutputText = "Error: \(error.localizedDescription)" }
+        }
     }
 
     private func getModelStatusText() -> String {
@@ -3026,6 +3068,8 @@ extension ContentView {
         }
     }
 }
+
+// swiftlint:enable type_body_length
 
 private extension ContentView {
     func reloadSettingsStateAfterBackupRestore() {
