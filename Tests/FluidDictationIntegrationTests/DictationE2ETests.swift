@@ -13,6 +13,10 @@ final class DictationE2ETests: XCTestCase {
     private let selectedEditPromptIDKey = "SelectedEditPromptID"
     private let defaultDictationPromptOverrideKey = "DefaultDictationPromptOverride"
     private let defaultEditPromptOverrideKey = "DefaultEditPromptOverride"
+    private let savedProvidersKey = "SavedProviders"
+    private let selectedProviderIDKey = "SelectedProviderID"
+    private let availableModelsByProviderKey = "AvailableModelsByProvider"
+    private let selectedModelByProviderKey = "SelectedModelByProvider"
 
     func testTranscriptionStartSound_noneOptionHasNoFile() {
         XCTAssertEqual(SettingsStore.TranscriptionStartSound.none.displayName, "None")
@@ -178,6 +182,29 @@ final class DictationE2ETests: XCTestCase {
         }
     }
 
+    func testCustomProviderSettingsRoundTripThroughSettingsStore() {
+        self.withProviderSettingsRestored {
+            let settings = SettingsStore.shared
+            let provider = SettingsStore.SavedProvider(
+                id: "custom-provider-test",
+                name: "Issue299 Temp",
+                baseURL: "http://10.0.0.138:1234/v1",
+                models: ["google/gemma-4-e4b"]
+            )
+            let providerKey = "custom:\(provider.id)"
+
+            settings.savedProviders = [provider]
+            settings.availableModelsByProvider = [providerKey: provider.models]
+            settings.selectedModelByProvider = [providerKey: provider.models[0]]
+            settings.selectedProviderID = provider.id
+
+            XCTAssertEqual(settings.selectedProviderID, provider.id)
+            XCTAssertEqual(settings.savedProviders, [provider])
+            XCTAssertEqual(settings.availableModelsByProvider[providerKey], provider.models)
+            XCTAssertEqual(settings.selectedModelByProvider[providerKey], provider.models[0])
+        }
+    }
+
     private static func modelDirectoryForRun() -> URL {
         // Use a stable path on CI so GitHub Actions cache can speed up runs.
         if ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true" ||
@@ -241,6 +268,18 @@ final class DictationE2ETests: XCTestCase {
                 self.selectedEditPromptIDKey,
                 self.defaultDictationPromptOverrideKey,
                 self.defaultEditPromptOverrideKey,
+            ],
+            run: run
+        )
+    }
+
+    private func withProviderSettingsRestored(run: () -> Void) {
+        self.withRestoredDefaults(
+            keys: [
+                self.savedProvidersKey,
+                self.selectedProviderIDKey,
+                self.availableModelsByProviderKey,
+                self.selectedModelByProviderKey,
             ],
             run: run
         )

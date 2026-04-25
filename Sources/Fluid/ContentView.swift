@@ -1310,6 +1310,14 @@ struct ContentView: View {
     }
 
     private func saveSavedProviders() {
+        let storedProviders = SettingsStore.shared.savedProviders
+        if self.savedProviders.isEmpty, !storedProviders.isEmpty {
+            DebugLogger.shared.warning(
+                "Skipped stale empty savedProviders write from ContentView.",
+                source: "ContentView"
+            )
+            return
+        }
         SettingsStore.shared.savedProviders = self.savedProviders
     }
 

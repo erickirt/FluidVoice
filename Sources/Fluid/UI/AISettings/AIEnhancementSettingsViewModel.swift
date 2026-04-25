@@ -146,6 +146,12 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         self.selectedEditPromptID = self.settings.selectedEditPromptID
         self.isDictationPromptOff = self.settings.isDictationPromptOff
 
+        if !ModelRepository.shared.isBuiltIn(self.selectedProviderID),
+           self.savedProviders.contains(where: { $0.id == self.selectedProviderID }) == false
+        {
+            self.selectedProviderID = "openai"
+        }
+
         // Normalize provider keys
         var normalized: [String: [String]] = [:]
         for (key, models) in self.availableModelsByProvider {
@@ -380,6 +386,10 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
 
     func saveSavedProviders() {
         self.settings.savedProviders = self.savedProviders
+        self.settings.availableModelsByProvider = self.availableModelsByProvider
+        self.settings.selectedModelByProvider = self.selectedModelByProvider
+        self.settings.selectedProviderID = self.selectedProviderID
+        self.refreshProviderItems()
     }
 
     func isLocalEndpoint(_ urlString: String) -> Bool {
