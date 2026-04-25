@@ -1851,6 +1851,7 @@ struct ContentView: View {
         }
 
         var finalText: String
+        var aiFallbackReason: String?
 
         let shouldUseAI = activeDictationSlot.map { DictationAIPostProcessingGate.isConfigured(for: $0) } ??
             DictationAIPostProcessingGate.isConfigured()
@@ -1881,6 +1882,7 @@ struct ContentView: View {
                     "AI post-processing failed, falling back to raw transcription: \(error.localizedDescription)",
                     source: "ContentView"
                 )
+                aiFallbackReason = error.localizedDescription
                 finalText = transcribedText
             }
             let postProcessingLatencyMs = Int((Date().timeIntervalSince(postProcessingStart) * 1000).rounded())
@@ -1946,7 +1948,8 @@ struct ContentView: View {
                 rawText: transcribedText,
                 processedText: finalText,
                 appName: appInfo.name,
-                windowTitle: appInfo.windowTitle
+                windowTitle: appInfo.windowTitle,
+                aiProcessingError: aiFallbackReason
             )
         }
 
@@ -2156,6 +2159,7 @@ struct ContentView: View {
         await Task.yield()
 
         var finalText = transcribedText
+        var aiFallbackReason: String?
         let shouldUseAI = DictationAIPostProcessingGate.isConfigured()
         if shouldUseAI {
             do {
@@ -2165,6 +2169,7 @@ struct ContentView: View {
                     "AI reprocess failed, falling back to raw transcription: \(error.localizedDescription)",
                     source: "ContentView"
                 )
+                aiFallbackReason = error.localizedDescription
                 finalText = transcribedText
             }
         }
@@ -2180,7 +2185,8 @@ struct ContentView: View {
                 rawText: transcribedText,
                 processedText: finalText,
                 appName: appInfo.name,
-                windowTitle: appInfo.windowTitle
+                windowTitle: appInfo.windowTitle,
+                aiProcessingError: aiFallbackReason
             )
         }
 

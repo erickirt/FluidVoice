@@ -143,6 +143,13 @@ struct TranscriptionHistoryView: View {
                             )
                     }
 
+                    if entry.aiProcessingError != nil {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(isSelected ? .white : Color.orange)
+                            .help(entry.aiProcessingError ?? "")
+                    }
+
                     Spacer()
 
                     Text(entry.relativeTimeString)
@@ -293,6 +300,31 @@ struct TranscriptionHistoryView: View {
 
                 Divider()
                     .opacity(0.3)
+
+                if let aiError = entry.aiProcessingError {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Color.orange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("AI cleanup failed - raw transcription was typed instead")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text(aiError)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.orange.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+                }
 
                 // Final Text Section
                 self.detailSection(
