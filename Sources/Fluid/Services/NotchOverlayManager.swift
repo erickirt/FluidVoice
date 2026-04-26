@@ -93,6 +93,17 @@ final class NotchOverlayManager {
     private(set) var currentNotchPresentationPolicy = NotchPresentationPolicy.standard
     private(set) var currentScreenSupportsCompactPresentation = false
     private var presentationPolicyScreen: NSScreen?
+    private static let transientOverlayStatusTexts: Set<String> = [
+        "Transcribing",
+        "Refining",
+        "Thinking",
+        "Working",
+        "Transcribing...",
+        "Refining...",
+        "Thinking...",
+        "Working...",
+        "Reprocessing...",
+    ]
 
     private init() {
         self.refreshNotchPresentationPolicy()
@@ -336,7 +347,10 @@ final class NotchOverlayManager {
 
     func updateTranscriptionText(_ text: String) {
         guard self.shouldShowOrTrackLivePreviewText else {
-            if !NotchContentState.shared.transcriptionText.isEmpty {
+            let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedText.isEmpty || Self.transientOverlayStatusTexts.contains(trimmedText) {
+                NotchContentState.shared.updateTranscription(text)
+            } else if !NotchContentState.shared.transcriptionText.isEmpty {
                 NotchContentState.shared.updateTranscription("")
             }
             return
