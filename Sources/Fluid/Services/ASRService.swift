@@ -562,6 +562,9 @@ final class ASRService: ObservableObject {
         if let observer = self.vocabularyChangeObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        if let observer = self.engineConfigurationChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     @MainActor
@@ -1731,7 +1734,7 @@ final class ASRService: ObservableObject {
     private var defaultInputListenerToken: AudioObjectPropertyListenerBlock?
     private var defaultOutputListenerToken: AudioObjectPropertyListenerBlock?
     private func registerDefaultDeviceChangeListener() {
-        guard self.defaultInputListenerInstalled == false else { return }
+        guard self.defaultInputListenerInstalled == false || self.defaultOutputListenerToken == nil else { return }
         var inputAddress = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultInputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -1742,52 +1745,47 @@ final class ASRService: ObservableObject {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        let inputToken: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-            // Defer to next runloop pass — CoreAudio may hold an internal lock during
-            // this callback, and our handler makes synchronous CoreAudio queries that
-            // would deadlock waiting for the same lock.
-            DispatchQueue.main.async { self?.handleDefaultInputChanged() }
-        }
-        let outputToken: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-            DispatchQueue.main.async { self?.handleDefaultOutputChanged() }
-        }
 
-        let inputStatus = AudioObjectAddPropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &inputAddress,
-            DispatchQueue.main,
-            inputToken
-        )
-        let outputStatus = AudioObjectAddPropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &outputAddress,
-            DispatchQueue.main,
-            outputToken
-        )
+        if self.defaultInputListenerInstalled == false {
+            let inputToken: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+                // Defer to next runloop pass — CoreAudio may hold an internal lock during
+                // this callback, and our handler makes synchronous CoreAudio queries that
+                // would deadlock waiting for the same lock.
+                DispatchQueue.main.async { self?.handleDefaultInputChanged() }
+            }
+            let inputStatus = AudioObjectAddPropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &inputAddress,
+                DispatchQueue.main,
+                inputToken
+            )
 
-        if inputStatus == noErr, outputStatus == noErr {
-            self.defaultInputListenerInstalled = true
-            self.defaultInputListenerToken = inputToken
-            self.defaultOutputListenerToken = outputToken
-        } else {
             if inputStatus == noErr {
-                _ = AudioObjectRemovePropertyListenerBlock(
-                    AudioObjectID(kAudioObjectSystemObject),
-                    &inputAddress,
-                    DispatchQueue.main,
-                    inputToken
-                )
+                self.defaultInputListenerInstalled = true
+                self.defaultInputListenerToken = inputToken
+            } else {
+                self.defaultInputListenerToken = nil
+                DebugLogger.shared.error("Failed to register default input listener: \(inputStatus)", source: "ASRService")
             }
+        }
+
+        if self.defaultOutputListenerToken == nil {
+            let outputToken: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+                DispatchQueue.main.async { self?.handleDefaultOutputChanged() }
+            }
+            let outputStatus = AudioObjectAddPropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &outputAddress,
+                DispatchQueue.main,
+                outputToken
+            )
+
             if outputStatus == noErr {
-                _ = AudioObjectRemovePropertyListenerBlock(
-                    AudioObjectID(kAudioObjectSystemObject),
-                    &outputAddress,
-                    DispatchQueue.main,
-                    outputToken
-                )
+                self.defaultOutputListenerToken = outputToken
+            } else {
+                self.defaultOutputListenerToken = nil
+                DebugLogger.shared.warning("Failed to register default output listener: \(outputStatus)", source: "ASRService")
             }
-            self.defaultInputListenerToken = nil
-            self.defaultOutputListenerToken = nil
         }
     }
 
