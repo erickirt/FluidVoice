@@ -176,18 +176,22 @@ struct TranscriptionHistoryView: View {
         .buttonStyle(.plain)
         .contextMenu {
             Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(entry.processedText, forType: .string)
+                self.copyToClipboard(entry.processedText)
             } label: {
-                Label("Copy Text", systemImage: "doc.on.doc")
+                Label(entry.wasAIProcessed ? "Copy AI Text" : "Copy Text", systemImage: "doc.on.doc")
             }
 
             if entry.wasAIProcessed {
                 Button {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(entry.rawText, forType: .string)
+                    self.copyToClipboard(entry.rawText)
                 } label: {
                     Label("Copy Raw Text", systemImage: "doc.on.doc.fill")
+                }
+
+                Button {
+                    self.copyToClipboard(self.combinedText(for: entry))
+                } label: {
+                    Label("Copy Both", systemImage: "doc.on.doc")
                 }
             }
 
@@ -275,22 +279,40 @@ struct TranscriptionHistoryView: View {
             VStack(alignment: .leading, spacing: 20) {
                 // Header
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
+                    HStack(spacing: 8) {
                         Text("Transcription Details")
                             .font(.system(size: 18, weight: .semibold))
 
                         Spacer()
 
-                        // Copy button
                         Button {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(entry.processedText, forType: .string)
+                            self.copyToClipboard(entry.processedText)
                         } label: {
-                            Label("Copy", systemImage: "doc.on.doc")
+                            Label(entry.wasAIProcessed ? "Copy AI" : "Copy", systemImage: "doc.on.doc")
                                 .font(.system(size: 12, weight: .medium))
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+
+                        if entry.wasAIProcessed {
+                            Button {
+                                self.copyToClipboard(entry.rawText)
+                            } label: {
+                                Label("Raw", systemImage: "doc.on.doc.fill")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+
+                            Button {
+                                self.copyToClipboard(self.combinedText(for: entry))
+                            } label: {
+                                Label("Both", systemImage: "doc.on.doc")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
                     }
 
                     Text(entry.fullDateString)
@@ -457,6 +479,15 @@ struct TranscriptionHistoryView: View {
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 8)
             .fill(self.theme.palette.cardBackground.opacity(0.9)))
+    }
+
+    private func copyToClipboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    private func combinedText(for entry: TranscriptionHistoryEntry) -> String {
+        "\(entry.rawText)\n\n\(entry.processedText)"
     }
 
     // MARK: - No Selection View
