@@ -289,10 +289,6 @@ extension AIEnhancementSettingsView {
                     self.selectedAppsOnlySummary(mode: mode)
                     self.appPromptBindingsSection(mode: mode, isEmphasized: true)
                 } else {
-                    if mode.normalized == .dictate {
-                        self.promptRoutingHeader("Default Prompt")
-                    }
-
                     self.promptProfileCard(
                         cardKey: "\(mode.normalized.rawValue)-default",
                         title: mode.normalized == .dictate ? "Built-in Default" : "Default \(self.friendlyModeName(mode))",
@@ -423,14 +419,6 @@ extension AIEnhancementSettingsView {
             .onHover { hovering in
                 self.hoveredCleanupControlKey = hovering ? key : nil
             }
-    }
-
-    private func promptRoutingHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(self.theme.palette.secondaryText)
-            .padding(.horizontal, 4)
-            .padding(.top, 4)
     }
 
     private func promptRoutingScopeRow(mode: SettingsStore.PromptMode) -> some View {
