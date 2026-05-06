@@ -14,6 +14,7 @@ struct AIEnhancementSettingsView: View {
     @State var selectedPromptMode: SettingsStore.PromptMode = .dictate
     @State var hoveredPromptModeKey: String? = nil
     @State var hoveredCleanupControlKey: String? = nil
+    @State var hoveredPromptScopeKey: String? = nil
 
     var body: some View {
         self.aiConfigurationCard

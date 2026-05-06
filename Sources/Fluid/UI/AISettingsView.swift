@@ -73,6 +73,11 @@ enum AISettingsLayout {
     static let wideActionMinWidth: CGFloat = 140
     static let primaryActionMinWidth: CGFloat = 150
     static let promptActionMinWidth: CGFloat = 90
+    static let promptModeMinHeight: CGFloat = 430
+    static let promptModeHintHeight: CGFloat = 18
+    static let promptInlinePickerWidth: CGFloat = 145
+    static let promptInlineModelWidth: CGFloat = 180
+    static let promptScopeLabelWidth: CGFloat = 110
     static let rowLeadingIndent: CGFloat = labelWidth + 12
 }
 

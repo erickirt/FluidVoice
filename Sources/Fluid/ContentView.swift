@@ -1881,9 +1881,11 @@ struct ContentView: View {
 
         var finalText: String
         var aiFallbackReason: String?
+        let appInfo = self.recordingAppInfo ?? self.getCurrentAppInfo()
 
-        let shouldUseAI = activeDictationSlot.map { DictationAIPostProcessingGate.isConfigured(for: $0) } ??
-            DictationAIPostProcessingGate.isConfigured()
+        let shouldUseAI = activeDictationSlot.map {
+            DictationAIPostProcessingGate.isConfigured(for: $0, appBundleID: appInfo.bundleId)
+        } ?? DictationAIPostProcessingGate.isConfigured(for: .primary, appBundleID: appInfo.bundleId)
         let transcriptionModelInfo = self.currentTranscriptionModelInfo()
 
         if shouldUseAI {
@@ -1973,7 +1975,6 @@ struct ContentView: View {
 
         // Save to transcription history (transcription mode only, if enabled)
         if shouldPersistOutputs, SettingsStore.shared.saveTranscriptionHistory {
-            let appInfo = self.recordingAppInfo ?? self.getCurrentAppInfo()
             TranscriptionHistoryStore.shared.addEntry(
                 rawText: transcribedText,
                 processedText: finalText,
@@ -2194,7 +2195,8 @@ struct ContentView: View {
 
         var finalText = transcribedText
         var aiFallbackReason: String?
-        let shouldUseAI = DictationAIPostProcessingGate.isConfigured()
+        let appInfo = self.getCurrentAppInfo()
+        let shouldUseAI = DictationAIPostProcessingGate.isConfigured(for: .primary, appBundleID: appInfo.bundleId)
         if shouldUseAI {
             do {
                 finalText = try await self.processTextWithAI(transcribedText)
@@ -2213,7 +2215,6 @@ struct ContentView: View {
         self.menuBarManager.setProcessing(false)
 
         finalText = ASRService.applyGAAVFormatting(finalText)
-        let appInfo = self.getCurrentAppInfo()
 
         if SettingsStore.shared.saveTranscriptionHistory {
             TranscriptionHistoryStore.shared.addEntry(

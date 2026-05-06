@@ -886,6 +886,15 @@ final class SettingsStore: ObservableObject {
             )
         }
 
+        if self.promptRoutingScope(for: normalizedMode) == .selectedAppsOnly {
+            return self.defaultPromptResolution(
+                for: normalizedMode,
+                source: .builtInDefault,
+                appBinding: nil,
+                allowDefaultOverride: false
+            )
+        }
+
         if let profile = self.selectedPromptProfile(for: normalizedMode) {
             let body = Self.stripBasePrompt(for: normalizedMode, from: profile.prompt)
             if !body.isEmpty {
@@ -973,9 +982,10 @@ final class SettingsStore: ObservableObject {
     private func defaultPromptResolution(
         for mode: PromptMode,
         source: PromptResolutionSource,
-        appBinding: AppPromptBinding?
+        appBinding: AppPromptBinding?,
+        allowDefaultOverride: Bool = true
     ) -> PromptResolution {
-        if let override = self.defaultPromptOverride(for: mode) {
+        if allowDefaultOverride, let override = self.defaultPromptOverride(for: mode) {
             let trimmedOverride = override.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedOverride.isEmpty {
                 return PromptResolution(
@@ -2265,7 +2275,9 @@ final class SettingsStore: ObservableObject {
             customDictionaryEntries: self.customDictionaryEntries,
             selectedDictationPromptID: self.selectedDictationPromptID,
             dictationPromptOff: self.isDictationPromptOff,
+            dictationPromptRoutingScope: self.dictationPromptRoutingScope,
             selectedEditPromptID: self.selectedEditPromptID,
+            editPromptRoutingScope: self.editPromptRoutingScope,
             defaultDictationPromptOverride: self.defaultDictationPromptOverride,
             defaultEditPromptOverride: self.defaultEditPromptOverride
         )
@@ -2340,6 +2352,12 @@ final class SettingsStore: ObservableObject {
         self.appPromptBindings = appPromptBindings
         self.selectedDictationPromptID = payload.selectedDictationPromptID
         self.isDictationPromptOff = payload.dictationPromptOff ?? self.isDictationPromptOff
+        if let scope = payload.dictationPromptRoutingScope {
+            self.dictationPromptRoutingScope = scope
+        }
+        if let scope = payload.editPromptRoutingScope {
+            self.editPromptRoutingScope = scope
+        }
         self.selectedEditPromptID = payload.selectedEditPromptID
         self.defaultDictationPromptOverride = payload.defaultDictationPromptOverride
         self.defaultEditPromptOverride = payload.defaultEditPromptOverride

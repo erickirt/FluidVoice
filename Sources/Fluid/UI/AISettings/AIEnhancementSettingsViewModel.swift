@@ -1429,7 +1429,12 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         let trimmedName = appName.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? normalizedBundleID : trimmedName
         let existingPromptID = self.settings.appPromptBinding(for: mode, appBundleID: normalizedBundleID)?.promptID
-        let resolvedPromptID = existingPromptID ?? self.selectedPromptID(for: mode)
+        let resolvedPromptID: String?
+        if self.settings.promptRoutingScope(for: mode) == .selectedAppsOnly {
+            resolvedPromptID = existingPromptID
+        } else {
+            resolvedPromptID = existingPromptID ?? self.selectedPromptID(for: mode)
+        }
 
         self.appPromptBindingErrorMessage = ""
         self.settings.upsertAppPromptBinding(
@@ -1497,11 +1502,22 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
                       $0.mode.normalized == mode.normalized
               })
         else {
-            return "Default"
+            return "Built-in Default"
         }
 
         let trimmed = profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "Untitled Prompt" : trimmed
+    }
+
+    func promptRoutingScope(for mode: SettingsStore.PromptMode) -> SettingsStore.PromptRoutingScope {
+        self.settings.promptRoutingScope(for: mode)
+    }
+
+    func setPromptRoutingScope(_ scope: SettingsStore.PromptRoutingScope, for mode: SettingsStore.PromptMode) {
+        self.settings.setPromptRoutingScope(scope, for: mode)
+        self.selectedDictationPromptID = self.settings.selectedDictationPromptID
+        self.selectedEditPromptID = self.settings.selectedEditPromptID
+        self.isDictationPromptOff = self.settings.isDictationPromptOff
     }
 
     func isPrimaryDictationPromptSelectionOff() -> Bool {
