@@ -328,7 +328,7 @@ struct TranscriptionHistoryView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(Color.orange)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("AI cleanup failed - raw transcription was typed instead")
+                            Text("AI Enhancement failed - raw transcription was typed instead")
                                 .font(.system(size: 12, weight: .semibold))
                             Text(aiError)
                                 .font(.system(size: 11))

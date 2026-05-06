@@ -959,7 +959,7 @@ struct ContentView: View {
                 .listRowBackground(self.sidebarRowBackground(for: .voiceEngine))
 
                 NavigationLink(value: SidebarItem.aiEnhancements) {
-                    Label("AI Enhancements", systemImage: "brain")
+                    Label("AI Enhancement", systemImage: "brain")
                         .font(.system(size: 15, weight: .medium))
                         .padding(.leading, 18)
                 }
@@ -1578,7 +1578,7 @@ struct ContentView: View {
             return self.buildSystemPrompt(appInfo: appInfo, dictationSlot: dictationSlot)
         }()
 
-        // Dictation cleanup folds the prompt + transcript into a single user
+        // Dictation enhancement folds the prompt + transcript into a single user
         // turn (substituting `${transcript}` when present, otherwise appending
         // the transcript after a blank line). Non-dictation callers — the AI
         // chat tab specifically — keep the legacy two-message layout where
@@ -1631,7 +1631,7 @@ struct ContentView: View {
                     }
                     self.logDictationPromptTrace("Selected context text", value: "<none (dictation mode)>")
                 }
-                DebugLogger.shared.debug("Using Apple Intelligence for transcription cleanup", source: "ContentView")
+                DebugLogger.shared.debug("Using Apple Intelligence for transcription enhancement", source: "ContentView")
                 let output = try await provider.process(systemPrompt: systemPrompt, userText: userMessageContent)
                 if self.shouldTracePromptProcessing {
                     self.logDictationPromptTrace("Model answer (A)", value: output)
@@ -1710,7 +1710,7 @@ struct ContentView: View {
             )
         }
 
-        // Build messages array. For dictation cleanup the whole prompt +
+        // Build messages array. For dictation enhancement the whole prompt +
         // transcript is folded into a single user message, so we omit the
         // (empty) system role. Non-dictation callers keep the legacy
         // system + user shape.
@@ -1722,7 +1722,7 @@ struct ContentView: View {
 
         // NOTE: Transcription doesn't need streaming - the full result appears at once
         // Streaming is only useful for Command/Rewrite modes where real-time display helps
-        // Using non-streaming is simpler and more reliable for transcription cleanup
+        // Using non-streaming is simpler and more reliable for transcription enhancement
         let enableStreaming = false // Hardcoded off for transcription
 
         // Build LLMClient configuration

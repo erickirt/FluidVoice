@@ -185,7 +185,7 @@ extension AIEnhancementSettingsView {
         let isOff = self.viewModel.isPrimaryDictationPromptSelectionOff()
 
         return HStack(alignment: .center, spacing: 7) {
-            Text("AI Cleanup")
+            Text("AI Enhancement")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(self.theme.palette.secondaryText)
                 .lineLimit(1)
@@ -423,7 +423,7 @@ extension AIEnhancementSettingsView {
 
     private func promptRoutingScopeRow(mode: SettingsStore.PromptMode) -> some View {
         HStack(alignment: .center, spacing: 10) {
-            Text(mode.normalized == .dictate ? "Use cleanup" : "Use prompts")
+            Text(mode.normalized == .dictate ? "Use AI" : "Use prompts")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(self.theme.palette.secondaryText)
                 .frame(width: AISettingsLayout.promptScopeLabelWidth, alignment: .leading)
@@ -505,7 +505,7 @@ extension AIEnhancementSettingsView {
                 .frame(width: 18, height: 18)
 
             Text(mode.normalized == .dictate
-                ? "No default cleanup. Add app overrides to use prompts in selected apps."
+                ? "No default enhancement. Add app overrides to use prompts in selected apps."
                 : "Default edit stays built-in. App overrides can use custom prompts."
             )
             .font(.caption2)

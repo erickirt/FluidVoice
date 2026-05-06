@@ -235,7 +235,7 @@ final class SettingsStore: ObservableObject {
         let systemPrompt: String
     }
 
-    /// User-defined dictation prompt profiles (named system prompts for dictation cleanup).
+    /// User-defined dictation prompt profiles (named system prompts for dictation enhancement).
     /// The built-in default prompt is not stored here.
     var dictationPromptProfiles: [DictationPromptProfile] {
         get {
@@ -972,10 +972,10 @@ final class SettingsStore: ObservableObject {
     }
 
     /// Literal placeholder that gets substituted with the raw transcription
-    /// when composing the user message for a dictation cleanup call.
+    /// when composing the user message for a dictation enhancement call.
     static let transcriptPlaceholder = "${transcript}"
 
-    /// Compose the user-turn string for a dictation cleanup call by folding
+    /// Compose the user-turn string for a dictation enhancement call by folding
     /// the transcript into the prompt template. If the template contains the
     /// `${transcript}` placeholder, the placeholder is replaced; otherwise
     /// the transcript is appended after a blank line, matching the pre-PR
