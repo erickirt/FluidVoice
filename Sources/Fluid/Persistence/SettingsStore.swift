@@ -916,6 +916,11 @@ final class SettingsStore: ObservableObject {
     }
 
     func effectiveDictationPromptBody(for slot: DictationShortcutSlot, appBundleID: String? = nil) -> String {
+        if self.promptRoutingScope(for: .dictate) == .selectedAppsOnly {
+            guard self.dictationPromptSelection(for: slot) != .off else { return "" }
+            return self.effectivePromptBody(for: .dictate, appBundleID: appBundleID)
+        }
+
         switch self.dictationPromptSelection(for: slot) {
         case .off:
             return ""
@@ -934,6 +939,11 @@ final class SettingsStore: ObservableObject {
     }
 
     func effectiveDictationSystemPrompt(for slot: DictationShortcutSlot, appBundleID: String? = nil) -> String {
+        if self.promptRoutingScope(for: .dictate) == .selectedAppsOnly {
+            guard self.dictationPromptSelection(for: slot) != .off else { return "" }
+            return self.effectiveSystemPrompt(for: .dictate, appBundleID: appBundleID)
+        }
+
         switch self.dictationPromptSelection(for: slot) {
         case .off, .default:
             return self.effectiveSystemPrompt(for: .dictate, appBundleID: appBundleID)
@@ -2352,12 +2362,8 @@ final class SettingsStore: ObservableObject {
         self.appPromptBindings = appPromptBindings
         self.selectedDictationPromptID = payload.selectedDictationPromptID
         self.isDictationPromptOff = payload.dictationPromptOff ?? self.isDictationPromptOff
-        if let scope = payload.dictationPromptRoutingScope {
-            self.dictationPromptRoutingScope = scope
-        }
-        if let scope = payload.editPromptRoutingScope {
-            self.editPromptRoutingScope = scope
-        }
+        self.dictationPromptRoutingScope = payload.dictationPromptRoutingScope ?? .allApps
+        self.editPromptRoutingScope = payload.editPromptRoutingScope ?? .allApps
         self.selectedEditPromptID = payload.selectedEditPromptID
         self.defaultDictationPromptOverride = payload.defaultDictationPromptOverride
         self.defaultEditPromptOverride = payload.defaultEditPromptOverride
