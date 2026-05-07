@@ -660,7 +660,7 @@ struct SettingsView: View {
                                             icon: "text.bubble.fill",
                                             iconColor: .secondary,
                                             title: "Secondary Dictation Shortcut",
-                                            description: "Defaults to Default cleanup, but can use Off, Default, or any custom prompt."
+                                            description: "Defaults to AI Enhancement, but can use Off, Default, or any custom prompt."
                                         ),
                                         shortcut: self.promptModeShortcut,
                                         isRecording: self.isRecording(.secondaryDictation),
@@ -807,8 +807,8 @@ struct SettingsView: View {
                                     Divider().opacity(0.2)
 
                                     self.optionToggleRow(
-                                        title: "Notify AI Cleanup Failures",
-                                        description: "Show a macOS notification when AI cleanup fails and raw transcription is typed.",
+                                        title: "Notify AI Enhancement Failures",
+                                        description: "Show a macOS notification when AI Enhancement fails and raw transcription is typed.",
                                         isOn: Binding(
                                             get: { SettingsStore.shared.notifyAIProcessingFailures },
                                             set: { SettingsStore.shared.notifyAIProcessingFailures = $0 }

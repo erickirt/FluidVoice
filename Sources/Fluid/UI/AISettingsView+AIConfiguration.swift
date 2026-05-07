@@ -126,11 +126,11 @@ extension AIEnhancementSettingsView {
             .frame(width: 34, height: 34)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("AI Enhancements")
+                Text("AI Enhancement")
                     .font(.title3)
                     .fontWeight(.semibold)
                     .foregroundStyle(self.theme.palette.primaryText)
-                Text("Choose the model used for AI Cleanup.")
+                Text("Choose the model used for AI Enhancement.")
                     .font(.caption)
                     .foregroundStyle(self.theme.palette.secondaryText)
             }
@@ -146,13 +146,13 @@ extension AIEnhancementSettingsView {
                 self.aiSetupSummaryDivider
                 self.aiSetupSummaryItem(icon: "cloud", text: "Cloud models use provider APIs")
                 self.aiSetupSummaryDivider
-                self.aiSetupSummaryItem(icon: "slider.horizontal.3", text: "AI Cleanup enables dictation prompts")
+                self.aiSetupSummaryItem(icon: "slider.horizontal.3", text: "AI Enhancement enables dictation prompts")
             }
 
             VStack(alignment: .leading, spacing: 7) {
                 self.aiSetupSummaryItem(icon: "cpu", text: "Local models run on Mac")
                 self.aiSetupSummaryItem(icon: "cloud", text: "Cloud models use provider APIs")
-                self.aiSetupSummaryItem(icon: "slider.horizontal.3", text: "AI Cleanup enables dictation prompts")
+                self.aiSetupSummaryItem(icon: "slider.horizontal.3", text: "AI Enhancement enables dictation prompts")
             }
         }
         .padding(.horizontal, 2)

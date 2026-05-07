@@ -43,7 +43,7 @@ enum AppleIntelligenceService {
 #if canImport(FoundationModels)
 @available(macOS 26.0, *)
 final class AppleIntelligenceProvider {
-    /// Process text with a system prompt (for transcription cleanup)
+    /// Process text with a system prompt (for transcription enhancement)
     func process(systemPrompt: String, userText: String) async throws -> String {
         let session = LanguageModelSession()
 

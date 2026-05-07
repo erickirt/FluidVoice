@@ -235,7 +235,7 @@ final class SettingsStore: ObservableObject {
         let systemPrompt: String
     }
 
-    /// User-defined dictation prompt profiles (named system prompts for dictation cleanup).
+    /// User-defined dictation prompt profiles (named system prompts for dictation enhancement).
     /// The built-in default prompt is not stored here.
     var dictationPromptProfiles: [DictationPromptProfile] {
         get {
@@ -886,6 +886,15 @@ final class SettingsStore: ObservableObject {
             )
         }
 
+        if self.promptRoutingScope(for: normalizedMode) == .selectedAppsOnly {
+            return self.defaultPromptResolution(
+                for: normalizedMode,
+                source: .builtInDefault,
+                appBinding: nil,
+                allowDefaultOverride: false
+            )
+        }
+
         if let profile = self.selectedPromptProfile(for: normalizedMode) {
             let body = Self.stripBasePrompt(for: normalizedMode, from: profile.prompt)
             if !body.isEmpty {
@@ -907,6 +916,11 @@ final class SettingsStore: ObservableObject {
     }
 
     func effectiveDictationPromptBody(for slot: DictationShortcutSlot, appBundleID: String? = nil) -> String {
+        if self.promptRoutingScope(for: .dictate) == .selectedAppsOnly {
+            guard self.dictationPromptSelection(for: slot) != .off else { return "" }
+            return self.effectivePromptBody(for: .dictate, appBundleID: appBundleID)
+        }
+
         switch self.dictationPromptSelection(for: slot) {
         case .off:
             return ""
@@ -925,6 +939,11 @@ final class SettingsStore: ObservableObject {
     }
 
     func effectiveDictationSystemPrompt(for slot: DictationShortcutSlot, appBundleID: String? = nil) -> String {
+        if self.promptRoutingScope(for: .dictate) == .selectedAppsOnly {
+            guard self.dictationPromptSelection(for: slot) != .off else { return "" }
+            return self.effectiveSystemPrompt(for: .dictate, appBundleID: appBundleID)
+        }
+
         switch self.dictationPromptSelection(for: slot) {
         case .off, .default:
             return self.effectiveSystemPrompt(for: .dictate, appBundleID: appBundleID)
@@ -953,10 +972,10 @@ final class SettingsStore: ObservableObject {
     }
 
     /// Literal placeholder that gets substituted with the raw transcription
-    /// when composing the user message for a dictation cleanup call.
+    /// when composing the user message for a dictation enhancement call.
     static let transcriptPlaceholder = "${transcript}"
 
-    /// Compose the user-turn string for a dictation cleanup call by folding
+    /// Compose the user-turn string for a dictation enhancement call by folding
     /// the transcript into the prompt template. If the template contains the
     /// `${transcript}` placeholder, the placeholder is replaced; otherwise
     /// the transcript is appended after a blank line, matching the pre-PR
@@ -973,9 +992,10 @@ final class SettingsStore: ObservableObject {
     private func defaultPromptResolution(
         for mode: PromptMode,
         source: PromptResolutionSource,
-        appBinding: AppPromptBinding?
+        appBinding: AppPromptBinding?,
+        allowDefaultOverride: Bool = true
     ) -> PromptResolution {
-        if let override = self.defaultPromptOverride(for: mode) {
+        if allowDefaultOverride, let override = self.defaultPromptOverride(for: mode) {
             let trimmedOverride = override.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedOverride.isEmpty {
                 return PromptResolution(
@@ -2265,7 +2285,9 @@ final class SettingsStore: ObservableObject {
             customDictionaryEntries: self.customDictionaryEntries,
             selectedDictationPromptID: self.selectedDictationPromptID,
             dictationPromptOff: self.isDictationPromptOff,
+            dictationPromptRoutingScope: self.dictationPromptRoutingScope,
             selectedEditPromptID: self.selectedEditPromptID,
+            editPromptRoutingScope: self.editPromptRoutingScope,
             defaultDictationPromptOverride: self.defaultDictationPromptOverride,
             defaultEditPromptOverride: self.defaultEditPromptOverride
         )
@@ -2340,6 +2362,8 @@ final class SettingsStore: ObservableObject {
         self.appPromptBindings = appPromptBindings
         self.selectedDictationPromptID = payload.selectedDictationPromptID
         self.isDictationPromptOff = payload.dictationPromptOff ?? self.isDictationPromptOff
+        self.dictationPromptRoutingScope = payload.dictationPromptRoutingScope ?? .allApps
+        self.editPromptRoutingScope = payload.editPromptRoutingScope ?? .allApps
         self.selectedEditPromptID = payload.selectedEditPromptID
         self.defaultDictationPromptOverride = payload.defaultDictationPromptOverride
         self.defaultEditPromptOverride = payload.defaultEditPromptOverride

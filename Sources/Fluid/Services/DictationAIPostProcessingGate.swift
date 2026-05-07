@@ -7,12 +7,18 @@ enum DictationAIPostProcessingGate {
     /// - Requires dictation prompt selection to not be `Off`
     /// - Requires the selected provider connection to still be verified
     static func isConfigured() -> Bool {
-        self.isConfigured(for: .primary)
+        self.isConfigured(for: .primary, appBundleID: nil)
     }
 
-    static func isConfigured(for slot: SettingsStore.DictationShortcutSlot) -> Bool {
+    static func isConfigured(for slot: SettingsStore.DictationShortcutSlot, appBundleID: String? = nil) -> Bool {
         let settings = SettingsStore.shared
         guard settings.dictationPromptSelection(for: slot) != .off else { return false }
+        if let appBundleID,
+           settings.promptRoutingScope(for: .dictate) == .selectedAppsOnly,
+           !settings.hasAppPromptBinding(for: .dictate, appBundleID: appBundleID)
+        {
+            return false
+        }
 
         return self.isProviderConfigured()
     }
