@@ -304,7 +304,7 @@ final class CommandModeService: ObservableObject {
     }
 
     /// Process user voice/text command
-    func processUserCommand(_ text: String) async {
+    func processUserCommand(_ text: String, notifyInvalidRequest: Bool = false) async {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         self.isProcessing = true
@@ -321,7 +321,7 @@ final class CommandModeService: ObservableObject {
             NotchContentState.shared.setCommandProcessing(true)
         }
 
-        await self.processNextTurn()
+        await self.processNextTurn(notifyInvalidRequest: notifyInvalidRequest)
     }
 
     /// Process follow-up command from notch input
@@ -369,7 +369,7 @@ final class CommandModeService: ObservableObject {
 
     // MARK: - Agent Loop
 
-    private func processNextTurn() async {
+    private func processNextTurn(notifyInvalidRequest: Bool = false) async {
         if self.currentTurnCount >= self.maxTurns {
             let errorMsg = "Reached maximum steps limit. Please review the progress and continue if needed."
             self.conversationHistory.append(Message(
@@ -485,8 +485,16 @@ final class CommandModeService: ObservableObject {
             }
 
         } catch {
-            let errorMsg = "Error: \(error.localizedDescription)"
+            let errorMsg: String
+            if case LLMError.invalidRequest = error {
+                errorMsg = error.localizedDescription
+            } else {
+                errorMsg = "Error: \(error.localizedDescription)"
+            }
             DebugLogger.shared.error("Command mode failed: \(error.localizedDescription)", source: "CommandModeService")
+            if notifyInvalidRequest, case LLMError.invalidRequest = error {
+                NotificationService.showCommandModeFailure(error: errorMsg)
+            }
             self.conversationHistory.append(Message(
                 role: .assistant,
                 content: errorMsg,
@@ -707,9 +715,12 @@ final class CommandModeService: ObservableObject {
 
     private func callLLM() async throws -> LLMResponse {
         let settings = SettingsStore.shared
-        // Use Command Mode's independent provider/model settings
-        let providerID = settings.commandModeSelectedProviderID
-        let model = settings.commandModeSelectedModel ?? "gpt-4.1"
+        if let issue = settings.commandModeReadinessIssue {
+            throw LLMError.invalidRequest(issue)
+        }
+
+        let providerID = settings.effectiveCommandModeProviderID
+        let model = settings.effectiveCommandModeSelectedModel
         let apiKey = settings.getAPIKey(for: providerID) ?? ""
 
         let baseURL: String
@@ -990,9 +1001,17 @@ final class CommandModeService: ObservableObject {
             )
         }
 
+        if response.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            DebugLogger.shared.error(
+                "Command mode LLM returned empty content with no tool calls (model=\(model), provider=\(providerID))",
+                source: "CommandModeService"
+            )
+            throw LLMError.invalidResponse
+        }
+
         // Text response only
         return LLMResponse(
-            content: response.content.isEmpty ? "I couldn't understand that." : response.content,
+            content: response.content,
             thinking: finalThinking, // Display-only
             toolCall: nil
         )

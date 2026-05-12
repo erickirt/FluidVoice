@@ -812,6 +812,8 @@ struct ContentView: View {
         guard let destination = AppNavigationRouter.shared.consumePendingDestination() else { return }
 
         switch destination {
+        case .aiEnhancements:
+            self.selectedSidebarItem = .aiEnhancements
         case .history:
             self.selectedSidebarItem = .history
         }
@@ -2407,7 +2409,7 @@ struct ContentView: View {
 
         // Process the command through CommandModeService
         // This stores the conversation history and executes any terminal commands
-        await self.commandModeService.processUserCommand(command)
+        await self.commandModeService.processUserCommand(command, notifyInvalidRequest: true)
 
         // Hide processing animation
         self.menuBarManager.setProcessing(false)
@@ -2685,7 +2687,7 @@ struct ContentView: View {
 
         self.hotkeyManager?.setHotkeyMode(self.hotkeyMode)
 
-        // Set cancel callback for Escape key handling (closes mode views, resets recording state)
+        // Set cancel callback for Escape key handling (closes transient UI, resets recording state)
         // Returns true if it handled something (so GlobalHotkeyManager knows to consume the event)
         self.hotkeyManager?.setCancelCallback {
             var handled = false
@@ -2703,8 +2705,8 @@ struct ContentView: View {
                 handled = true
             }
 
-            // Close mode views if open
-            if self.selectedSidebarItem == .commandMode || self.selectedSidebarItem == .rewriteMode {
+            // Close rewrite mode if open. Command Mode stays open so Escape can cancel voice capture without leaving the tool.
+            if self.selectedSidebarItem == .rewriteMode {
                 DebugLogger.shared.debug("Cancel callback: closing mode view", source: "ContentView")
                 DispatchQueue.main.async {
                     self.selectedSidebarItem = .welcome
@@ -2762,7 +2764,7 @@ struct ContentView: View {
             handled = true
         }
 
-        if self.selectedSidebarItem == .commandMode || self.selectedSidebarItem == .rewriteMode {
+        if self.selectedSidebarItem == .rewriteMode {
             DebugLogger.shared.debug("Cancel shortcut: closing mode view", source: "ContentView")
             let isOnboarded = self.asr.isAsrReady || self.asr.modelsExistOnDisk
             self.selectedSidebarItem = isOnboarded ? .preferences : .welcome

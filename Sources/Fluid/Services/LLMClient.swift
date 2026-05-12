@@ -9,6 +9,7 @@ enum LLMError: Error, LocalizedError {
     case networkError(Error)
     case encodingError
     case timeout(TimeInterval)
+    case invalidRequest(String)
 
     var errorDescription: String? {
         switch self {
@@ -24,6 +25,8 @@ enum LLMError: Error, LocalizedError {
             return "Failed to encode request"
         case let .timeout(seconds):
             return "Request timed out after \(Int(seconds)) seconds"
+        case let .invalidRequest(message):
+            return message
         }
     }
 }
@@ -334,6 +337,7 @@ final class LLMClient {
         var thinkingBuffer: [String] = []
         var contentBuffer: [String] = []
         var tagDetectionBuffer = ""
+        var usesSeparateReasoningFields = false
 
         // Tool call accumulation
         var toolCallId: String?
@@ -376,6 +380,7 @@ final class LLMClient {
                 delta["thinking"] as? String
 
             if let reasoning = reasoningField {
+                usesSeparateReasoningFields = true
                 if state == .initial {
                     state = .inThinking
                     config.onThinkingStart?()
@@ -386,6 +391,16 @@ final class LLMClient {
 
             // Handle content with potential <think> tags
             if let content = delta["content"] as? String {
+                if usesSeparateReasoningFields {
+                    if state == .inThinking {
+                        state = .inContent
+                        config.onThinkingEnd?()
+                    }
+                    contentBuffer.append(content)
+                    config.onContentChunk?(content)
+                    continue
+                }
+
                 // If we were in thinking mode via a separate field (not tag-based),
                 // receiving "content" usually means the thinking phase is over.
                 if state == .inThinking && reasoningField == nil && tagDetectionBuffer.isEmpty {
