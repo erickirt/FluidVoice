@@ -1275,9 +1275,11 @@ final class SettingsStore: ObservableObject {
         }
     }
 
-    var pressAndHoldMode: Bool {
-        get { self.defaults.bool(forKey: Keys.pressAndHoldMode) }
-        set { self.defaults.set(newValue, forKey: Keys.pressAndHoldMode) }
+    var pressAndHoldMode: Bool { get { self.defaults.object(forKey: Keys.hotkeyMode) != nil ? self.hotkeyMode == .hold : self.defaults.bool(forKey: Keys.pressAndHoldMode) } set { self.hotkeyMode = newValue ? .hold : .toggle } }
+
+    var hotkeyMode: HotkeyActivationMode {
+        get { self.defaults.string(forKey: Keys.hotkeyMode).flatMap(HotkeyActivationMode.init(rawValue:)) ?? (self.defaults.bool(forKey: Keys.pressAndHoldMode) ? .hold : .toggle) }
+        set { objectWillChange.send(); self.defaults.set(newValue.rawValue, forKey: Keys.hotkeyMode); self.defaults.set(newValue == .hold, forKey: Keys.pressAndHoldMode) }
     }
 
     var enableStreamingPreview: Bool {
@@ -2262,6 +2264,7 @@ final class SettingsStore: ObservableObject {
             enableDebugLogs: self.enableDebugLogs,
             shareAnonymousAnalytics: self.shareAnonymousAnalytics,
             pressAndHoldMode: self.pressAndHoldMode,
+            hotkeyMode: self.hotkeyMode,
             enableStreamingPreview: self.enableStreamingPreview,
             enableAIStreaming: self.enableAIStreaming,
             copyTranscriptionToClipboard: self.copyTranscriptionToClipboard,
@@ -2333,7 +2336,7 @@ final class SettingsStore: ObservableObject {
         self.betaReleasesEnabled = payload.betaReleasesEnabled
         self.enableDebugLogs = payload.enableDebugLogs
         self.shareAnonymousAnalytics = payload.shareAnonymousAnalytics
-        self.pressAndHoldMode = payload.pressAndHoldMode
+        self.hotkeyMode = payload.hotkeyMode ?? (payload.pressAndHoldMode ? .hold : .toggle)
         self.enableStreamingPreview = payload.enableStreamingPreview
         self.enableAIStreaming = payload.enableAIStreaming
         self.copyTranscriptionToClipboard = payload.copyTranscriptionToClipboard
@@ -3618,6 +3621,7 @@ private extension SettingsStore {
         static let transcriptionSoundVolume = "TranscriptionSoundVolume"
         static let transcriptionSoundIndependentVolume = "TranscriptionSoundIndependentVolume"
         static let pressAndHoldMode = "PressAndHoldMode"
+        static let hotkeyMode = "HotkeyMode"
         static let enableStreamingPreview = "EnableStreamingPreview"
         static let enableAIStreaming = "EnableAIStreaming"
         static let copyTranscriptionToClipboard = "CopyTranscriptionToClipboard"

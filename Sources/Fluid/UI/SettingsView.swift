@@ -44,7 +44,7 @@ struct SettingsView: View {
     @Binding var commandModeShortcutEnabled: Bool
     @Binding var rewriteShortcutEnabled: Bool
     @Binding var hotkeyManagerInitialized: Bool
-    @Binding var pressAndHoldModeEnabled: Bool
+    @Binding var hotkeyMode: HotkeyActivationMode
     @Binding var enableStreamingPreview: Bool
     @Binding var copyToClipboard: Bool
 
@@ -751,14 +751,28 @@ struct SettingsView: View {
                                 // MARK: - Options Section
 
                                 VStack(spacing: 12) {
-                                    self.optionToggleRow(
-                                        title: "Press and Hold Mode",
-                                        description: "The shortcut only records while you hold it down, giving you quick push-to-talk style control.",
-                                        isOn: self.$pressAndHoldModeEnabled
-                                    )
-                                    .onChange(of: self.pressAndHoldModeEnabled) { _, newValue in
-                                        SettingsStore.shared.pressAndHoldMode = newValue
-                                        self.hotkeyManager?.enablePressAndHoldMode(newValue)
+                                    HStack(alignment: .center) {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Activation Mode")
+                                                .font(.body)
+                                            Text(self.hotkeyMode.description)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+
+                                        Spacer()
+
+                                        Picker("", selection: self.$hotkeyMode) {
+                                            ForEach(HotkeyActivationMode.allCases) { mode in
+                                                Text(mode.displayName).tag(mode)
+                                            }
+                                        }
+                                        .pickerStyle(.menu)
+                                        .frame(width: 170, alignment: .trailing)
+                                    }
+                                    .onChange(of: self.hotkeyMode) { _, newValue in
+                                        SettingsStore.shared.hotkeyMode = newValue
+                                        self.hotkeyManager?.setHotkeyMode(newValue)
                                     }
                                     Divider().opacity(0.2)
 

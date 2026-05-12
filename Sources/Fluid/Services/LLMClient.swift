@@ -187,6 +187,11 @@ final class LLMClient {
     private func buildRequest(_ config: Config) throws -> URLRequest {
         // Build endpoint URL
         let baseURL = config.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !baseURL.isEmpty else {
+            DebugLogger.shared.error("LLMClient: Missing base URL; refusing to fall back to OpenAI", source: "LLMClient")
+            throw LLMError.invalidURL
+        }
+
         let endpoint: String
         if baseURL.contains("/chat/completions") ||
             baseURL.contains("/api/chat") ||
@@ -194,61 +199,14 @@ final class LLMClient {
         {
             endpoint = baseURL
         } else {
-            endpoint = baseURL.isEmpty ? "\(ModelRepository.shared.defaultBaseURL(for: "openai"))/chat/completions" : "\(baseURL)/chat/completions"
+            endpoint = self.appendingPath("chat/completions", to: baseURL)
         }
 
         guard let url = URL(string: endpoint) else {
             throw LLMError.invalidURL
         }
 
-        // Detect if this is a local endpoint (skip auth for local)
-        let isLocal = self.isLocalEndpoint(baseURL)
-
-        // Build request body
-        var body: [String: Any] = [
-            "model": config.model,
-            "messages": config.messages,
-        ]
-
-        // Add temperature if provided (reasoning models like o1/o3/gpt-5 don't support it)
-        if let temp = config.temperature {
-            body["temperature"] = temp
-        }
-
-        // Add tools if provided
-        if !config.tools.isEmpty {
-            body["tools"] = config.tools
-            body["tool_choice"] = "auto"
-        }
-
-        // Add streaming flag
-        if config.streaming {
-            body["stream"] = true
-        }
-
-        // Add extra parameters in layers:
-        // 1. Model-specific parameters (from ThinkingParserFactory)
-        // 2. User-provided parameters (can override model defaults)
-
-        // Layer 1: Model-specific parameters (e.g., enable_thinking for Nemotron)
-        let modelExtras = ThinkingParserFactory.getExtraParameters(for: config.model)
-        for (key, value) in modelExtras {
-            body[key] = value
-        }
-
-        // Layer 2: User-provided extra parameters (e.g., reasoning_effort from settings)
-        for (key, value) in config.extraParameters {
-            body[key] = value
-        }
-
-        // Final Layer: Common parameters with model-specific keys
-        if let tokens = config.maxTokens {
-            if SettingsStore.shared.isReasoningModel(config.model) {
-                body["max_completion_tokens"] = tokens
-            } else {
-                body["max_tokens"] = tokens
-            }
-        }
+        let body = self.buildChatCompletionsBody(config)
 
         // Serialize to JSON
         guard let jsonData = try? JSONSerialization.data(withJSONObject: body, options: []) else {
@@ -277,6 +235,55 @@ final class LLMClient {
         return request
     }
 
+    private func appendingPath(_ path: String, to baseURL: String) -> String {
+        baseURL.hasSuffix("/") ? "\(baseURL)\(path)" : "\(baseURL)/\(path)"
+    }
+
+    private func buildChatCompletionsBody(_ config: Config) -> [String: Any] {
+        var body: [String: Any] = [
+            "model": config.model,
+            "messages": config.messages,
+        ]
+
+        // Add temperature if provided (reasoning models like o1/o3/gpt-5 don't support it)
+        if let temp = config.temperature {
+            body["temperature"] = temp
+        }
+
+        // Add tools if provided
+        if !config.tools.isEmpty {
+            body["tools"] = config.tools
+            body["tool_choice"] = "auto"
+        }
+
+        // Add streaming flag
+        if config.streaming {
+            body["stream"] = true
+        }
+
+        // Layer 1: Model-specific parameters (e.g., enable_thinking for Nemotron)
+        let modelExtras = ThinkingParserFactory.getExtraParameters(for: config.model)
+        for (key, value) in modelExtras {
+            body[key] = value
+        }
+
+        // Layer 2: User-provided extra parameters (e.g., reasoning_effort from settings)
+        for (key, value) in config.extraParameters {
+            body[key] = value
+        }
+
+        // Final Layer: Common parameters with model-specific keys
+        if let tokens = config.maxTokens {
+            if SettingsStore.shared.isReasoningModel(config.model) {
+                body["max_completion_tokens"] = tokens
+            } else {
+                body["max_tokens"] = tokens
+            }
+        }
+
+        return body
+    }
+
     // MARK: - Non-Streaming Response
 
     private func processNonStreaming(request: URLRequest) async throws -> Response {
@@ -292,13 +299,14 @@ final class LLMClient {
 
         DebugLogger.shared.debug("LLMClient: Non-streaming response received (\(data.count) bytes)", source: "LLMClient")
 
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let choice = choices.first,
-              let message = choice["message"] as? [String: Any]
-        else {
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw LLMError.invalidResponse
         }
+
+        guard let choices = json["choices"] as? [[String: Any]],
+              let choice = choices.first,
+              let message = choice["message"] as? [String: Any]
+        else { throw LLMError.invalidResponse }
 
         return self.parseMessageResponse(message)
     }

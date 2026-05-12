@@ -486,6 +486,7 @@ final class CommandModeService: ObservableObject {
 
         } catch {
             let errorMsg = "Error: \(error.localizedDescription)"
+            DebugLogger.shared.error("Command mode failed: \(error.localizedDescription)", source: "CommandModeService")
             self.conversationHistory.append(Message(
                 role: .assistant,
                 content: errorMsg,
@@ -717,7 +718,7 @@ final class CommandModeService: ObservableObject {
         } else if ModelRepository.shared.isBuiltIn(providerID) {
             baseURL = ModelRepository.shared.defaultBaseURL(for: providerID)
         } else {
-            baseURL = ModelRepository.shared.defaultBaseURL(for: "openai")
+            baseURL = ""
         }
 
         // Build conversation with agentic system prompt

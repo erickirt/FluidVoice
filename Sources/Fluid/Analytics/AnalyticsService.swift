@@ -89,6 +89,7 @@ final class AnalyticsService {
             "ai_processing_enabled": anyDictationShortcutUsesAI,
             "streaming_preview_enabled": settings.enableStreamingPreview,
             "press_and_hold_mode": settings.pressAndHoldMode,
+            "hotkey_activation_mode": settings.hotkeyMode.rawValue,
             "copy_to_clipboard_enabled": settings.copyTranscriptionToClipboard,
         ]
 

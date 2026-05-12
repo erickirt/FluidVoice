@@ -169,7 +169,7 @@ struct ContentView: View {
     @State private var openAIBaseURL: String = ModelRepository.shared.defaultBaseURL(for: "openai")
 
     @State private var enableDebugLogs: Bool = SettingsStore.shared.enableDebugLogs
-    @State private var pressAndHoldModeEnabled: Bool = SettingsStore.shared.pressAndHoldMode
+    @State private var hotkeyMode: HotkeyActivationMode = SettingsStore.shared.hotkeyMode
     @State private var enableStreamingPreview: Bool = SettingsStore.shared.enableStreamingPreview
     @State private var copyToClipboard: Bool = SettingsStore.shared.copyTranscriptionToClipboard
 
@@ -1258,7 +1258,7 @@ struct ContentView: View {
             commandModeShortcutEnabled: self.$isCommandModeShortcutEnabled,
             rewriteShortcutEnabled: self.$isRewriteModeShortcutEnabled,
             hotkeyManagerInitialized: self.$hotkeyManagerInitialized,
-            pressAndHoldModeEnabled: self.$pressAndHoldModeEnabled,
+            hotkeyMode: self.$hotkeyMode,
             enableStreamingPreview: self.$enableStreamingPreview,
             copyToClipboard: self.$copyToClipboard,
             hotkeyManager: self.hotkeyManager,
@@ -1561,9 +1561,9 @@ struct ContentView: View {
             derivedBaseURL = ModelRepository.shared.defaultBaseURL(for: currentSelectedProviderID)
             derivedSelectedModel = storedSelectedModelByProvider[currentSelectedProviderID] ?? ModelRepository.shared.defaultModels(for: currentSelectedProviderID).first ?? ""
         } else {
-            // Unknown provider - fallback to OpenAI
+            // Unknown provider - fail closed instead of silently sending to OpenAI.
             derivedCurrentProvider = currentSelectedProviderID
-            derivedBaseURL = ModelRepository.shared.defaultBaseURL(for: "openai")
+            derivedBaseURL = ""
             derivedSelectedModel = storedSelectedModelByProvider[currentSelectedProviderID] ?? ""
         }
 
@@ -2683,7 +2683,7 @@ struct ContentView: View {
 
         self.hotkeyManagerInitialized = self.hotkeyManager?.validateEventTapHealth() ?? false
 
-        self.hotkeyManager?.enablePressAndHoldMode(self.pressAndHoldModeEnabled)
+        self.hotkeyManager?.setHotkeyMode(self.hotkeyMode)
 
         // Set cancel callback for Escape key handling (closes mode views, resets recording state)
         // Returns true if it handled something (so GlobalHotkeyManager knows to consume the event)
@@ -3128,7 +3128,7 @@ private extension ContentView {
         self.selectedInputUID = AudioDevice.getDefaultInputDevice()?.uid ?? ""
         self.selectedOutputUID = SettingsStore.shared.preferredOutputDeviceUID ?? ""
         self.enableDebugLogs = SettingsStore.shared.enableDebugLogs
-        self.pressAndHoldModeEnabled = SettingsStore.shared.pressAndHoldMode
+        self.hotkeyMode = SettingsStore.shared.hotkeyMode
         self.enableStreamingPreview = SettingsStore.shared.enableStreamingPreview
         self.copyToClipboard = SettingsStore.shared.copyTranscriptionToClipboard
         self.launchAtStartup = SettingsStore.shared.launchAtStartup
