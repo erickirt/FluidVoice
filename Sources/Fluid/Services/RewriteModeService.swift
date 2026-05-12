@@ -296,7 +296,7 @@ final class RewriteModeService: ObservableObject {
         } else if ModelRepository.shared.isBuiltIn(providerID) {
             baseURL = ModelRepository.shared.defaultBaseURL(for: providerID)
         } else {
-            baseURL = ModelRepository.shared.defaultBaseURL(for: "openai")
+            baseURL = ""
         }
 
         // Build messages array for LLMClient

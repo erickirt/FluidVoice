@@ -222,6 +222,11 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         return providerID.isEmpty ? self.currentProvider : "custom:\(providerID)"
     }
 
+    func providerAPIKey(for providerID: String) -> String {
+        let key = self.providerKey(for: providerID)
+        return self.providerAPIKeys[key] ?? self.providerAPIKeys[providerID] ?? ""
+    }
+
     func providerDisplayName(for providerID: String) -> String {
         switch providerID {
         case "openai": return "OpenAI"
@@ -448,7 +453,7 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
     func handleAPIKeyButtonTapped() {
         switch self.probeKeychainAccess() {
         case .granted:
-            self.newProviderApiKey = self.providerAPIKeys[self.currentProvider] ?? ""
+            self.newProviderApiKey = self.providerAPIKey(for: self.selectedProviderID)
             self.showAPIKeyEditor = true
         case let .denied(status):
             self.keychainPermissionMessage = self.keychainPermissionExplanation(for: status)
@@ -539,8 +544,8 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
 
         let providerID = self.selectedProviderID
         let providerName = ModelRepository.shared.displayName(for: providerID)
-        let apiKey = self.providerAPIKeys[self.currentProvider] ?? ""
-        let baseURL = self.openAIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiKey = self.providerAPIKey(for: providerID)
+        let baseURL = self.providerBaseURL(for: providerID)
         let isLocal = self.isLocalEndpoint(baseURL)
         let isAnthropic = providerID == "anthropic" || baseURL.contains("anthropic.com")
 
@@ -1064,14 +1069,23 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
     }
 
     private func providerBaseURL(for providerID: String) -> String {
-        if providerID == self.selectedProviderID {
-            return self.openAIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
+        let currentBaseURL = self.openAIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if let saved = self.savedProviders.first(where: { $0.id == providerID }) {
             return saved.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if ModelRepository.shared.isBuiltIn(providerID) {
-            return ModelRepository.shared.defaultBaseURL(for: providerID).trimmingCharacters(in: .whitespacesAndNewlines)
+            let defaultBaseURL = ModelRepository.shared.defaultBaseURL(for: providerID).trimmingCharacters(in: .whitespacesAndNewlines)
+            let openAIDefaultURL = ModelRepository.shared.defaultBaseURL(for: "openai").trimmingCharacters(in: .whitespacesAndNewlines)
+            if providerID == self.selectedProviderID,
+               !currentBaseURL.isEmpty,
+               providerID == "openai" || currentBaseURL != openAIDefaultURL
+            {
+                return currentBaseURL
+            }
+            return defaultBaseURL
+        }
+        if providerID == self.selectedProviderID {
+            return currentBaseURL
         }
         return ""
     }
@@ -1099,7 +1113,7 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         let key = self.providerKey(for: providerID)
         guard let stored = self.settings.verifiedProviderFingerprints[key] else { return }
         let baseURL = self.providerBaseURL(for: providerID)
-        let apiKey = self.providerAPIKeys[key] ?? ""
+        let apiKey = self.providerAPIKey(for: providerID)
         let current = self.fingerprint(baseURL: baseURL, apiKey: apiKey)
         if current != stored {
             self.settings.verifiedProviderFingerprints.removeValue(forKey: key)
@@ -1131,7 +1145,7 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
                 continue
             }
             let baseURL = self.providerBaseURL(for: providerID)
-            let apiKey = self.providerAPIKeys[key] ?? ""
+            let apiKey = self.providerAPIKey(for: providerID)
             let current = self.fingerprint(baseURL: baseURL, apiKey: apiKey)
             if current == stored {
                 statuses[providerID] = .success

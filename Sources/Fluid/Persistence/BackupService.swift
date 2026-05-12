@@ -42,6 +42,7 @@ struct SettingsBackupPayload: Codable, Equatable {
     let enableDebugLogs: Bool
     let shareAnonymousAnalytics: Bool
     let pressAndHoldMode: Bool
+    let hotkeyMode: HotkeyActivationMode?
     let enableStreamingPreview: Bool
     let enableAIStreaming: Bool
     let copyTranscriptionToClipboard: Bool

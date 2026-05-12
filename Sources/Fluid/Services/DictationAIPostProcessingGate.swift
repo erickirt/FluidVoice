@@ -50,8 +50,8 @@ enum DictationAIPostProcessingGate {
         if ModelRepository.shared.isBuiltIn(providerID) {
             return ModelRepository.shared.defaultBaseURL(for: providerID)
         }
-        // Unknown provider - fallback to OpenAI
-        return ModelRepository.shared.defaultBaseURL(for: "openai")
+        // Unknown provider: fail closed instead of silently treating it as OpenAI.
+        return ""
     }
 
     static func providerKey(for providerID: String) -> String {

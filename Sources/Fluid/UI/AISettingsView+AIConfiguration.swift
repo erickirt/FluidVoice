@@ -1764,7 +1764,9 @@ extension AIEnhancementSettingsView {
     }
 
     var connectionTestSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let selectedProviderAPIKey = self.viewModel.providerAPIKey(for: self.viewModel.selectedProviderID)
+
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 Button(action: { Task { await self.viewModel.testAPIConnection() } }) {
                     Text(self.viewModel.isTestingConnection ? "Verifying..." : "Verify Connection")
@@ -1775,7 +1777,7 @@ extension AIEnhancementSettingsView {
                 .frame(minWidth: AISettingsLayout.primaryActionMinWidth, minHeight: AISettingsLayout.controlHeight)
                 .disabled(self.viewModel.isTestingConnection ||
                     (!self.viewModel.isLocalEndpoint(self.viewModel.openAIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)) &&
-                        (self.viewModel.providerAPIKeys[self.viewModel.currentProvider] ?? "").isEmpty))
+                        selectedProviderAPIKey.isEmpty))
             }
 
             // Connection Status Display
@@ -1846,7 +1848,8 @@ extension AIEnhancementSettingsView {
                     .frame(minWidth: AISettingsLayout.actionMinWidth, minHeight: AISettingsLayout.controlHeight)
                 Button("OK") {
                     let trimmedKey = self.viewModel.newProviderApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-                    self.viewModel.providerAPIKeys[self.viewModel.currentProvider] = trimmedKey
+                    let providerKey = self.viewModel.providerKey(for: self.viewModel.selectedProviderID)
+                    self.viewModel.providerAPIKeys[providerKey] = trimmedKey
                     self.viewModel.saveProviderAPIKeys()
                     if self.viewModel.connectionStatus != .unknown {
                         self.viewModel.connectionStatus = .unknown
