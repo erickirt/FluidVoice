@@ -59,8 +59,14 @@ struct CommandModeView: View {
         .onChange(of: self.settings.commandModeSelectedProviderID) { _, _ in
             self.updateAvailableModels()
         }
-        .onExitCommand {
-            self.onClose?()
+        .onChange(of: self.settings.commandModeLinkedToGlobal) { _, _ in
+            self.updateAvailableModels()
+        }
+        .onChange(of: self.settings.selectedProviderID) { _, _ in
+            self.updateAvailableModels()
+        }
+        .onChange(of: self.settings.selectedModelByProvider) { _, _ in
+            self.updateAvailableModels()
         }
     }
 
@@ -283,21 +289,8 @@ struct CommandModeView: View {
                     }
 
                     if self.service.isProcessing {
-                        VStack(alignment: .leading, spacing: 8) {
-                            self.processingIndicator
-
-                            // Show thinking tokens in collapsible section (real-time)
-                            // Only show if setting is enabled AND there are thinking tokens
-                            if self.settings.showThinkingTokens && !self.service.streamingThinkingText.isEmpty {
-                                self.thinkingView
-                            }
-
-                            // Show streaming text in real-time
-                            if !self.service.streamingText.isEmpty {
-                                self.streamingTextView
-                            }
-                        }
-                        .id("processing")
+                        self.processingIndicator
+                            .id("processing")
                     }
 
                     Color.clear.frame(height: 1).id("bottom")
@@ -331,79 +324,29 @@ struct CommandModeView: View {
         }
     }
 
-    // MARK: - Thinking View (Cursor-style shimmer)
-
-    private var thinkingView: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header with shimmer effect - tap to expand/collapse
-            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { self.isThinkingExpanded.toggle() } }) {
-                HStack(spacing: 8) {
-                    ThinkingShimmerLabel()
-
-                    Spacer()
-
-                    Image(systemName: self.isThinkingExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary.opacity(0.6))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-            }
-            .buttonStyle(.plain)
-
-            // Expanded content
-            if self.isThinkingExpanded {
-                ScrollView(.vertical, showsIndicators: true) {
-                    Text(self.service.streamingThinkingText)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 10)
-                }
-                .frame(maxHeight: 200)
-            } else {
-                // Preview - first 150 chars
-                if !self.service.streamingThinkingText.isEmpty {
-                    Text(String(self.service.streamingThinkingText.prefix(150)) + (self.service.streamingThinkingText.count > 150 ? "..." : ""))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary.opacity(0.7))
-                        .lineLimit(2)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 8)
-                }
-            }
-        }
-        .background(self.theme.palette.cardBackground.opacity(0.9))
-        .cornerRadius(8)
-        .frame(maxWidth: 520, alignment: .leading)
-    }
-
     // MARK: - Processing Indicator (Minimal with Shimmer)
 
     private var processingIndicator: some View {
-        CommandShimmerText(text: self.currentStepLabel)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(self.theme.palette.cardBackground.opacity(0.9))
-            .cornerRadius(6)
-    }
+        VStack(alignment: .leading, spacing: 10) {
+            CommandShimmerText(text: "Thinking")
+                .padding(.horizontal, 12)
 
-    // MARK: - Streaming Text View (Real-time AI response)
-
-    private var streamingTextView: some View {
-        // Use fixedSize to prevent expensive re-layout on every update
-        Text(self.service.streamingText)
-            .font(.system(size: 13))
-            .foregroundStyle(.primary.opacity(0.9))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(maxWidth: 520, alignment: .leading)
-            .background(self.theme.palette.contentBackground.opacity(0.9))
-            .cornerRadius(8)
-            .drawingGroup() // Flatten to bitmap for faster updates
-        // textSelection disabled during streaming - re-enabled in final message
+            if self.settings.showThinkingTokens && !self.service.streamingThinkingText.isEmpty {
+                ScrollView(.vertical, showsIndicators: true) {
+                    Text(self.service.streamingThinkingText)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 140)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
+            }
+        }
+        .frame(maxWidth: 520, minHeight: 72, alignment: .leading)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
     }
 
     private var currentStepLabel: String {
@@ -506,75 +449,160 @@ struct CommandModeView: View {
     // MARK: - Input Area
 
     private var inputArea: some View {
-        HStack(spacing: 8) {
-            // Provider Selector (compact, searchable)
-            SearchableProviderPicker(
-                builtInProviders: self.builtInProvidersList,
-                savedProviders: self.settings.savedProviders,
-                selectedProviderID: Binding(
-                    get: { self.settings.commandModeSelectedProviderID },
-                    set: { newValue in
-                        // Prevent selecting disabled Apple Intelligence
-                        if newValue == "apple-intelligence-disabled" || newValue == "apple-intelligence" {
-                            self.settings.commandModeSelectedProviderID = "openai"
-                        } else {
-                            self.settings.commandModeSelectedProviderID = newValue
-                        }
-                        self.updateAvailableModels()
+        VStack(alignment: .leading, spacing: 10) {
+            if let issue = self.settings.commandModeReadinessIssue {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Text(issue)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+
+                    Spacer(minLength: 8)
+
+                    Button("AI Settings") {
+                        AppNavigationRouter.shared.request(.aiEnhancements)
                     }
-                )
-            )
-
-            // Model Selector (compact, searchable)
-            SearchableModelPicker(
-                models: self.availableModels,
-                selectedModel: Binding(
-                    get: { self.settings.commandModeSelectedModel ?? self.availableModels.first ?? "" },
-                    set: { self.settings.commandModeSelectedModel = $0 }
-                ),
-                onRefresh: nil,
-                isRefreshing: false
-            )
-
-            // Input field (flexible)
-            TextField("Type a command or ask a question...", text: self.$inputText)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit {
-                    self.submitCommand()
+                    .font(.caption)
+                    .buttonStyle(.plain)
+                    .controlSize(.small)
                 }
-
-            Button(action: self.submitCommand) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
+                .padding(.horizontal, 10)
+                .padding(.top, 2)
             }
-            .buttonStyle(.plain)
-            .disabled(self.inputText.isEmpty || self.service.isProcessing)
 
-            // Voice Input
-            Button(action: self.toggleRecording) {
-                Image(systemName: self.asr.isRunning ? "stop.circle.fill" : "mic.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(self.asr.isRunning ? Color.red : self.theme.palette.accent)
+            VStack(alignment: .leading, spacing: 14) {
+                TextField("Type a command or ask a question...", text: self.$inputText, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 16))
+                    .lineLimit(1...4)
+                    .onSubmit {
+                        self.submitCommand()
+                    }
+
+                HStack(spacing: 10) {
+                    Toggle("Sync", isOn: self.$settings.commandModeLinkedToGlobal)
+                        .toggleStyle(.checkbox)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .help("Use the same provider and model selected in AI Enhancement.")
+
+                    SearchableProviderPicker(
+                        builtInProviders: self.builtInProvidersList,
+                        savedProviders: self.settings.savedProviders,
+                        selectedProviderID: Binding(
+                            get: { self.settings.effectiveCommandModeProviderID },
+                            set: { newValue in
+                                guard !self.settings.commandModeLinkedToGlobal else { return }
+                                if newValue == "apple-intelligence-disabled" || newValue == "apple-intelligence" {
+                                    self.settings.commandModeSelectedProviderID = "openai"
+                                } else {
+                                    self.settings.commandModeSelectedProviderID = newValue
+                                }
+                                self.updateAvailableModels()
+                            }
+                        ),
+                        controlWidth: 140,
+                        controlHeight: 30
+                    )
+                    .disabled(self.settings.commandModeLinkedToGlobal)
+                    .opacity(self.settings.commandModeLinkedToGlobal ? 0.55 : 1)
+
+                    SearchableModelPicker(
+                        models: self.availableModels,
+                        selectedModel: Binding(
+                            get: { self.settings.effectiveCommandModeSelectedModel },
+                            set: { newValue in
+                                guard !self.settings.commandModeLinkedToGlobal else { return }
+                                self.settings.commandModeSelectedModel = newValue
+                            }
+                        ),
+                        onRefresh: nil,
+                        isRefreshing: false,
+                        selectionEnabled: !self.settings.commandModeLinkedToGlobal && !self.availableModels.isEmpty,
+                        controlWidth: 180,
+                        controlHeight: 30
+                    )
+                    .disabled(self.settings.commandModeLinkedToGlobal)
+
+                    Spacer(minLength: 12)
+
+                    Button(action: self.toggleRecording) {
+                        Image(systemName: self.asr.isRunning ? "stop.fill" : "mic")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: 34, height: 34)
+                            .foregroundStyle(self.asr.isRunning ? Color.red : .secondary)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(self.service.isProcessing)
+                    .help(self.asr.isRunning ? "Stop voice command" : "Start voice command")
+
+                    Button(action: self.submitCommand) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 18, weight: .semibold))
+                            .frame(width: 34, height: 34)
+                            .foregroundStyle(self.canSubmitCommand ? Color.black : .secondary)
+                            .background(
+                                Circle()
+                                    .fill(self.canSubmitCommand ? Color.white.opacity(0.86) : self.theme.palette.cardBackground)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!self.canSubmitCommand)
+                    .help("Run command")
+                }
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(self.theme.palette.contentBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(self.theme.palette.cardBorder.opacity(0.55), lineWidth: 1)
+                    )
+            )
         }
-        .padding()
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
         .background(self.theme.palette.windowBackground)
     }
 
     // MARK: - Actions
 
+    private var canSubmitCommand: Bool {
+        !self.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !self.service.isProcessing &&
+            self.settings.commandModeReadinessIssue == nil
+    }
+
     private func toggleRecording() {
         if self.asr.isRunning {
-            Task { await self.asr.stop() }
+            Task {
+                let command = await self.asr.stop().trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !command.isEmpty else { return }
+                await MainActor.run {
+                    self.inputText = command
+                }
+                guard self.settings.commandModeReadinessIssue == nil else { return }
+                await self.service.processUserCommand(command)
+                await MainActor.run {
+                    self.inputText = ""
+                }
+            }
         } else {
             Task { await self.asr.start() }
         }
     }
 
     private func submitCommand() {
-        guard !self.inputText.isEmpty else { return }
-        let text = self.inputText
+        let text = self.inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        guard self.settings.commandModeReadinessIssue == nil else { return }
         self.inputText = ""
         Task {
             await self.service.processUserCommand(text)
@@ -582,30 +610,14 @@ struct CommandModeView: View {
     }
 
     private func updateAvailableModels() {
-        let currentProviderID = self.settings.commandModeSelectedProviderID
+        let currentProviderID = self.settings.effectiveCommandModeProviderID
         let currentModel = self.settings.commandModeSelectedModel ?? "gpt-4.1"
-
-        // Pull models from the shared pool configured in AI Settings
-        let possibleKeys = self.providerKeys(for: currentProviderID)
-        let storedList = possibleKeys.lazy
-            .compactMap { SettingsStore.shared.availableModelsByProvider[$0] }
-            .first { !$0.isEmpty }
-
-        if let stored = storedList {
-            self.availableModels = stored
-        } else {
-            self.availableModels = ModelRepository.shared.defaultModels(for: currentProviderID)
-        }
+        self.availableModels = self.settings.commandModeModels(for: currentProviderID)
 
         // If current model not in list, select first available
-        if !self.availableModels.contains(currentModel) {
+        if !self.settings.commandModeLinkedToGlobal, !self.availableModels.contains(currentModel) {
             self.settings.commandModeSelectedModel = self.availableModels.first ?? "gpt-4.1"
         }
-    }
-
-    /// Returns possible keys used to store models for a provider.
-    private func providerKeys(for providerID: String) -> [String] {
-        return ModelRepository.shared.providerKeys(for: providerID)
     }
 
     private var builtInProvidersList: [(id: String, name: String)] {
@@ -623,87 +635,32 @@ struct CommandModeView: View {
 struct CommandShimmerText: View {
     let text: String
 
-    @State private var shimmerPhase: CGFloat = 0
-
     var body: some View {
-        Text(self.text)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [
-                        Color.primary.opacity(0.4),
-                        Color.primary.opacity(0.4),
-                        Color.primary.opacity(0.8),
-                        Color.primary.opacity(0.4),
-                        Color.primary.opacity(0.4),
-                    ],
-                    startPoint: UnitPoint(x: self.shimmerPhase - 0.3, y: 0.5),
-                    endPoint: UnitPoint(x: self.shimmerPhase + 0.3, y: 0.5)
-                )
-            )
-            .onAppear {
-                withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
-                    self.shimmerPhase = 1.3
-                }
-            }
-    }
-}
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+            let duration = 1.15
+            let progress = timeline.date.timeIntervalSinceReferenceDate
+                .truncatingRemainder(dividingBy: duration) / duration
+            let center = CGFloat(progress)
+            let leadingEdge = max(0, center - 0.18)
+            let trailingEdge = min(1, center + 0.18)
 
-// MARK: - Thinking Shimmer Label (Cursor-style sparkle)
-
-struct ThinkingShimmerLabel: View {
-    @State private var shimmerPhase: CGFloat = -0.5
-    @State private var sparkleOpacity: [Double] = [0.3, 0.5, 0.7, 0.4, 0.6]
-
-    var body: some View {
-        HStack(spacing: 6) {
-            // Sparkle dots with staggered animation
-            HStack(spacing: 2) {
-                ForEach(0..<3, id: \.self) { index in
-                    Circle()
-                        .fill(Color.primary.opacity(self.sparkleOpacity[index]))
-                        .frame(width: 4, height: 4)
-                }
-            }
-
-            // Shimmering "Think" text
-            Text("Think")
-                .font(.system(size: 12, weight: .medium))
+            Text(self.text)
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(
                     LinearGradient(
                         stops: [
-                            .init(color: Color.primary.opacity(0.35), location: 0),
-                            .init(color: Color.primary.opacity(0.35), location: max(0, self.shimmerPhase - 0.15)),
-                            .init(color: Color.primary.opacity(0.85), location: self.shimmerPhase),
-                            .init(color: Color.primary.opacity(0.35), location: min(1, self.shimmerPhase + 0.15)),
-                            .init(color: Color.primary.opacity(0.35), location: 1),
+                            .init(color: Color.secondary.opacity(0.42), location: 0),
+                            .init(color: Color.secondary.opacity(0.42), location: leadingEdge),
+                            .init(color: Color.primary.opacity(0.98), location: center),
+                            .init(color: Color.secondary.opacity(0.42), location: trailingEdge),
+                            .init(color: Color.secondary.opacity(0.42), location: 1),
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
         }
-        .onAppear {
-            // Shimmer animation - smooth left to right
-            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                self.shimmerPhase = 1.5
-            }
-
-            // Sparkle animation - staggered twinkling
-            self.animateSparkles()
-        }
-    }
-
-    private func animateSparkles() {
-        // Create twinkling effect with staggered delays
-        for i in 0..<3 {
-            let delay = Double(i) * 0.15
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                withAnimation(.easeInOut(duration: 0.4).repeatForever(autoreverses: true)) {
-                    self.sparkleOpacity[i] = self.sparkleOpacity[i] > 0.5 ? 0.2 : 0.8
-                }
-            }
-        }
+        .accessibilityLabel(Text(self.text))
     }
 }
 
@@ -770,29 +727,23 @@ struct MessageBubble: View {
 
     private func thinkingSection(_ thinking: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header - tap to expand/collapse
             Button(action: { withAnimation(.easeInOut(duration: 0.2)) { self.isThinkingExpanded.toggle() } }) {
                 HStack(spacing: 6) {
-                    HStack(spacing: 2) {
-                        ForEach(0..<3, id: \.self) { _ in
-                            Circle()
-                                .fill(Color.primary.opacity(0.4))
-                                .frame(width: 3, height: 3)
-                        }
-                    }
-                    Text("Think")
+                    Text("Thinking")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
 
-                    Spacer()
-
-                    Text("\(thinking.count) chars")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
+                    if self.isThinkingExpanded {
+                        Text("\(thinking.count) chars")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                    }
 
                     Image(systemName: self.isThinkingExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 9))
+                        .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.tertiary)
+
+                    Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
@@ -811,18 +762,10 @@ struct MessageBubble: View {
                         .padding(.bottom, 8)
                 }
                 .frame(maxHeight: 150)
-            } else {
-                // Preview - first 80 chars
-                Text(String(thinking.prefix(80)) + (thinking.count > 80 ? "..." : ""))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 6)
             }
         }
-        .background(self.theme.palette.cardBackground.opacity(0.85))
-        .cornerRadius(6)
+        .background(self.theme.palette.cardBackground.opacity(0.55))
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 
     // MARK: - Command Call View (Minimal)

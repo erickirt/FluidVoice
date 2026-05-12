@@ -1853,14 +1853,6 @@ final class SettingsStore: ObservableObject {
         }
     }
 
-    var commandModeLinkedToGlobal: Bool {
-        get { self.defaults.bool(forKey: Keys.commandModeLinkedToGlobal) } // Default to false (let user opt-in, or true if preferred)
-        set {
-            objectWillChange.send()
-            self.defaults.set(newValue, forKey: Keys.commandModeLinkedToGlobal)
-        }
-    }
-
     // MARK: - Prompt Mode Settings (Transcribe with Prompt)
 
     var promptModeShortcutEnabled: Bool {

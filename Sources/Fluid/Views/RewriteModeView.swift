@@ -425,7 +425,7 @@ struct RewriteModeView: View {
             // Header with shimmer effect - tap to expand/collapse
             Button(action: { withAnimation(.easeInOut(duration: 0.2)) { self.isThinkingExpanded.toggle() } }) {
                 HStack(spacing: 8) {
-                    ThinkingShimmerLabel()
+                    CommandShimmerText(text: "Thinking")
 
                     Spacer()
 
