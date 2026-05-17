@@ -165,7 +165,19 @@ final class FluidAudioProvider: TranscriptionProvider {
             )
         }
 
+        let startedAt = Date().timeIntervalSince1970
         let result = try await manager.transcribe(samples, source: AudioSource.microphone)
+        let elapsedMs = Int(((Date().timeIntervalSince1970 - startedAt) * 1000).rounded())
+        let audioMs = Int((Double(samples.count) / 16_000.0 * 1000).rounded())
+        let rtf = audioMs > 0 ? Double(elapsedMs) / Double(audioMs) : 0
+        DebugLogger.shared.info(
+            """
+            ASR_BENCH provider_streaming_done samples=\(samples.count) audioMs=\(audioMs) \
+            elapsedMs=\(elapsedMs) textChars=\(result.text.trimmingCharacters(in: .whitespacesAndNewlines).count) \
+            rtf=\(String(format: "%.3f", rtf))
+            """,
+            source: "ASRBenchmark"
+        )
         return ASRTranscriptionResult(text: result.text, confidence: result.confidence)
     }
 
@@ -181,7 +193,9 @@ final class FluidAudioProvider: TranscriptionProvider {
         // If the boosted final manager fails, fall back to the unboosted streaming
         // manager so the user still gets a transcription (just without CTC rescoring).
         do {
+            let startedAt = Date().timeIntervalSince1970
             let result = try await manager.transcribe(samples, source: AudioSource.microphone)
+            self.logFinalBenchmark(samples: samples, text: result.text, startedAt: startedAt, usedFallback: false)
             return ASRTranscriptionResult(text: result.text, confidence: result.confidence)
         } catch {
             guard let fallback = self.streamingAsrManager, fallback !== manager else {
@@ -191,9 +205,25 @@ final class FluidAudioProvider: TranscriptionProvider {
                 "FluidAudioProvider: Boosted final transcription failed (\(error.localizedDescription)), retrying without vocab boost",
                 source: "FluidAudioProvider"
             )
+            let startedAt = Date().timeIntervalSince1970
             let result = try await fallback.transcribe(samples, source: AudioSource.microphone)
+            self.logFinalBenchmark(samples: samples, text: result.text, startedAt: startedAt, usedFallback: true)
             return ASRTranscriptionResult(text: result.text, confidence: result.confidence)
         }
+    }
+
+    private func logFinalBenchmark(samples: [Float], text: String, startedAt: TimeInterval, usedFallback: Bool) {
+        let elapsedMs = Int(((Date().timeIntervalSince1970 - startedAt) * 1000).rounded())
+        let audioMs = Int((Double(samples.count) / 16_000.0 * 1000).rounded())
+        let rtf = audioMs > 0 ? Double(elapsedMs) / Double(audioMs) : 0
+        DebugLogger.shared.info(
+            """
+            ASR_BENCH provider_final_done samples=\(samples.count) audioMs=\(audioMs) \
+            elapsedMs=\(elapsedMs) textChars=\(text.trimmingCharacters(in: .whitespacesAndNewlines).count) \
+            rtf=\(String(format: "%.3f", rtf)) fallback=\(usedFallback)
+            """,
+            source: "ASRBenchmark"
+        )
     }
 
     func modelsExistOnDisk() -> Bool {
