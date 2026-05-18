@@ -209,11 +209,18 @@ final class FluidAudioProvider: TranscriptionProvider {
         }
 
         let startedAt = Date().timeIntervalSince1970
-        if let slidingResult = try await self.finishSlidingWindowTranscription(samples),
-           self.shouldUseSlidingWindowFinal(slidingResult.text)
-        {
-            self.logFinalBenchmark(samples: samples, text: slidingResult.text, startedAt: startedAt, usedFallback: false)
-            return slidingResult
+        do {
+            if let slidingResult = try await self.finishSlidingWindowTranscription(samples),
+               self.shouldUseSlidingWindowFinal(slidingResult.text)
+            {
+                self.logFinalBenchmark(samples: samples, text: slidingResult.text, startedAt: startedAt, usedFallback: false)
+                return slidingResult
+            }
+        } catch {
+            DebugLogger.shared.warning(
+                "ASR_BENCH provider_sliding_rejected reason=error error=\(error.localizedDescription)",
+                source: "ASRBenchmark"
+            )
         }
 
         // If the boosted final manager fails, fall back to the unboosted streaming
