@@ -3219,7 +3219,7 @@ final class SettingsStore: ObservableObject {
             case .qwen3Asr: return 0.45
             case .cohereTranscribeSixBit: return 0.85
             case .nemotronOffline: return 0.85
-            case .nemotronStreaming, .nemotronStreaming320: return 0.99
+            case .nemotronStreaming, .nemotronStreaming320: return 1.0
             case .appleSpeech: return 0.60
             case .appleSpeechAnalyzer: return 0.85
             case .whisperTiny: return 0.90
