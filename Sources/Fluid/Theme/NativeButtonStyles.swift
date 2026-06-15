@@ -22,12 +22,15 @@ enum FluidButtonRole {
 }
 
 enum FluidButtonSize: Equatable {
+    case compact
     case small
     case medium
     case large
 
     var controlHeight: CGFloat {
         switch self {
+        case .compact:
+            return 34
         case .small:
             return 32
         case .medium:

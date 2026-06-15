@@ -380,7 +380,7 @@ struct WelcomeView: View {
                                         }
                                         .frame(maxWidth: .infinity)
                                     }
-                                    .buttonStyle(PremiumButtonStyle(isRecording: self.asr.isRunning))
+                                    .fluidButton(.primary, size: .large, isRecording: self.asr.isRunning)
                                     .buttonHoverEffect()
                                     .scaleEffect(self.asr.isRunning ? 1.02 : 1.0)
                                     .animation(.spring(response: 0.3), value: self.asr.isRunning)
@@ -1206,7 +1206,7 @@ struct OnboardingFlowView: View {
                             Button(self.asr.isRunning ? "Stop Recording" : "Start Recording") {
                                 self.togglePlaygroundRecording()
                             }
-                            .buttonStyle(PremiumButtonStyle(isRecording: self.asr.isRunning))
+                            .fluidButton(.primary, size: .large, isRecording: self.asr.isRunning)
                             .disabled(self.asr.micStatus != .authorized)
                         }
 

@@ -566,7 +566,7 @@ extension AIEnhancementSettingsView {
                     Image(systemName: "folder")
                         .font(.system(size: 12, weight: .semibold))
                 }
-                .buttonStyle(CompactButtonStyle())
+                .fluidButton(.compact, size: .compact)
                 .frame(width: 28, height: 28)
                 .help("Open downloaded model folder")
             }
@@ -613,7 +613,7 @@ extension AIEnhancementSettingsView {
                                 .font(.system(size: 13, weight: .semibold))
                         }
                     }
-                    .buttonStyle(AccentButtonStyle(compact: true))
+                    .fluidButton(.accent, size: .small)
                     .disabled(isBusy)
                 } else {
                     HStack(spacing: 6) {
@@ -636,7 +636,7 @@ extension AIEnhancementSettingsView {
                             .font(.system(size: 13, weight: .semibold))
                     }
                 }
-                .buttonStyle(AccentButtonStyle(compact: true))
+                .fluidButton(.accent, size: .small)
                 .disabled(isBusy)
             }
         }
@@ -1104,7 +1104,7 @@ extension AIEnhancementSettingsView {
                     Button("Verify") {
                         self.viewModel.verifyAppleIntelligence()
                     }
-                    .buttonStyle(GlassButtonStyle(height: AISettingsLayout.controlHeight))
+                    .fluidButton(.glass, size: .compact)
                 }
             } else {
                 if isCustom {
@@ -1237,7 +1237,7 @@ extension AIEnhancementSettingsView {
                                 .font(.system(size: 13, weight: .semibold))
                         }
                     }
-                    .buttonStyle(AccentButtonStyle(compact: true))
+                    .fluidButton(.accent, size: .small)
                     .disabled(self.viewModel.isTestingConnection)
                 } else {
                     HStack(spacing: 6) {
@@ -1446,7 +1446,7 @@ extension AIEnhancementSettingsView {
                                     .font(.system(size: 12, weight: .semibold))
                             }
                         }
-                        .buttonStyle(AccentButtonStyle(compact: true))
+                        .fluidButton(.accent, size: .small)
                         .disabled(!fluidModel.canDownload || isFluidBusy)
                         .help(fluidModel.canDownload ? "Download and verify selected model" : "Download URL is not configured yet")
                     } else if !isFluidVerified || hasFluidLoadFailure {
@@ -1461,7 +1461,7 @@ extension AIEnhancementSettingsView {
                                     .font(.system(size: 12, weight: .semibold))
                             }
                         }
-                        .buttonStyle(AccentButtonStyle(compact: true))
+                        .fluidButton(.accent, size: .small)
                         .disabled(isFluidBusy)
                         .help("Verify selected model")
                     }
@@ -1470,7 +1470,7 @@ extension AIEnhancementSettingsView {
                         Image(systemName: "folder")
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    .buttonStyle(CompactButtonStyle())
+                    .fluidButton(.compact, size: .compact)
                     .frame(width: 28, height: 28)
                     .help("Open downloaded model folder")
                 } else {
@@ -1486,7 +1486,7 @@ extension AIEnhancementSettingsView {
                             self.viewModel.setEditingAPIKey(true, for: item.id)
                         }
                     }
-                    .buttonStyle(CompactButtonStyle())
+                    .fluidButton(.compact, size: .compact)
                 }
             }
 
@@ -1850,7 +1850,7 @@ extension AIEnhancementSettingsView {
                         Text("Save")
                     }
                 }
-                .buttonStyle(GlassButtonStyle(height: AISettingsLayout.controlHeight))
+                .fluidButton(.glass, size: .compact)
                 .disabled(!isBuiltIn &&
                     (self.viewModel.editProviderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
                         self.viewModel.editProviderBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
@@ -1858,7 +1858,7 @@ extension AIEnhancementSettingsView {
                 Button("Cancel") {
                     self.viewModel.clearEditProviderDraft()
                 }
-                .buttonStyle(CompactButtonStyle())
+                .fluidButton(.compact, size: .compact)
             }
 
             HStack(spacing: 10) {
@@ -1998,7 +1998,7 @@ extension AIEnhancementSettingsView {
                 self.viewModel.showingAddModel = false
                 self.viewModel.newModelName = ""
             }
-            .buttonStyle(CompactButtonStyle())
+            .fluidButton(.compact, size: .compact)
             .frame(minWidth: AISettingsLayout.compactActionMinWidth, minHeight: AISettingsLayout.controlHeight)
         }
         .padding(.leading, AISettingsLayout.rowLeadingIndent)
@@ -2136,11 +2136,11 @@ extension AIEnhancementSettingsView {
                     Text("Save")
                         .font(.system(size: 12, weight: .semibold))
                 }
-                .buttonStyle(AccentButtonStyle(compact: true))
+                .fluidButton(.accent, size: .small)
                 .frame(minWidth: 60, minHeight: 26)
 
                 Button("Cancel") { self.viewModel.showingReasoningConfig = false }
-                    .buttonStyle(CompactButtonStyle())
+                    .fluidButton(.compact, size: .compact)
                     .font(.system(size: 12))
                     .frame(minWidth: 60, minHeight: 26)
             }
@@ -2229,7 +2229,7 @@ extension AIEnhancementSettingsView {
                     Label(websiteInfo.label, systemImage: websiteInfo.label.contains("Download") ? "arrow.down.circle.fill" : (websiteInfo.label.contains("Guide") ? "book.fill" : "link"))
                         .labelStyle(.titleAndIcon).font(.caption)
                 }
-                .buttonStyle(CompactButtonStyle())
+                .fluidButton(.compact, size: .compact)
                 .frame(minWidth: AISettingsLayout.actionMinWidth, minHeight: AISettingsLayout.controlHeight)
             }
         }
@@ -2246,7 +2246,7 @@ extension AIEnhancementSettingsView {
                 }
             HStack(spacing: 12) {
                 Button("Cancel") { self.viewModel.showAPIKeyEditor = false }
-                    .buttonStyle(CompactButtonStyle())
+                    .fluidButton(.compact, size: .compact)
                     .frame(minWidth: AISettingsLayout.actionMinWidth, minHeight: AISettingsLayout.controlHeight)
                 Button("OK") {
                     let trimmedKey = self.viewModel.newProviderApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2258,7 +2258,7 @@ extension AIEnhancementSettingsView {
                     }
                     self.viewModel.showAPIKeyEditor = false
                 }
-                .buttonStyle(GlassButtonStyle(height: AISettingsLayout.controlHeight))
+                .fluidButton(.glass, size: .compact)
                 .frame(minWidth: AISettingsLayout.actionMinWidth, minHeight: AISettingsLayout.controlHeight)
                 .disabled(!self.viewModel.isLocalEndpoint(self.viewModel.openAIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)) &&
                     self.viewModel.newProviderApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -2319,7 +2319,7 @@ extension AIEnhancementSettingsView {
                         Text("Save Provider")
                     }
                 }
-                .buttonStyle(GlassButtonStyle(height: AISettingsLayout.controlHeight))
+                .fluidButton(.glass, size: .compact)
                 .disabled(self.viewModel.newProviderBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                 Button("Cancel") {
@@ -2329,7 +2329,7 @@ extension AIEnhancementSettingsView {
                     self.viewModel.newProviderApiKey = ""
                     self.viewModel.newProviderModels = ""
                 }
-                .buttonStyle(CompactButtonStyle())
+                .fluidButton(.compact, size: .compact)
             }
         }
         .padding(14)

@@ -1266,13 +1266,13 @@ extension AIEnhancementSettingsView {
                 Button(mode.isDefault ? "Close" : "Cancel") {
                     self.viewModel.closePromptEditor()
                 }
-                .buttonStyle(CompactButtonStyle())
+                .fluidButton(.compact, size: .compact)
                 .frame(minWidth: AISettingsLayout.actionMinWidth, minHeight: AISettingsLayout.controlHeight)
 
                 Button("Save") {
                     self.viewModel.savePromptEditor(mode: mode)
                 }
-                .buttonStyle(GlassButtonStyle(height: AISettingsLayout.controlHeight))
+                .fluidButton(.glass, size: .compact)
                 .frame(minWidth: AISettingsLayout.actionMinWidth, minHeight: AISettingsLayout.controlHeight)
                 .disabled(!mode.isDefault && self.viewModel.draftPromptName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
