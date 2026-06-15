@@ -21,6 +21,8 @@ struct AppTheme {
     }
 
     struct Typography {
+        let displayTitle: Font
+        let statement: Font
         let title: Font
         let titleIcon: Font
         let sectionTitle: Font
@@ -41,6 +43,8 @@ struct AppTheme {
         let chromeCaption: Font
 
         static let standard = Typography(
+            displayTitle: .system(size: 32, weight: .bold),
+            statement: .system(size: 16, weight: .regular),
             title: .system(size: 22, weight: .bold),
             titleIcon: .system(size: 22, weight: .regular),
             sectionTitle: .system(size: 15, weight: .semibold),
@@ -182,6 +186,16 @@ struct AppTheme {
         }
 
         struct OnboardingSurface {
+            struct Landing {
+                let contentWidth: CGFloat
+                let heroPadding: CGFloat
+                let heroIconSize: CGFloat
+                let heroIconFrame: CGFloat
+                let tileSpacing: CGFloat
+                let sectionSpacing: CGFloat
+                let heroCornerRadius: CGFloat
+            }
+
             let normalFillOpacity: Double
             let selectedFillOpacity: Double
             let normalBorderOpacity: Double
@@ -193,6 +207,7 @@ struct AppTheme {
             let optionCornerRadius: CGFloat
             let compactOptionCornerRadius: CGFloat
             let editorCornerRadius: CGFloat
+            let landing: Landing
 
             static let standard = OnboardingSurface(
                 normalFillOpacity: 0.55,
@@ -205,7 +220,30 @@ struct AppTheme {
                 compactOptionPadding: 10,
                 optionCornerRadius: 12,
                 compactOptionCornerRadius: 10,
-                editorCornerRadius: 8
+                editorCornerRadius: 8,
+                landing: Landing(
+                    contentWidth: 820,
+                    heroPadding: 28,
+                    heroIconSize: 48,
+                    heroIconFrame: 68,
+                    tileSpacing: 12,
+                    sectionSpacing: 16,
+                    heroCornerRadius: 18
+                )
+            )
+        }
+
+        struct Window {
+            let mainMinWidth: CGFloat
+            let mainMinHeight: CGFloat
+            let onboardingMinWidth: CGFloat
+            let onboardingMinHeight: CGFloat
+
+            static let standard = Window(
+                mainMinWidth: 800,
+                mainMinHeight: 500,
+                onboardingMinWidth: 940,
+                onboardingMinHeight: 700
             )
         }
 
@@ -215,6 +253,7 @@ struct AppTheme {
         let pickerControl: PickerControl
         let cardSurface: CardSurface
         let onboardingSurface: OnboardingSurface
+        let window: Window
         let cardShadow: Shadow
         let elevatedCardShadow: Shadow
     }
@@ -232,6 +271,60 @@ struct AppTheme {
     let typography: Typography
     let metrics: Metrics
     let materials: Materials
+
+    static func adaptive(accent: Color, colorScheme: ColorScheme) -> AppTheme {
+        switch colorScheme {
+        case .light:
+            return .light(accent: accent)
+        case .dark:
+            return .dark(accent: accent)
+        @unknown default:
+            return .dark(accent: accent)
+        }
+    }
+
+    /// Light theme using system colors so macOS accessibility contrast settings stay in control.
+    static func light(accent: Color) -> AppTheme {
+        AppTheme(
+            palette: Palette(
+                windowBackground: Color(nsColor: .windowBackgroundColor),
+                contentBackground: Color(nsColor: .controlBackgroundColor),
+                sidebarBackground: Color(nsColor: .windowBackgroundColor),
+                cardBackground: Color(nsColor: .controlBackgroundColor),
+                elevatedCardBackground: Color(nsColor: .windowBackgroundColor),
+                toolbarBackground: Color(nsColor: .windowBackgroundColor),
+
+                cardBorder: Color.black.opacity(0.12),
+                separator: Color(nsColor: .separatorColor),
+                primaryText: Color(nsColor: .labelColor),
+                secondaryText: Color(nsColor: .secondaryLabelColor),
+                tertiaryText: Color(nsColor: .tertiaryLabelColor),
+                accent: accent,
+                warning: Color(nsColor: .systemOrange),
+                success: accent
+            ),
+            typography: .standard,
+            metrics: Metrics(
+                spacing: .standard,
+                corners: .standard,
+                formRow: .standard,
+                pickerControl: .standard,
+                cardSurface: .defaults,
+                onboardingSurface: .standard,
+                window: .standard,
+                cardShadow: .subtle(color: .black, opacity: 0.18),
+                elevatedCardShadow: .subtle(color: .black, opacity: 0.22)
+            ),
+            materials: Materials(
+                window: .thinMaterial,
+                sidebar: .ultraThinMaterial,
+                card: .thinMaterial,
+                elevatedCard: .regularMaterial,
+                formRow: .ultraThinMaterial,
+                toolbar: .ultraThinMaterial
+            )
+        )
+    }
 
     /// Default dark-forward theme tuned for macOS Sonoma / Sequoia aesthetics.
     static func dark(accent: Color) -> AppTheme {
@@ -261,6 +354,7 @@ struct AppTheme {
                 pickerControl: .standard,
                 cardSurface: .defaults,
                 onboardingSurface: .standard,
+                window: .standard,
                 cardShadow: .subtle(color: .black, opacity: 0.70),
                 elevatedCardShadow: .subtle(color: .black, opacity: 0.80)
             ),
@@ -275,6 +369,7 @@ struct AppTheme {
         )
     }
 
+    static let light = AppTheme.light(accent: .fluidGreen)
     static let dark = AppTheme.dark(accent: .fluidGreen)
 }
 

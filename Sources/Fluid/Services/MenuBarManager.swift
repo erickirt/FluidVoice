@@ -758,11 +758,11 @@ final class MenuBarManager: NSObject, ObservableObject, NSMenuDelegate {
     /// Create and present a fresh main window hosting `ContentView`
     private func createAndShowMainWindow() {
         // Build the SwiftUI root view with required environment
-        let rootView = ContentView()
-            .environmentObject(self)
-            .environmentObject(AppServices.shared)
-            .appTheme(AppTheme.dark(accent: SettingsStore.shared.accentColor))
-            .preferredColorScheme(.dark)
+        let rootView = AdaptiveAppTheme(accent: SettingsStore.shared.accentColor) {
+            ContentView()
+                .environmentObject(self)
+                .environmentObject(AppServices.shared)
+        }
 
         // Host inside an AppKit window
         let hostingController = NSHostingController(rootView: rootView)
@@ -774,7 +774,7 @@ final class MenuBarManager: NSObject, ObservableObject, NSMenuDelegate {
         )
         window.title = "FluidVoice"
         window.animationBehavior = .none
-        window.minSize = NSSize(width: 800, height: 500)
+        window.minSize = self.mainWindowMinimumSize
         window.isReleasedWhenClosed = false
         window.contentViewController = hostingController
         window.setFrame(self.defaultWindowFrame(), display: false)
@@ -790,7 +790,7 @@ final class MenuBarManager: NSObject, ObservableObject, NSMenuDelegate {
 
     private func ensureUsableMainWindow(_ window: NSWindow) {
         // If the window is too small (e.g., height collapsed), reset to the default frame.
-        let minSize = NSSize(width: 800, height: 500)
+        let minSize = self.mainWindowMinimumSize
         window.minSize = minSize
 
         let frame = window.frame
@@ -808,6 +808,11 @@ final class MenuBarManager: NSObject, ObservableObject, NSMenuDelegate {
             y: screenFrame.midY - size.height / 2
         )
         return NSRect(origin: origin, size: size)
+    }
+
+    private var mainWindowMinimumSize: NSSize {
+        let window = AppTheme.dark.metrics.window
+        return NSSize(width: window.mainMinWidth, height: window.mainMinHeight)
     }
 
     private func bringToFront(_ window: NSWindow) {

@@ -621,14 +621,17 @@ struct OnboardingFlowView: View {
     }
 
     private enum Step: Int, CaseIterable {
-        case voiceModel = 0
-        case microphone = 1
-        case accessibility = 2
-        case aiEnhancement = 3
-        case playground = 4
+        case landing = 0
+        case voiceModel = 1
+        case microphone = 2
+        case accessibility = 3
+        case aiEnhancement = 4
+        case playground = 5
 
         var title: String {
             switch self {
+            case .landing:
+                return "Welcome"
             case .voiceModel:
                 return "Download Voice Model"
             case .microphone:
@@ -644,6 +647,8 @@ struct OnboardingFlowView: View {
 
         var subtitle: String {
             switch self {
+            case .landing:
+                return "Talk anywhere. FluidVoice types for you."
             case .voiceModel:
                 return CPUArchitecture.isAppleSilicon
                     ? "Choose the best voice model for how you speak. Download it once to continue."
@@ -665,7 +670,7 @@ struct OnboardingFlowView: View {
     }
 
     private var progressValue: Double {
-        Double(self.step.rawValue + 1) / Double(Step.allCases.count)
+        Double(self.step.rawValue) / Double(Step.allCases.count - 1)
     }
 
     private var recommendedOnboardingModel: SettingsStore.SpeechModel {
@@ -799,6 +804,8 @@ struct OnboardingFlowView: View {
 
     private var canContinue: Bool {
         switch self.step {
+        case .landing:
+            return true
         case .voiceModel:
             return self.isVoiceModelReady
         case .microphone:
@@ -814,6 +821,8 @@ struct OnboardingFlowView: View {
 
     private var primaryButtonTitle: String {
         switch self.step {
+        case .landing:
+            return "Get Started"
         case .playground:
             return "Finish Setup"
         default:
@@ -823,12 +832,17 @@ struct OnboardingFlowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            self.header
-            Divider()
-            self.stepContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            Divider()
-            self.footer
+            if self.step == .landing {
+                self.stepContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            } else {
+                self.header
+                Divider()
+                self.stepContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                Divider()
+                self.footer
+            }
         }
         .background {
             ZStack {
@@ -883,6 +897,8 @@ struct OnboardingFlowView: View {
     @ViewBuilder
     private var stepContent: some View {
         switch self.step {
+        case .landing:
+            self.landingStep
         case .voiceModel:
             self.voiceModelStep
         case .microphone:
@@ -894,6 +910,65 @@ struct OnboardingFlowView: View {
         case .playground:
             self.playgroundStep
         }
+    }
+
+    private var landingStep: some View {
+        ScrollView {
+            let landing = self.theme.metrics.onboardingSurface.landing
+            let tileWidth = (landing.contentWidth - (landing.tileSpacing * 2)) / 3
+            let tileColumns = Array(
+                repeating: GridItem(.fixed(tileWidth), spacing: landing.tileSpacing, alignment: .top),
+                count: 3
+            )
+
+            VStack(alignment: .leading, spacing: self.theme.metrics.onboardingSurface.landing.sectionSpacing) {
+                FluidOnboardingLandingHero(
+                    eyebrow: "FluidVoice",
+                    title: "Say it once. Use it anywhere.",
+                    statement: "FluidVoice turns your speech into clean, ready-to-use text across your Mac, with local dictation first and optional AI polish when you want it.",
+                    systemImage: "waveform.and.mic"
+                ) {
+                    Button("Get Started") {
+                        self.goNext()
+                    }
+                    .fluidOnboardingProminentButton(controlSize: .large)
+                    .keyboardShortcut(.defaultAction)
+                }
+
+                LazyVGrid(
+                    columns: tileColumns,
+                    alignment: .leading,
+                    spacing: self.theme.metrics.onboardingSurface.landing.tileSpacing
+                ) {
+                    FluidOnboardingValueTile(
+                        systemImage: "keyboard",
+                        title: "Types where you work",
+                        description: "Dictate into Notes, browsers, chat, docs, and editors."
+                    )
+                    FluidOnboardingValueTile(
+                        systemImage: "lock",
+                        title: "Local-first setup",
+                        description: "Prepare a voice model once and keep core dictation on your Mac."
+                    )
+                    FluidOnboardingValueTile(
+                        systemImage: "wand.and.stars",
+                        title: "Cleaner drafts",
+                        description: "Turn rough speech into polished text when enhancement is enabled."
+                    )
+                }
+
+                FluidOnboardingChecklistPanel(title: "Setup takes a few minutes") {
+                    FluidOnboardingChecklistRow(systemImage: "cpu", text: "Choose and prepare a voice model")
+                    FluidOnboardingChecklistRow(systemImage: "mic", text: "Allow microphone access")
+                    FluidOnboardingChecklistRow(systemImage: "keyboard.badge.eye", text: "Allow FluidVoice to type into apps")
+                    FluidOnboardingChecklistRow(systemImage: "text.bubble", text: "Run one quick test")
+                }
+            }
+            .frame(width: landing.contentWidth, alignment: .leading)
+            .frame(maxWidth: .infinity)
+            .padding(24)
+        }
+        .defaultScrollAnchor(.center)
     }
 
     private var voiceModelStep: some View {

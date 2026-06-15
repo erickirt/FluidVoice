@@ -18,6 +18,28 @@ extension View {
     }
 }
 
+struct AdaptiveAppTheme<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @ObservedObject private var settings = SettingsStore.shared
+
+    let accent: Color
+    let content: Content
+
+    init(accent: Color, @ViewBuilder content: () -> Content) {
+        self.accent = accent
+        self.content = content()
+    }
+
+    var body: some View {
+        let preferredScheme = self.settings.themePreference.preferredColorScheme
+        let activeScheme = preferredScheme ?? self.colorScheme
+
+        self.content
+            .appTheme(AppTheme.adaptive(accent: self.accent, colorScheme: activeScheme))
+            .preferredColorScheme(preferredScheme)
+    }
+}
+
 // MARK: - Color Hex Initializer
 
 extension Color {

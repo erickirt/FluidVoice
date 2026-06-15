@@ -1498,7 +1498,6 @@ struct SettingsView: View {
             AnalyticsPrivacyView()
                 .frame(minWidth: 520, minHeight: 520)
                 .appTheme(self.theme)
-                .preferredColorScheme(.dark)
         }
         .sheet(isPresented: self.analyticsConfirmationBinding) {
             AnalyticsConfirmationView(

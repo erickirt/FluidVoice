@@ -545,10 +545,10 @@ struct CommandModeView: View {
                         Image(systemName: "arrow.up")
                             .font(.system(size: 18, weight: .semibold))
                             .frame(width: 34, height: 34)
-                            .foregroundStyle(self.canSubmitCommand ? Color.black : .secondary)
+                            .foregroundStyle(self.canSubmitCommand ? Color.white : .secondary)
                             .background(
                                 Circle()
-                                    .fill(self.canSubmitCommand ? Color.white.opacity(0.86) : self.theme.palette.cardBackground)
+                                    .fill(self.canSubmitCommand ? self.theme.palette.accent : self.theme.palette.cardBackground)
                             )
                     }
                     .buttonStyle(.plain)

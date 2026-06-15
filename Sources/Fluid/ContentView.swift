@@ -239,8 +239,9 @@ struct ContentView: View {
         let nav = env.onChange(of: self.menuBarManager.requestedNavigationDestination) { _, destination in
             self.handleMenuBarNavigation(destination)
         }
+        let sized = nav.fluidWindowSizing(self.windowSizing)
 
-        return nav.onAppear {
+        return sized.onAppear {
             self.appear = true
             self.accessibilityEnabled = self.checkAccessibilityPermissions()
 
@@ -627,7 +628,9 @@ struct ContentView: View {
         }
         .toolbar {
             if !self.settings.shouldShowOnboarding {
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    self.themePreferenceButton
+
                     Button(action: self.openIssueReportingPage) {
                         Image(systemName: "ladybug.fill")
                     }
@@ -975,6 +978,24 @@ struct ContentView: View {
         }
     }
 
+    private var themePreferenceButton: some View {
+        Button {
+            self.settings.themePreference = self.nextThemePreference(after: self.settings.themePreference)
+        } label: {
+            Image(systemName: self.settings.themePreference.systemImageName)
+        }
+        .help("Theme: \(self.settings.themePreference.displayName)")
+        .accessibilityLabel("Theme")
+    }
+
+    private func nextThemePreference(after preference: SettingsStore.ThemePreference) -> SettingsStore.ThemePreference {
+        switch preference {
+        case .system: return .light
+        case .light: return .dark
+        case .dark: return .system
+        }
+    }
+
     private var detailView: some View {
         ZStack {
             Color(nsColor: .windowBackgroundColor)
@@ -1093,6 +1114,14 @@ struct ContentView: View {
                 self.microphoneInstructionsView
             }
         }
+    }
+
+    private var windowSizing: FluidWindowSizing {
+        let window = self.theme.metrics.window
+        if self.settings.shouldShowOnboarding {
+            return .minimum(width: window.onboardingMinWidth, height: window.onboardingMinHeight)
+        }
+        return .minimum(width: window.mainMinWidth, height: window.mainMinHeight)
     }
 
     private var microphoneActionButton: some View {
@@ -2120,7 +2149,7 @@ struct ContentView: View {
     }
 
     private func currentDictationOutputRouteForHotkeyStop() -> DictationOutputRoute {
-        let onboardingPlaygroundStep = 4
+        let onboardingPlaygroundStep = 5
         let isOnboardingPlayground = !self.settings.onboardingCompleted &&
             self.settings.onboardingCurrentStep == onboardingPlaygroundStep
         let isDictationMode = self.activeRecordingMode == .dictate || self.activeRecordingMode == .promptMode

@@ -1631,6 +1631,40 @@ final class SettingsStore: ObservableObject {
         }
     }
 
+    enum ThemePreference: String, CaseIterable, Identifiable, Codable {
+        case system
+        case light
+        case dark
+
+        var id: String {
+            self.rawValue
+        }
+
+        var displayName: String {
+            switch self {
+            case .system: return "System"
+            case .light: return "Light"
+            case .dark: return "Dark"
+            }
+        }
+
+        var systemImageName: String {
+            switch self {
+            case .system: return "circle.lefthalf.filled"
+            case .light: return "sun.max"
+            case .dark: return "moon"
+            }
+        }
+
+        var preferredColorScheme: ColorScheme? {
+            switch self {
+            case .system: return nil
+            case .light: return .light
+            case .dark: return .dark
+            }
+        }
+    }
+
     enum TranscriptionStartSound: String, CaseIterable, Identifiable, Codable {
         case none
         case fluidSfx0 = "fluid_sfx_0"
@@ -1694,6 +1728,21 @@ final class SettingsStore: ObservableObject {
 
     var accentColor: Color {
         Color(hex: self.accentColorOption.hex) ?? Color(red: 0.227, green: 0.784, blue: 0.776)
+    }
+
+    var themePreference: ThemePreference {
+        get {
+            guard let raw = self.defaults.string(forKey: Keys.themePreference),
+                  let preference = ThemePreference(rawValue: raw)
+            else {
+                return .system
+            }
+            return preference
+        }
+        set {
+            objectWillChange.send()
+            self.defaults.set(newValue.rawValue, forKey: Keys.themePreference)
+        }
     }
 
     var enableTranscriptionSounds: Bool {
@@ -1904,11 +1953,11 @@ final class SettingsStore: ObservableObject {
     var onboardingCurrentStep: Int {
         get {
             let raw = self.defaults.integer(forKey: Keys.onboardingCurrentStep)
-            return max(0, min(4, raw))
+            return max(0, min(5, raw))
         }
         set {
             objectWillChange.send()
-            let clamped = max(0, min(4, newValue))
+            let clamped = max(0, min(5, newValue))
             self.defaults.set(clamped, forKey: Keys.onboardingCurrentStep)
         }
     }
@@ -3857,6 +3906,7 @@ private extension SettingsStore {
         static let launchAtStartup = "LaunchAtStartup"
         static let showInDock = "ShowInDock"
         static let accentColorOption = "AccentColorOption"
+        static let themePreference = "ThemePreference"
         static let enableTranscriptionSounds = "EnableTranscriptionSounds"
         static let transcriptionStartSound = "TranscriptionStartSound"
         static let transcriptionSoundVolume = "TranscriptionSoundVolume"

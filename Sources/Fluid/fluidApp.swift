@@ -23,11 +23,11 @@ struct FluidApp: App {
 
     var body: some Scene {
         WindowGroup(id: "main") {
-            ContentView()
-                .environmentObject(self.menuBarManager)
-                .environmentObject(self.appServices)
-                .appTheme(AppTheme.dark(accent: self.settings.accentColor))
-                .preferredColorScheme(.dark)
+            AdaptiveAppTheme(accent: self.settings.accentColor) {
+                ContentView()
+                    .environmentObject(self.menuBarManager)
+                    .environmentObject(self.appServices)
+            }
         }
         .defaultSize(width: 1000, height: 700)
         .commands {

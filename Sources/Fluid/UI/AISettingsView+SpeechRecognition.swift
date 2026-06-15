@@ -758,7 +758,7 @@ extension VoiceEngineSettingsView {
             } else {
                 Text(String(model.brandName.prefix(2)).uppercased())
                     .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(self.theme.palette.primaryText)
             }
         }
         .frame(width: 28, height: 28)
