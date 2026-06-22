@@ -33,6 +33,7 @@ struct TranscriptionHistoryEntry: Codable, Identifiable, Equatable {
         processedText: String,
         appName: String,
         windowTitle: String,
+        wasAIProcessed: Bool,
         processingModel: String? = nil,
         aiProcessingError: String? = nil,
         audio: DictationAudioMetadata? = nil
@@ -44,7 +45,7 @@ struct TranscriptionHistoryEntry: Codable, Identifiable, Equatable {
         self.appName = appName
         self.windowTitle = windowTitle
         self.characterCount = processedText.count
-        self.wasAIProcessed = rawText != processedText
+        self.wasAIProcessed = wasAIProcessed
         self.processingModel = processingModel
         self.aiProcessingError = aiProcessingError
         self.audio = audio
@@ -176,6 +177,7 @@ final class TranscriptionHistoryStore: ObservableObject {
         processedText: String,
         appName: String,
         windowTitle: String,
+        wasAIProcessed: Bool? = nil,
         processingModel: String? = nil,
         aiProcessingError: String? = nil,
         audio: DictationAudioMetadata? = nil
@@ -190,6 +192,7 @@ final class TranscriptionHistoryStore: ObservableObject {
             processedText: processedText,
             appName: appName,
             windowTitle: windowTitle,
+            wasAIProcessed: wasAIProcessed ?? (processingModel != nil && aiProcessingError == nil),
             processingModel: processingModel,
             aiProcessingError: aiProcessingError,
             audio: audio

@@ -2135,6 +2135,7 @@ struct ContentView: View {
                 processedText: finalText,
                 appName: appInfo.name,
                 windowTitle: appInfo.windowTitle,
+                wasAIProcessed: postProcessingModel != nil && aiFallbackReason == nil,
                 processingModel: postProcessingModel,
                 aiProcessingError: aiFallbackReason
             )
@@ -2388,7 +2389,8 @@ struct ContentView: View {
                 rawText: text,
                 processedText: finalText,
                 appName: appInfo.name,
-                windowTitle: appInfo.windowTitle
+                windowTitle: appInfo.windowTitle,
+                wasAIProcessed: false
             )
         }
 
@@ -2470,6 +2472,7 @@ struct ContentView: View {
                 processedText: finalText,
                 appName: appInfo.name,
                 windowTitle: appInfo.windowTitle,
+                wasAIProcessed: postProcessingModel != nil && aiFallbackReason == nil,
                 processingModel: postProcessingModel,
                 aiProcessingError: aiFallbackReason
             )
