@@ -722,6 +722,12 @@ struct ContentView: View {
         let newShortcut = HotkeyShortcut(mouseButton: event.buttonNumber, modifierFlags: self.pendingModifierFlags.union(eventModifiers))
         DebugLogger.shared.debug("NSEvent monitor: Recording new mouse shortcut: \(newShortcut.displayString)", source: "ContentView")
 
+        if newShortcut.isUnmodifiedLeftOrRightClick, let mouseButton = newShortcut.mouseButton {
+            self.shortcutRecordingMessage = "\(HotkeyShortcut.mouseButtonToString(mouseButton)) needs a modifier key"
+            self.resetPendingShortcutState()
+            return event
+        }
+
         if let recordingTarget,
            let conflictMessage = self.shortcutConflictMessage(for: newShortcut, target: recordingTarget)
         {

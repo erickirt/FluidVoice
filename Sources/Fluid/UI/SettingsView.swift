@@ -2061,6 +2061,7 @@ struct SettingsView: View {
                         .toggleStyle(.switch)
                         .tint(self.theme.palette.accent)
                         .labelsHidden()
+                        .disabled(isAnyRecordingActive)
                 }
             }
 
@@ -2093,12 +2094,17 @@ struct SettingsView: View {
                         )
                 }
 
-                Button("Change") {
-                    onChangePressed()
+                Button(isRecording ? "Cancel" : "Change") {
+                    if isRecording {
+                        self.shortcutRecordingMessage = nil
+                        self.activeShortcutRecordingTarget = nil
+                    } else {
+                        onChangePressed()
+                    }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(isAnyRecordingActive || !enabledValue)
+                .disabled(!isRecording && (isAnyRecordingActive || !enabledValue))
 
                 if isRecording, let recordingMessage, !recordingMessage.isEmpty {
                     Text(recordingMessage)
