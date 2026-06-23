@@ -104,13 +104,13 @@ final class HuggingFaceModelDownloader {
                 let files = try await listFilesRecursively(relativePath: item.path)
                 for rel in files {
                     let dest = targetRoot.appendingPathComponent(rel)
-                    if FileManager.default.fileExists(atPath: dest.path) == false {
+                    if self.needsDownload(relativePath: rel, at: dest) {
                         pendingFiles.append(rel)
                     }
                 }
             } else {
                 let dest = targetRoot.appendingPathComponent(item.path)
-                if FileManager.default.fileExists(atPath: dest.path) == false {
+                if self.needsDownload(relativePath: item.path, at: dest) {
                     pendingFiles.append(item.path)
                 }
             }
@@ -168,6 +168,36 @@ final class HuggingFaceModelDownloader {
 
     private func requiredItems() -> [ModelItem] {
         self.requiredItemsList
+    }
+
+    /// Decides whether `relativePath` needs to be (re)downloaded into `destination`.
+    ///
+    /// A file is pending when it is missing, OR when it is present but its cached content
+    /// looks like an HTML/markup payload — a corrupt artifact cached before download-time
+    /// content validation existed (see #353). `fileExists` alone would leave such a payload
+    /// stuck forever, because `downloadFile` (and its validator) only runs for pending files.
+    /// A present markup file is deleted here so a clean copy is fetched; on a read error the
+    /// file is left in place and treated as valid, so we never delete on uncertainty.
+    private func needsDownload(relativePath: String, at destination: URL) -> Bool {
+        guard FileManager.default.fileExists(atPath: destination.path) else {
+            return true
+        }
+        guard Self.cachedFileIsMarkup(at: destination) else {
+            return false
+        }
+        DebugLogger.shared.warning(
+            "[ModelDL] Cached file is an HTML/markup page, not model data; deleting to re-download: \(relativePath)",
+            source: "ModelDownloader"
+        )
+        do {
+            try FileManager.default.removeItem(at: destination)
+        } catch {
+            DebugLogger.shared.error(
+                "[ModelDL] Failed to delete corrupt cached file \(relativePath): \(error.localizedDescription)",
+                source: "ModelDownloader"
+            )
+        }
+        return true
     }
 
     private func downloadDirectory(relativePath: String, to destination: URL) async throws {
@@ -251,6 +281,23 @@ final class HuggingFaceModelDownloader {
                 detail: "the downloaded file is an HTML/markup document, not the expected model data"
             )
         }
+    }
+
+    /// Returns `true` if a file already on disk is an HTML/markup payload rather than real
+    /// model data — a corrupt artifact cached before download-time validation existed (#353).
+    ///
+    /// This is the cached-file analog of `validateDownloadedFile`'s byte-sniff: it reuses the
+    /// same `looksLikeHTML` check on a small leading prefix (model files can be gigabytes, so
+    /// only 512 bytes are read). There is no `URLResponse` for a cached file, so only the
+    /// content is inspected, not a `Content-Type`. Returns `false` (treat as valid) on any
+    /// read error, so an unreadable file is never deleted on uncertainty.
+    static func cachedFileIsMarkup(at fileURL: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: fileURL) else {
+            return false
+        }
+        defer { try? handle.close() }
+        let prefix = (try? handle.read(upToCount: 512)) ?? Data()
+        return Self.looksLikeHTML(prefix)
     }
 
     /// Returns `true` if `data` begins with an HTML / XML markup marker, ignoring a leading

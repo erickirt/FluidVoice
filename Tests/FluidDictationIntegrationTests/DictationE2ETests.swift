@@ -609,6 +609,31 @@ final class DictationE2ETests: XCTestCase {
         )
     }
 
+    func testCachedFileIsMarkup_detectsCachedCorruptHTMLAndAcceptsModelData() throws {
+        // Guards the #353 cached-file path: a corrupt HTML payload already on disk (cached
+        // before download-time validation existed) must be detected so it is re-downloaded,
+        // while a real model artifact must not be flagged, and an unreadable path must be
+        // treated as valid (never deleted on uncertainty).
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FluidVoice-CachedMarkupTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // A cached HTML/proxy page persisted as a model file must be detected as markup.
+        let htmlURL = dir.appendingPathComponent("coremldata.bin")
+        try Data("<!DOCTYPE html><html><body>Blocked by proxy</body></html>".utf8).write(to: htmlURL)
+        XCTAssertTrue(HuggingFaceModelDownloader.cachedFileIsMarkup(at: htmlURL))
+
+        // A real JSON vocab payload must not be flagged.
+        let jsonURL = dir.appendingPathComponent("parakeet_v3_vocab.json")
+        try Data("{\"0\": \"<pad>\", \"1\": \"the\"}".utf8).write(to: jsonURL)
+        XCTAssertFalse(HuggingFaceModelDownloader.cachedFileIsMarkup(at: jsonURL))
+
+        // An unreadable / missing path must be treated as valid (conservative on read error).
+        let missingURL = dir.appendingPathComponent("does-not-exist.bin")
+        XCTAssertFalse(HuggingFaceModelDownloader.cachedFileIsMarkup(at: missingURL))
+    }
+
     private static func modelDirectoryForRun() -> URL {
         // Use a stable path on CI so GitHub Actions cache can speed up runs.
         if ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true" ||
