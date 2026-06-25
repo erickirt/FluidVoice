@@ -24,6 +24,7 @@ struct SettingsView: View {
         self.appServices.asr
     }
 
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.theme) private var theme
     @ObservedObject private var settings = SettingsStore.shared
     @Binding var appear: Bool
@@ -73,6 +74,18 @@ struct SettingsView: View {
 
     private var isRecordingAnyShortcut: Bool {
         self.activeShortcutRecordingTarget != nil
+    }
+
+    private var settingsTitleText: Color {
+        Color(nsColor: .labelColor)
+    }
+
+    private var settingsSecondaryText: Color {
+        self.colorScheme == .light ? Color(nsColor: .labelColor).opacity(0.90) : self.theme.palette.primaryText.opacity(0.82)
+    }
+
+    private var settingsTertiaryText: Color {
+        self.colorScheme == .light ? Color(nsColor: .labelColor).opacity(0.85) : self.theme.palette.secondaryText
     }
 
     private func isRecording(_ target: ShortcutRecordingTarget) -> Bool {
@@ -171,8 +184,8 @@ struct SettingsView: View {
         let privateAILocked = PrivateAIProviderPromptFormat.isAvailable(settings: self.settings)
         HStack {
             Text("AI Prompt")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .font(self.theme.typography.bodySmall)
+                .foregroundStyle(self.settingsSecondaryText)
                 .padding(.leading, 30)
             Spacer()
             Picker("", selection: self.dictationPromptSelectionBinding(for: slot)) {
@@ -195,7 +208,7 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        SettingsPersistentScrollView {
             VStack(spacing: 16) {
                 // App Settings Card
                 ThemedCard(style: .standard) {
@@ -244,10 +257,11 @@ struct SettingsView: View {
                                 HStack(alignment: .center) {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Accent Color")
-                                            .font(.body)
+                                            .font(self.theme.typography.bodyStrong)
+                                            .foregroundStyle(self.settingsTitleText)
                                         Text("Pick a preset accent color for the app.")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                                            .font(self.theme.typography.bodySmall)
+                                            .foregroundStyle(self.settingsSecondaryText)
                                     }
 
                                     Spacer()
@@ -292,10 +306,11 @@ struct SettingsView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Transcription Sounds")
-                                        .font(.body)
+                                        .font(self.theme.typography.bodyStrong)
+                                        .foregroundStyle(self.settingsTitleText)
                                     Text("Choose the sound cue for recording. Some cues include an end sound.")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                        .font(self.theme.typography.bodySmall)
+                                        .foregroundStyle(self.settingsSecondaryText)
                                 }
 
                                 Spacer()
@@ -319,10 +334,11 @@ struct SettingsView: View {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Volume")
-                                            .font(.body)
+                                            .font(self.theme.typography.bodyStrong)
+                                            .foregroundStyle(self.settingsTitleText)
                                         Text("Adjust the recording sound cue volume.")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                                            .font(self.theme.typography.bodySmall)
+                                            .foregroundStyle(self.settingsSecondaryText)
                                     }
 
                                     Spacer()
@@ -362,10 +378,11 @@ struct SettingsView: View {
                                 HStack(alignment: .center) {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Automatic Updates")
-                                            .font(.body)
+                                            .font(self.theme.typography.bodyStrong)
+                                            .foregroundStyle(self.settingsTitleText)
                                         Text("Check for updates automatically once per hour")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                                            .font(self.theme.typography.bodySmall)
+                                            .foregroundStyle(self.settingsSecondaryText)
                                     }
 
                                     Spacer()
@@ -382,10 +399,11 @@ struct SettingsView: View {
                                 HStack(alignment: .center) {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Beta Releases")
-                                            .font(.body)
+                                            .font(self.theme.typography.bodyStrong)
+                                            .foregroundStyle(self.settingsTitleText)
                                         Text("Opt in to preview builds that may be unstable")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                                            .font(self.theme.typography.bodySmall)
+                                            .foregroundStyle(self.settingsSecondaryText)
                                     }
 
                                     Spacer()
@@ -407,13 +425,13 @@ struct SettingsView: View {
 
                                 if let lastCheck = SettingsStore.shared.lastUpdateCheckDate {
                                     Text("Last checked: \(lastCheck.formatted(date: .abbreviated, time: .shortened))")
-                                        .font(.caption)
-                                        .foregroundStyle(.tertiary)
+                                        .font(self.theme.typography.bodySmall)
+                                        .foregroundStyle(self.settingsSecondaryText)
                                 }
 
                                 Text("Current version: \(self.currentAppVersion)")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
+                                    .font(self.theme.typography.bodySmall)
+                                    .foregroundStyle(self.settingsSecondaryText)
                             }
 
                             // Update Buttons
@@ -526,12 +544,12 @@ struct SettingsView: View {
 
                             if self.rollbackVersion.isEmpty {
                                 Text("No rollback backup found.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .font(self.theme.typography.bodySmall)
+                                    .foregroundStyle(self.settingsSecondaryText)
                             } else {
                                 Text("Rollback target: \(self.rollbackVersion)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .font(self.theme.typography.bodySmall)
+                                    .foregroundStyle(self.settingsSecondaryText)
                             }
                         }
                     }
@@ -557,13 +575,13 @@ struct SettingsView: View {
                                             self.asr.micStatus == .denied ? "Microphone access denied" :
                                             "Microphone access not determined"
                                     )
-                                    .font(.body)
+                                    .font(self.theme.typography.bodyStrong)
                                     .foregroundStyle(self.asr.micStatus == .authorized ? .primary : self.theme.palette.warning)
 
                                     if self.asr.micStatus != .authorized {
                                         Text("Microphone access is required for voice recording")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                                            .font(self.theme.typography.bodySmall)
+                                            .foregroundStyle(self.settingsSecondaryText)
                                     }
                                 }
                                 Spacer()
@@ -627,12 +645,12 @@ struct SettingsView: View {
                                             .font(.caption)
                                         Text("Active")
                                             .font(.caption.weight(.semibold))
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(self.settingsSecondaryText)
                                     }
                                 } else {
                                     Text("Initializing…")
                                         .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(self.settingsSecondaryText)
                                 }
                             }
                         }
@@ -654,7 +672,7 @@ struct SettingsView: View {
                                             .fixedSize()
                                         Text("Hotkey initializing…")
                                             .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(self.settingsSecondaryText)
                                     }
                                 }
 
@@ -662,12 +680,12 @@ struct SettingsView: View {
 
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Shortcuts")
-                                        .font(.subheadline.weight(.medium))
-                                        .foregroundStyle(.secondary)
+                                        .font(self.theme.typography.bodySmallStrong)
+                                        .foregroundStyle(self.settingsTitleText)
 
                                     Text("Primary dictation can use a keyboard shortcut or allowed mouse button. Changes usually apply immediately.")
                                         .font(.caption)
-                                        .foregroundStyle(.tertiary)
+                                        .foregroundStyle(self.settingsTertiaryText)
 
                                     self.primaryDictationShortcutsList()
                                     self.dictationPromptPicker(for: .primary)
@@ -747,10 +765,11 @@ struct SettingsView: View {
                                     HStack(alignment: .center) {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text("Activation Mode")
-                                                .font(.body)
+                                                .font(self.theme.typography.bodyStrong)
+                                                .foregroundStyle(self.settingsTitleText)
                                             Text(self.hotkeyMode.description)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
+                                                .font(self.theme.typography.bodySmall)
+                                                .foregroundStyle(self.settingsSecondaryText)
                                         }
 
                                         Spacer()
@@ -782,10 +801,11 @@ struct SettingsView: View {
                                     HStack(alignment: .center) {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text("Text Insertion Mode")
-                                                .font(.body)
+                                                .font(self.theme.typography.bodyStrong)
+                                                .foregroundStyle(self.settingsTitleText)
                                             Text(SettingsStore.shared.textInsertionMode.description)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
+                                                .font(self.theme.typography.bodySmall)
+                                                .foregroundStyle(self.settingsSecondaryText)
                                         }
 
                                         Spacer()
@@ -940,12 +960,12 @@ struct SettingsView: View {
                                             Image(systemName: "exclamationmark.triangle.fill")
                                                 .foregroundStyle(self.theme.palette.warning)
                                             Text("Accessibility permissions required")
-                                                .font(.body)
+                                                .font(self.theme.typography.bodyStrong)
                                                 .foregroundStyle(self.theme.palette.warning)
                                         }
                                         Text("Required for global hotkey functionality")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                                            .font(self.theme.typography.bodySmall)
+                                            .foregroundStyle(self.settingsSecondaryText)
                                     }
                                     Spacer()
 
@@ -1012,11 +1032,11 @@ struct SettingsView: View {
                         // Info note about device syncing
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "info.circle")
-                                .foregroundStyle(.secondary)
-                                .font(.body)
+                                .foregroundStyle(self.settingsSecondaryText)
+                                .font(self.theme.typography.bodyStrong)
                             Text("Audio devices are synced with macOS System Settings.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(self.theme.typography.bodySmall)
+                                .foregroundStyle(self.settingsSecondaryText)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.vertical, 4)
@@ -1024,7 +1044,8 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Text("Input Device")
-                                    .font(.body)
+                                    .font(self.theme.typography.bodyStrong)
+                                    .foregroundStyle(self.settingsTitleText)
                                 Spacer()
                                 Picker("", selection: self.$selectedInputUID) {
                                     // Handle empty state gracefully
@@ -1081,7 +1102,8 @@ struct SettingsView: View {
 
                             HStack {
                                 Text("Output Device")
-                                    .font(.body)
+                                    .font(self.theme.typography.bodyStrong)
+                                    .foregroundStyle(self.settingsTitleText)
                                 Spacer()
                                 Picker("", selection: self.$selectedOutputUID) {
                                     // Handle empty state gracefully
@@ -1146,7 +1168,7 @@ struct SettingsView: View {
                                     Spacer()
                                     Text("Default: \(self.cachedDefaultInputName) / \(self.cachedDefaultOutputName)")
                                         .font(.caption)
-                                        .foregroundStyle(.tertiary)
+                                        .foregroundStyle(self.settingsTertiaryText)
                                         .lineLimit(1)
                                 }
                             }
@@ -1171,10 +1193,11 @@ struct SettingsView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Sensitivity")
-                                        .font(.body)
+                                        .font(self.theme.typography.bodyStrong)
+                                        .foregroundStyle(self.settingsTitleText)
                                     Text("Control how sensitive the audio visualizer is to sound input")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                        .font(self.theme.typography.bodySmall)
+                                        .foregroundStyle(self.settingsSecondaryText)
                                 }
 
                                 Spacer()
@@ -1190,7 +1213,7 @@ struct SettingsView: View {
                             HStack(spacing: 10) {
                                 Text("More")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(self.settingsSecondaryText)
                                     .frame(width: 36, alignment: .trailing)
 
                                 Slider(value: self.$visualizerNoiseThreshold, in: 0.01...0.8, step: 0.01)
@@ -1198,12 +1221,12 @@ struct SettingsView: View {
 
                                 Text("Less")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(self.settingsSecondaryText)
                                     .frame(width: 36, alignment: .leading)
 
                                 Text(String(format: "%.2f", self.visualizerNoiseThreshold))
                                     .font(.caption.monospaced())
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(self.settingsTertiaryText)
                                     .frame(width: 36)
                             }
 
@@ -1213,10 +1236,11 @@ struct SettingsView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Overlay Position")
-                                        .font(.body)
+                                        .font(self.theme.typography.bodyStrong)
+                                        .foregroundStyle(self.settingsTitleText)
                                     Text("Where the recording indicator appears on screen")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                        .font(self.theme.typography.bodySmall)
+                                        .foregroundStyle(self.settingsSecondaryText)
                                 }
 
                                 Spacer()
@@ -1236,23 +1260,24 @@ struct SettingsView: View {
                                 HStack(alignment: .top) {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Transcription Preview Length")
-                                            .font(.body)
+                                            .font(self.theme.typography.bodyStrong)
+                                            .foregroundStyle(self.settingsTitleText)
                                         Text("How many recent characters appear in the notch/pill preview")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                                            .font(self.theme.typography.bodySmall)
+                                            .foregroundStyle(self.settingsSecondaryText)
                                     }
 
                                     Spacer()
 
                                     Text("\(self.settings.transcriptionPreviewCharLimit) chars")
                                         .font(.caption.monospaced())
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(self.settingsSecondaryText)
                                 }
 
                                 HStack(spacing: 10) {
                                     Text("Less")
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(self.settingsSecondaryText)
                                         .frame(width: 36, alignment: .trailing)
 
                                     Slider(
@@ -1267,7 +1292,7 @@ struct SettingsView: View {
 
                                     Text("More")
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(self.settingsSecondaryText)
                                         .frame(width: 36, alignment: .leading)
                                 }
                             }
@@ -1277,14 +1302,15 @@ struct SettingsView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(self.settings.overlayPosition == .bottom ? "Overlay Size" : "Notch Style")
-                                        .font(.body)
+                                        .font(self.theme.typography.bodyStrong)
+                                        .foregroundStyle(self.settingsTitleText)
                                     Text(
                                         self.settings.overlayPosition == .bottom
                                             ? "How large the recording indicator appears"
                                             : "Choose the regular notch or the compact layout"
                                     )
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                    .font(self.theme.typography.bodySmall)
+                                    .foregroundStyle(self.settingsSecondaryText)
                                 }
 
                                 Spacer()
@@ -1311,10 +1337,11 @@ struct SettingsView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Live Preview")
-                                        .font(.body)
+                                        .font(self.theme.typography.bodyStrong)
+                                        .foregroundStyle(self.settingsTitleText)
                                     Text("Show transcription text in the overlay while you speak")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                        .font(self.theme.typography.bodySmall)
+                                        .foregroundStyle(self.settingsSecondaryText)
                                 }
 
                                 Spacer()
@@ -1334,10 +1361,11 @@ struct SettingsView: View {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Bottom Offset")
-                                            .font(.body)
+                                            .font(self.theme.typography.bodyStrong)
+                                            .foregroundStyle(self.settingsTitleText)
                                         Text("Distance from bottom of screen")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                                            .font(self.theme.typography.bodySmall)
+                                            .foregroundStyle(self.settingsSecondaryText)
                                     }
 
                                     Spacer()
@@ -1349,7 +1377,7 @@ struct SettingsView: View {
 
                                         Text("\(Int(self.settings.overlayBottomOffset)) px")
                                             .font(.caption.monospaced())
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(self.settingsSecondaryText)
                                             .frame(width: 54, alignment: .trailing)
                                     }
                                     .frame(width: 170, alignment: .trailing)
@@ -1359,7 +1387,7 @@ struct SettingsView: View {
                             if self.asr.isRunning {
                                 Text("Settings are disabled during active recording")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(self.settingsSecondaryText)
                                     .italic()
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.top, 4)
@@ -1408,11 +1436,11 @@ struct SettingsView: View {
                             .controlSize(.regular)
 
                             Text("The debug log contains detailed information about app operations and can help with troubleshooting.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(self.theme.typography.bodySmall)
+                                .foregroundStyle(self.settingsSecondaryText)
                             Text("Crash diagnostics are written to Library/Logs/Fluid/Fluid.log by default.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(self.theme.typography.bodySmall)
+                                .foregroundStyle(self.settingsSecondaryText)
 
                             #if DEBUG
                             Divider().padding(.vertical, 8)
@@ -1428,7 +1456,7 @@ struct SettingsView: View {
 
                             Text("Developer-only action. Immediately re-enters first-run onboarding flow.")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(self.settingsSecondaryText)
                             #endif
                         }
                     }
@@ -1446,7 +1474,8 @@ struct SettingsView: View {
                             HStack(alignment: .center) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Dictation Processing Speed")
-                                        .font(.body)
+                                        .font(self.theme.typography.bodyStrong)
+                                        .foregroundStyle(self.settingsTitleText)
                                 }
 
                                 Spacer()
@@ -1473,13 +1502,13 @@ struct SettingsView: View {
                             }
 
                             Text(self.settings.selectedSpeechModel.supportsFastDictationProcessing ? "Standard: most reliable. Fast: faster, but maybe inaccurate." : "Fast processing is available for Parakeet TDT v2 and v3.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(self.theme.typography.bodySmall)
+                                .foregroundStyle(self.settingsSecondaryText)
 
                             if self.asr.isRunning {
                                 Text("Settings are disabled during active recording")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(self.settingsSecondaryText)
                                     .italic()
                             }
                         }
@@ -1817,10 +1846,11 @@ struct SettingsView: View {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.body)
+                        .font(self.theme.typography.bodyStrong)
+                        .foregroundStyle(self.settingsTitleText)
                     Text(description)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(self.theme.typography.bodySmall)
+                        .foregroundStyle(self.settingsSecondaryText)
                 }
 
                 Spacer()
@@ -1833,8 +1863,8 @@ struct SettingsView: View {
 
             if let footnote = footnote {
                 Text(footnote)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(self.theme.typography.bodySmall)
+                    .foregroundStyle(self.settingsSecondaryText)
             }
 
             if let errorMessage = errorMessage {
@@ -1854,10 +1884,11 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Backup & Restore")
-                    .font(.body)
+                    .font(self.theme.typography.bodyStrong)
+                    .foregroundStyle(self.settingsTitleText)
                 Text("Export or import settings, prompt profiles, history, and stats. API keys excluded.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(self.theme.typography.bodySmall)
+                    .foregroundStyle(self.settingsSecondaryText)
             }
 
             Spacer(minLength: 16)
@@ -1884,10 +1915,11 @@ struct SettingsView: View {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Audio Storage")
-                        .font(.body)
+                        .font(self.theme.typography.bodyStrong)
+                        .foregroundStyle(self.settingsTitleText)
                     Text("Audio history: \(DictationAudioHistoryStore.formattedGigabytes(self.audioHistoryUsageBytes)) / \(Self.audioBudgetText(for: SettingsStore.shared.audioHistoryBudgetGB)) GB Budget")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(self.theme.typography.bodySmall)
+                        .foregroundStyle(self.settingsSecondaryText)
 
                     ProgressView(value: self.audioHistoryUsageFraction())
                         .progressViewStyle(.linear)
@@ -1899,7 +1931,7 @@ struct SettingsView: View {
                 HStack(spacing: 8) {
                     Text("Budget")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(self.settingsSecondaryText)
 
                     TextField("4", text: self.$audioHistoryBudgetText)
                         .textFieldStyle(.roundedBorder)
@@ -1907,7 +1939,7 @@ struct SettingsView: View {
 
                     Text("GB")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(self.settingsSecondaryText)
 
                     Button("Apply") {
                         self.applyAudioHistoryBudget()
@@ -1921,10 +1953,11 @@ struct SettingsView: View {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Export Audio")
-                        .font(.body)
+                        .font(self.theme.typography.bodyStrong)
+                        .foregroundStyle(self.settingsTitleText)
                     Text("ZIP with manifest.jsonl and WAV audio.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(self.theme.typography.bodySmall)
+                        .foregroundStyle(self.settingsSecondaryText)
                 }
 
                 Spacer(minLength: 16)
@@ -1967,10 +2000,11 @@ struct SettingsView: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.body)
+                    .font(self.theme.typography.bodyStrong)
+                    .foregroundStyle(self.settingsTitleText)
                 Text(description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(self.theme.typography.bodySmall)
+                    .foregroundStyle(self.settingsSecondaryText)
             }
 
             Spacer()
@@ -1993,8 +2027,8 @@ struct SettingsView: View {
                     .foregroundStyle(warningStyle ? self.theme.palette.warning : self.theme.palette.accent)
                     .font(.caption)
                 Text(title)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .font(self.theme.typography.bodySmallStrong)
+                    .foregroundStyle(self.settingsTitleText)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -2027,15 +2061,16 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 Image(systemName: "mic.fill")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(self.settingsSecondaryText)
                     .frame(width: 20)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Primary Dictation Shortcuts")
-                        .font(.body)
+                        .font(self.theme.typography.bodyStrong)
+                        .foregroundStyle(self.settingsTitleText)
                     Text("Use any keyboard shortcut, auxiliary mouse button, or modified click.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(self.theme.typography.bodySmall)
+                        .foregroundStyle(self.settingsSecondaryText)
                         .lineLimit(1)
                 }
 
@@ -2183,10 +2218,11 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(content.title)
-                        .font(.body)
+                        .font(self.theme.typography.bodyStrong)
+                        .foregroundStyle(self.settingsTitleText)
                     Text(content.description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(self.theme.typography.bodySmall)
+                        .foregroundStyle(self.settingsSecondaryText)
                         .lineLimit(1)
                 }
 
@@ -2234,6 +2270,62 @@ struct SettingsView: View {
     }
 }
 
+private final class SettingsPersistentScroller: NSScroller {
+    override static var isCompatibleWithOverlayScrollers: Bool {
+        false
+    }
+}
+
+private struct SettingsPersistentScrollView<Content: View>: NSViewRepresentable {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    func makeNSView(context _: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = false
+        scrollView.scrollerStyle = .legacy
+        scrollView.verticalScroller = SettingsPersistentScroller()
+        scrollView.verticalScroller?.isHidden = false
+        scrollView.verticalScroller?.alphaValue = 1
+        scrollView.verticalScrollElasticity = .allowed
+        scrollView.horizontalScrollElasticity = .none
+
+        let hostingView = NSHostingView(rootView: AnyView(self.content))
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        hostingView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        hostingView.setContentHuggingPriority(.required, for: .vertical)
+
+        scrollView.documentView = hostingView
+        NSLayoutConstraint.activate([
+            hostingView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
+            hostingView.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
+            hostingView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
+        ])
+
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context _: Context) {
+        (scrollView.documentView as? NSHostingView<AnyView>)?.rootView = AnyView(self.content)
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = false
+        scrollView.scrollerStyle = .legacy
+        if !(scrollView.verticalScroller is SettingsPersistentScroller) {
+            scrollView.verticalScroller = SettingsPersistentScroller()
+        }
+        scrollView.verticalScroller?.isHidden = false
+        scrollView.verticalScroller?.alphaValue = 1
+    }
+}
+
 // MARK: - Filler Words Editor
 
 struct FillerWordsEditor: View {
@@ -2244,7 +2336,7 @@ struct FillerWordsEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Filler words to remove:")
-                .font(.subheadline)
+                .font(self.theme.typography.bodySmall)
                 .foregroundStyle(.secondary)
 
             // Word chips
@@ -2415,7 +2507,7 @@ struct AnalyticsConfirmationView: View {
                 .font(.headline)
 
             Text("By sharing anonymous usage data, you help us build the features you care about most. We never collect personal information (Audio, Transcription text etc), ever. Your support simply helps us make FluidVoice better for you.")
-                .font(.subheadline)
+                .font(self.theme.typography.bodySmall)
                 .foregroundStyle(.secondary)
                 .padding(12)
                 .background(
@@ -2428,7 +2520,7 @@ struct AnalyticsConfirmationView: View {
                 )
 
             Text(self.contactInfoText)
-                .font(.subheadline)
+                .font(self.theme.typography.bodySmall)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
 
