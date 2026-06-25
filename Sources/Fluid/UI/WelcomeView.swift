@@ -11,7 +11,10 @@ import SwiftUI
 
 struct WelcomeView: View {
     @EnvironmentObject var appServices: AppServices
-    private var asr: ASRService { self.appServices.asr }
+    private var asr: ASRService {
+        self.appServices.asr
+    }
+
     @ObservedObject private var settings = SettingsStore.shared
     @Binding var selectedSidebarItem: SidebarItem?
     @Binding var playgroundUsed: Bool
@@ -35,11 +38,20 @@ struct WelcomeView: View {
 
     private let playgroundSectionID = "welcome-playground-section"
 
-    private var commandModeColor: Color { self.theme.palette.warning }
-    private var editModeColor: Color { self.theme.palette.accent }
+    private var commandModeColor: Color {
+        self.theme.palette.warning
+    }
+
+    private var editModeColor: Color {
+        self.theme.palette.accent
+    }
 
     private var isAIEnhancementReady: Bool {
         DictationAIPostProcessingGate.isProviderConfigured()
+    }
+
+    private var appDisplayName: String {
+        Bundle.main.fluidAppDisplayName
     }
 
     var body: some View {
@@ -87,9 +99,11 @@ struct WelcomeView: View {
                                     title: (self.asr.isAsrReady || self.asr.modelsExistOnDisk) ? "Voice Model Ready" : "Download Voice Model",
                                     description: self.asr.isAsrReady
                                         ? "Speech recognition model is loaded and ready"
-                                        : (self.asr.modelsExistOnDisk
-                                            ? "Model downloaded, will load when needed"
-                                            : "Download the AI model for offline voice transcription (~500MB)"),
+                                        : (
+                                            self.asr.modelsExistOnDisk
+                                                ? "Model downloaded, will load when needed"
+                                                : "Download the AI model for offline voice transcription (~500MB)"
+                                        ),
                                     status: (self.asr.isAsrReady || self.asr.modelsExistOnDisk) ? .completed : .pending,
                                     action: {
                                         self.selectedSidebarItem = .voiceEngine
@@ -121,7 +135,7 @@ struct WelcomeView: View {
                                     title: self.accessibilityEnabled ? "Accessibility Access Enabled" : "Enable Accessibility Access",
                                     description: self.accessibilityEnabled
                                         ? "Accessibility permission granted for typing into apps"
-                                        : "Drag FluidVoice into the Accessibility apps list as shown",
+                                        : "Drag \(self.appDisplayName) into the Accessibility apps list as shown",
                                     status: self.accessibilityEnabled ? .completed : .pending,
                                     action: {
                                         self.openAccessibilitySettings()
@@ -560,7 +574,10 @@ struct WelcomeView: View {
 struct OnboardingFlowView: View {
     @EnvironmentObject var appServices: AppServices
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var asr: ASRService { self.appServices.asr }
+    private var asr: ASRService {
+        self.appServices.asr
+    }
+
     @ObservedObject private var settings = SettingsStore.shared
 
     @Binding var currentStep: Int
@@ -798,12 +815,16 @@ struct OnboardingFlowView: View {
     }
 
     private var onboardingShortcutDisplay: String {
-        let display = self.settings.hotkeyShortcut.displayString.trimmingCharacters(in: .whitespacesAndNewlines)
+        let display = self.settings.primaryDictationShortcutDisplayString.trimmingCharacters(in: .whitespacesAndNewlines)
         return display.isEmpty ? "your shortcut" : display
     }
 
     private var isRecordingAnyShortcut: Bool {
         self.activeShortcutRecordingTarget != nil
+    }
+
+    private var isRecordingPrimaryShortcut: Bool {
+        self.activeShortcutRecordingTarget?.isPrimaryDictation == true
     }
 
     private var canContinue: Bool {
@@ -1666,8 +1687,8 @@ struct OnboardingFlowView: View {
             shortcutDisplay: self.onboardingShortcutDisplay,
             isTestReady: self.isPlaygroundReady,
             isRunning: self.asr.isRunning,
-            isRecordingShortcut: self.activeShortcutRecordingTarget == .primaryDictation,
-            shortcutRecordingMessage: self.activeShortcutRecordingTarget == .primaryDictation ? self.shortcutRecordingMessage : nil,
+            isRecordingShortcut: self.isRecordingPrimaryShortcut,
+            shortcutRecordingMessage: self.isRecordingPrimaryShortcut ? self.shortcutRecordingMessage : nil,
             onGlowMove: self.updateLandingGlow(location:in:),
             onGlowExit: self.resetLandingGlow,
             onBack: self.goBack,
@@ -1717,8 +1738,8 @@ struct OnboardingFlowView: View {
                                 shortcutDisplay: self.onboardingShortcutDisplay,
                                 isReady: self.isPlaygroundReady,
                                 isRunning: self.asr.isRunning,
-                                isRecordingShortcut: self.activeShortcutRecordingTarget == .primaryDictation,
-                                shortcutRecordingMessage: self.activeShortcutRecordingTarget == .primaryDictation ? self.shortcutRecordingMessage : nil,
+                                isRecordingShortcut: self.isRecordingPrimaryShortcut,
+                                shortcutRecordingMessage: self.isRecordingPrimaryShortcut ? self.shortcutRecordingMessage : nil,
                                 onToggleShortcut: self.togglePrimaryShortcutRecording
                             )
                         }
@@ -1777,12 +1798,16 @@ struct OnboardingFlowView: View {
 
     private var accessibilityPermissionSubtitle: String {
         if self.isAccessibilityReady {
-            return "FluidVoice can place text into the app you're using."
+            return "\(self.appDisplayName) can place text into the app you're using."
         }
         if self.accessibilitySetupInProgress {
-            return "Use the floating guide to drag FluidVoice into the Accessibility apps list."
+            return "Use the floating guide to drag \(self.appDisplayName) into the Accessibility apps list."
         }
-        return "Open Settings, then use the floating guide to add FluidVoice."
+        return "Open Settings, then use the floating guide to add \(self.appDisplayName)."
+    }
+
+    private var appDisplayName: String {
+        Bundle.main.fluidAppDisplayName
     }
 
     private var accessibilityPermissionStatusTitle: String {
@@ -2514,12 +2539,12 @@ struct OnboardingFlowView: View {
 
     private func togglePrimaryShortcutRecording() {
         guard !self.asr.isRunning else { return }
-        if self.activeShortcutRecordingTarget == .primaryDictation {
+        if self.isRecordingPrimaryShortcut {
             self.activeShortcutRecordingTarget = nil
             self.shortcutRecordingMessage = nil
         } else {
             self.shortcutRecordingMessage = nil
-            self.activeShortcutRecordingTarget = .primaryDictation
+            self.activeShortcutRecordingTarget = .primaryDictation(.replace(0))
         }
     }
 

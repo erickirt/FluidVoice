@@ -18,6 +18,9 @@ struct SettingsBackupPayload: Codable, Equatable {
     let selectedNemotronLanguage: SettingsStore.NemotronLanguage?
     let selectedAppleSpeechLocaleIdentifier: String?
     let hotkeyShortcut: HotkeyShortcut
+    // Older backup files only contain hotkeyShortcut; nil restores that legacy single shortcut.
+    // swiftlint:disable:next discouraged_optional_collection
+    let primaryDictationShortcuts: [HotkeyShortcut]?
     let promptModeHotkeyShortcut: HotkeyShortcut
     let promptModeShortcutEnabled: Bool
     let promptModeSelectedPromptID: String?

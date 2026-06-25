@@ -30,6 +30,7 @@ final class SettingsStore: ObservableObject {
         self.migrateDictationPromptProfilesIfNeeded()
         self.migrateLegacyDictationAIPreferenceIfNeeded()
         self.migrateSecondaryPromptShortcutIfNeeded()
+        self.retireLegacySecondaryPromptShortcutIfNeeded()
         self.normalizePromptSelectionsIfNeeded()
         self.normalizeProviderSelectionForCurrentVerificationState()
         self.enforceOnboardingGenerationIfNeeded()
@@ -96,7 +97,9 @@ final class SettingsStore: ObservableObject {
         case primary
         case secondary
 
-        var id: String { self.rawValue }
+        var id: String {
+            self.rawValue
+        }
 
         var displayName: String {
             switch self {
@@ -1467,22 +1470,84 @@ final class SettingsStore: ObservableObject {
 
     var hotkeyShortcut: HotkeyShortcut {
         get {
-            if let data = defaults.data(forKey: Keys.hotkeyShortcutKey),
-               let shortcut = try? JSONDecoder().decode(HotkeyShortcut.self, from: data)
-            {
-                return shortcut
-            }
-            return HotkeyShortcut(keyCode: 61, modifierFlags: [])
+            self.primaryDictationShortcuts.first ?? Self.defaultPrimaryDictationShortcut
         }
         set {
             objectWillChange.send()
-            if let data = try? JSONEncoder().encode(newValue) {
-                self.defaults.set(data, forKey: Keys.hotkeyShortcutKey)
-            }
+            let shortcuts = Self.normalizedPrimaryDictationShortcuts([newValue], fallback: Self.defaultPrimaryDictationShortcut)
+            self.storePrimaryDictationShortcuts(shortcuts)
+            self.storeLegacyHotkeyShortcut(shortcuts[0])
         }
     }
 
-    var pressAndHoldMode: Bool { get { self.defaults.object(forKey: Keys.hotkeyMode) != nil ? self.hotkeyMode == .hold : self.defaults.bool(forKey: Keys.pressAndHoldMode) } set { self.hotkeyMode = newValue ? .hold : .toggle } }
+    var primaryDictationShortcutDisplayString: String {
+        let displays = self.primaryDictationShortcuts
+            .map(\.displayString)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return displays.isEmpty ? Self.defaultPrimaryDictationShortcut.displayString : displays.joined(separator: " / ")
+    }
+
+    var primaryDictationShortcuts: [HotkeyShortcut] {
+        get {
+            let fallback = self.legacyHotkeyShortcut
+            if let data = defaults.data(forKey: Keys.primaryDictationShortcutsKey),
+               let shortcuts = try? JSONDecoder().decode([HotkeyShortcut].self, from: data)
+            {
+                return Self.normalizedPrimaryDictationShortcuts(shortcuts, fallback: fallback)
+            }
+            return [fallback]
+        }
+        set {
+            objectWillChange.send()
+            let shortcuts = Self.normalizedPrimaryDictationShortcuts(newValue, fallback: self.legacyHotkeyShortcut)
+            self.storePrimaryDictationShortcuts(shortcuts)
+            self.storeLegacyHotkeyShortcut(shortcuts[0])
+        }
+    }
+
+    private static var defaultPrimaryDictationShortcut: HotkeyShortcut {
+        HotkeyShortcut(keyCode: 61, modifierFlags: [])
+    }
+
+    private var legacyHotkeyShortcut: HotkeyShortcut {
+        if let data = defaults.data(forKey: Keys.hotkeyShortcutKey),
+           let shortcut = try? JSONDecoder().decode(HotkeyShortcut.self, from: data)
+        {
+            return shortcut
+        }
+        return Self.defaultPrimaryDictationShortcut
+    }
+
+    private static func normalizedPrimaryDictationShortcuts(
+        _ shortcuts: [HotkeyShortcut],
+        fallback: HotkeyShortcut
+    ) -> [HotkeyShortcut] {
+        var unique: [HotkeyShortcut] = []
+        for shortcut in shortcuts where !unique.contains(shortcut) {
+            unique.append(shortcut)
+        }
+        if unique.isEmpty {
+            unique.append(fallback)
+        }
+        return unique
+    }
+
+    private func storePrimaryDictationShortcuts(_ shortcuts: [HotkeyShortcut]) {
+        if let data = try? JSONEncoder().encode(shortcuts) {
+            self.defaults.set(data, forKey: Keys.primaryDictationShortcutsKey)
+        }
+    }
+
+    private func storeLegacyHotkeyShortcut(_ shortcut: HotkeyShortcut) {
+        if let data = try? JSONEncoder().encode(shortcut) {
+            self.defaults.set(data, forKey: Keys.hotkeyShortcutKey)
+        }
+    }
+
+    var pressAndHoldMode: Bool {
+        get { self.defaults.object(forKey: Keys.hotkeyMode) != nil ? self.hotkeyMode == .hold : self.defaults.bool(forKey: Keys.pressAndHoldMode) } set { self.hotkeyMode = newValue ? .hold : .toggle }
+    }
 
     var hotkeyMode: HotkeyActivationMode {
         get { self.defaults.string(forKey: Keys.hotkeyMode).flatMap(HotkeyActivationMode.init(rawValue:)) ?? (self.defaults.bool(forKey: Keys.pressAndHoldMode) ? .hold : .toggle) }
@@ -2193,6 +2258,7 @@ final class SettingsStore: ObservableObject {
     private func hasLegacyUsageSignals() -> Bool {
         if self.defaults.object(forKey: Keys.playgroundUsed) != nil { return true }
         if self.defaults.object(forKey: Keys.hotkeyShortcutKey) != nil { return true }
+        if self.defaults.object(forKey: Keys.primaryDictationShortcutsKey) != nil { return true }
         if let rawSpeechModel = self.defaults.string(forKey: Keys.selectedSpeechModel),
            rawSpeechModel != SpeechModel.defaultModel.rawValue
         {
@@ -2639,6 +2705,7 @@ final class SettingsStore: ObservableObject {
             selectedNemotronLanguage: self.selectedNemotronLanguage,
             selectedAppleSpeechLocaleIdentifier: self.selectedAppleSpeechLocaleIdentifier,
             hotkeyShortcut: self.hotkeyShortcut,
+            primaryDictationShortcuts: self.primaryDictationShortcuts,
             promptModeHotkeyShortcut: self.promptModeHotkeyShortcut,
             promptModeShortcutEnabled: self.promptModeShortcutEnabled,
             promptModeSelectedPromptID: self.promptModeSelectedPromptID,
@@ -2731,7 +2798,7 @@ final class SettingsStore: ObservableObject {
         if let selectedAppleSpeechLocaleIdentifier = payload.selectedAppleSpeechLocaleIdentifier {
             self.selectedAppleSpeechLocaleIdentifier = selectedAppleSpeechLocaleIdentifier
         }
-        self.hotkeyShortcut = payload.hotkeyShortcut
+        self.primaryDictationShortcuts = payload.primaryDictationShortcuts ?? [payload.hotkeyShortcut]
         self.promptModeHotkeyShortcut = payload.promptModeHotkeyShortcut
         self.promptModeShortcutEnabled = payload.promptModeShortcutEnabled
         self.commandModeHotkeyShortcut = payload.commandModeHotkeyShortcut
@@ -2915,6 +2982,16 @@ final class SettingsStore: ObservableObject {
         self.defaults.set(true, forKey: Keys.secondaryPromptShortcutRemoved)
     }
 
+    private func retireLegacySecondaryPromptShortcutIfNeeded() {
+        guard self.defaults.bool(forKey: Keys.legacySecondaryPromptShortcutRetired) == false else { return }
+
+        self.defaults.set(false, forKey: Keys.promptModeShortcutEnabled)
+        self.defaults.set(true, forKey: Keys.secondaryDictationPromptOff)
+        self.defaults.removeObject(forKey: Keys.promptModeHotkeyShortcut)
+        self.defaults.removeObject(forKey: Keys.promptModeSelectedPromptID)
+        self.defaults.set(true, forKey: Keys.legacySecondaryPromptShortcutRetired)
+    }
+
     private func normalizePromptSelectionsIfNeeded() {
         if self.defaults.object(forKey: Keys.secondaryDictationPromptOff) == nil {
             self.defaults.set(false, forKey: Keys.secondaryDictationPromptOff)
@@ -3065,9 +3142,11 @@ final class SettingsStore: ObservableObject {
         let originalCount = configurations.count
         configurations = configurations.filter { key, configuration in
             validKeys.contains(key) &&
-                (configuration.shortcut != nil ||
-                    !configuration.providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                    !configuration.modelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                (
+                    configuration.shortcut != nil ||
+                        !configuration.providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                        !configuration.modelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
         }
         if configurations.count != originalCount {
             self.dictationPromptConfigurations = configurations
@@ -4194,6 +4273,7 @@ private extension SettingsStore {
         static let shareAnonymousAnalytics = "ShareAnonymousAnalytics"
         static let privateAIInterestCaptured = "PrivateAIProviderInterestCaptured"
         static let hotkeyShortcutKey = "HotkeyShortcutKey"
+        static let primaryDictationShortcutsKey = "PrimaryDictationShortcuts"
         static let preferredInputDeviceUID = "PreferredInputDeviceUID"
         static let preferredOutputDeviceUID = "PreferredOutputDeviceUID"
         static let syncAudioDevicesWithSystem = "SyncAudioDevicesWithSystem"
@@ -4242,6 +4322,7 @@ private extension SettingsStore {
         static let promptModeSelectedPromptID = "PromptModeSelectedPromptID"
         static let secondaryDictationPromptOff = "SecondaryDictationPromptOff"
         static let secondaryPromptShortcutRemoved = "SecondaryPromptShortcutRemoved"
+        static let legacySecondaryPromptShortcutRetired = "LegacySecondaryPromptShortcutRetired"
         static let dictationPromptConfigurations = "DictationPromptConfigurations"
 
         // Rewrite Mode Keys
@@ -4471,7 +4552,9 @@ extension SettingsStore {
         case vietnamese = "vi"
         case mandarinChinese = "zh"
 
-        var id: String { self.rawValue }
+        var id: String {
+            self.rawValue
+        }
 
         var displayName: String {
             switch self {
@@ -4492,7 +4575,9 @@ extension SettingsStore {
             }
         }
 
-        var tokenString: String { "<|\(self.rawValue)|>" }
+        var tokenString: String {
+            "<|\(self.rawValue)|>"
+        }
     }
 
     // MARK: - Unified Speech Model Selection

@@ -13,7 +13,7 @@ private enum OverlayShortcutResolver {
     static func shortcutDisplay(for mode: OverlayMode, settings: SettingsStore = .shared) -> String {
         switch mode {
         case .dictation:
-            return settings.hotkeyShortcut.displayString
+            return settings.primaryDictationShortcutDisplayString
         case .edit, .write, .rewrite:
             return settings.rewriteModeHotkeyShortcut.displayString
         case .command:
@@ -1356,9 +1356,11 @@ private struct BottomOverlayPromptMenuView: View {
     @ViewBuilder
     private func defaultRow(selectedID: String?) -> some View {
         let activeSlot = self.contentState.activeDictationShortcutSlot ?? .primary
-        let isSelected = !self.privateAILocked && (self.promptMode.normalized == .dictate
-            ? (self.settings.dictationPromptSelection(for: activeSlot) == .default)
-            : (selectedID == nil))
+        let isSelected = !self.privateAILocked && (
+            self.promptMode.normalized == .dictate
+                ? (self.settings.dictationPromptSelection(for: activeSlot) == .default)
+                : (selectedID == nil)
+        )
         Button(action: {
             guard !self.privateAILocked else { return }
             if self.promptMode.normalized == .dictate {
@@ -1424,9 +1426,11 @@ private struct BottomOverlayPromptMenuView: View {
     @ViewBuilder
     private func profileRow(_ profile: SettingsStore.DictationPromptProfile, selectedID: String?) -> some View {
         let activeSlot = self.contentState.activeDictationShortcutSlot ?? .primary
-        let isSelected = !self.privateAILocked && (self.promptMode.normalized == .dictate
-            ? (self.settings.dictationPromptSelection(for: activeSlot) == .profile(profile.id))
-            : (selectedID == profile.id))
+        let isSelected = !self.privateAILocked && (
+            self.promptMode.normalized == .dictate
+                ? (self.settings.dictationPromptSelection(for: activeSlot) == .profile(profile.id))
+                : (selectedID == profile.id)
+        )
         Button(action: {
             guard !self.privateAILocked else { return }
             if self.promptMode.normalized == .dictate {
@@ -1751,8 +1755,8 @@ private enum PillShadowMetrics {
     // Keep in sync with the pill shadow in BottomOverlayView.body.
     static let radius: CGFloat = 10
     static let yOffset: CGFloat = 4
-    // Hit-test inset must cover the visible shadow extent (radius + |offset|)
-    // plus a small margin so the shadow region doesn't intercept clicks.
+    /// Hit-test inset must cover the visible shadow extent (radius + |offset|)
+    /// plus a small margin so the shadow region doesn't intercept clicks.
     static let hitTestInset: CGFloat = radius + abs(yOffset) + 12
 }
 

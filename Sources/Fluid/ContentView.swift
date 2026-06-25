@@ -61,8 +61,18 @@ enum SidebarItem: Hashable {
     case rewriteMode
 }
 
+enum PrimaryDictationShortcutEdit: Hashable {
+    case add
+    case replace(Int)
+
+    var replacementIndex: Int? {
+        if case let .replace(index) = self { return index }
+        return nil
+    }
+}
+
 enum ShortcutRecordingTarget: Hashable {
-    case primaryDictation
+    case primaryDictation(PrimaryDictationShortcutEdit)
     case secondaryDictation
     case command
     case edit
@@ -100,6 +110,22 @@ enum ShortcutRecordingTarget: Hashable {
 
     var promptConfigurationKey: String? {
         if case let .dictationPrompt(key) = self { return key }
+        return nil
+    }
+
+    var allowsMouseShortcut: Bool {
+        self.isPrimaryDictation
+    }
+
+    var isPrimaryDictation: Bool {
+        if case .primaryDictation = self { return true }
+        return false
+    }
+
+    var primaryDictationReplacementIndex: Int? {
+        if case let .primaryDictation(edit) = self {
+            return edit.replacementIndex
+        }
         return nil
     }
 }
@@ -151,7 +177,7 @@ struct ContentView: View {
 
     @State private var appear = false
     @State private var accessibilityEnabled = false
-    @State private var hotkeyShortcut: HotkeyShortcut = SettingsStore.shared.hotkeyShortcut
+    @State private var primaryDictationShortcuts: [HotkeyShortcut] = SettingsStore.shared.primaryDictationShortcuts
     @State private var promptModeHotkeyShortcut: HotkeyShortcut = SettingsStore.shared.promptModeHotkeyShortcut
     @State private var commandModeHotkeyShortcut: HotkeyShortcut = SettingsStore.shared.commandModeHotkeyShortcut
     @State private var rewriteModeHotkeyShortcut: HotkeyShortcut = SettingsStore.shared.rewriteModeHotkeyShortcut
@@ -172,6 +198,7 @@ struct ContentView: View {
     @State private var pendingModifierKeyCode: UInt16?
     @State private var pendingModifierOnly = false
     @State private var shortcutRecordingMessage: String? = nil
+    @State private var shortcutCaptureMonitor: Any?
     @FocusState private var isTranscriptionFocused: Bool
 
     @State private var selectedSidebarItem: SidebarItem?
@@ -271,10 +298,7 @@ struct ContentView: View {
 
         return observed
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                let trusted = AXIsProcessTrusted()
-                if trusted != self.accessibilityEnabled {
-                    self.accessibilityEnabled = trusted
-                }
+                self.refreshAccessibilityPermissionState()
             }
             .onReceive(NotificationCenter.default.publisher(for: .openCustomDictionaryFromVoiceEngine)) { _ in
                 self.selectedSidebarItem = .customDictionary
@@ -363,10 +387,19 @@ struct ContentView: View {
 
                 // Stop accessibility polling
                 self.finishAccessibilityPermissionFlow()
+                self.removeShortcutCaptureMonitor()
             }
-            .onChange(of: self.hotkeyShortcut) { _, newValue in
-                DebugLogger.shared.debug("Hotkey shortcut changed to \(newValue.displayString)", source: "ContentView")
-                self.hotkeyManager?.updateShortcut(newValue)
+            .onChange(of: self.primaryDictationShortcuts) { _, newValue in
+                SettingsStore.shared.primaryDictationShortcuts = newValue
+                let storedShortcuts = SettingsStore.shared.primaryDictationShortcuts
+                if storedShortcuts != newValue {
+                    self.primaryDictationShortcuts = storedShortcuts
+                    return
+                }
+
+                let display = storedShortcuts.map(\.displayString).joined(separator: ", ")
+                DebugLogger.shared.debug("Primary dictation shortcuts changed to \(display)", source: "ContentView")
+                self.hotkeyManager?.updatePrimaryShortcuts(storedShortcuts)
 
                 // Update initialization status after shortcut change
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -484,7 +517,7 @@ struct ContentView: View {
 
     private func handleContentAppear() {
         self.appear = true
-        self.accessibilityEnabled = self.checkAccessibilityPermissions()
+        self.refreshAccessibilityPermissionState()
 
         self.handleMenuBarNavigation(self.menuBarManager.requestedNavigationDestination)
         if UserDefaults.standard.bool(forKey: self.accessibilityRestartFlagKey) {
@@ -637,9 +670,18 @@ struct ContentView: View {
     }
 
     private func installShortcutCaptureMonitor() {
-        NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { event in
+        self.removeShortcutCaptureMonitor()
+        self.shortcutCaptureMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.keyDown, .flagsChanged, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { event in
             self.handleShortcutCaptureEvent(event)
         }
+    }
+
+    private func removeShortcutCaptureMonitor() {
+        guard let monitor = self.shortcutCaptureMonitor else { return }
+        NSEvent.removeMonitor(monitor)
+        self.shortcutCaptureMonitor = nil
     }
 
     private func handleShortcutCaptureEvent(_ event: NSEvent) -> NSEvent? {
@@ -651,6 +693,8 @@ struct ContentView: View {
             return self.handleShortcutKeyDownEvent(event, modifiers: eventModifiers, isRecordingAnyShortcut: isRecordingAnyShortcut, recordingTarget: recordingTarget)
         } else if event.type == .flagsChanged {
             return self.handleShortcutFlagsChangedEvent(event, modifiers: eventModifiers, isRecordingAnyShortcut: isRecordingAnyShortcut, recordingTarget: recordingTarget)
+        } else if event.type == .leftMouseDown || event.type == .rightMouseDown || event.type == .otherMouseDown {
+            return self.handleShortcutMouseDownEvent(event, modifiers: eventModifiers, isRecordingAnyShortcut: isRecordingAnyShortcut, recordingTarget: recordingTarget)
         }
 
         return event
@@ -698,6 +742,45 @@ struct ContentView: View {
         }
         self.resetPendingShortcutState()
         DebugLogger.shared.debug("NSEvent monitor: Finished recording shortcut", source: "ContentView")
+        return nil
+    }
+
+    private func handleShortcutMouseDownEvent(
+        _ event: NSEvent,
+        modifiers eventModifiers: NSEvent.ModifierFlags,
+        isRecordingAnyShortcut: Bool,
+        recordingTarget: ShortcutRecordingTarget?
+    ) -> NSEvent? {
+        guard isRecordingAnyShortcut else {
+            self.shortcutRecordingMessage = nil
+            self.resetPendingShortcutState()
+            return event
+        }
+
+        let newShortcut = HotkeyShortcut(mouseButton: event.buttonNumber, modifierFlags: self.pendingModifierFlags.union(eventModifiers))
+        DebugLogger.shared.debug("NSEvent monitor: Recording new mouse shortcut: \(newShortcut.displayString)", source: "ContentView")
+
+        if newShortcut.isUnmodifiedLeftOrRightClick, let mouseButton = newShortcut.mouseButton {
+            self.shortcutRecordingMessage = "\(HotkeyShortcut.mouseButtonToString(mouseButton)) needs a modifier key"
+            self.resetPendingShortcutState()
+            return event
+        }
+
+        if let recordingTarget,
+           let conflictMessage = self.shortcutConflictMessage(for: newShortcut, target: recordingTarget)
+        {
+            self.shortcutRecordingMessage = conflictMessage
+            self.resetPendingShortcutState()
+            DebugLogger.shared.debug("NSEvent monitor: Mouse shortcut conflict while recording: \(conflictMessage)", source: "ContentView")
+            return nil
+        }
+
+        self.shortcutRecordingMessage = nil
+        if let recordingTarget {
+            self.assignRecordedShortcut(newShortcut, to: recordingTarget)
+        }
+        self.resetPendingShortcutState()
+        DebugLogger.shared.debug("NSEvent monitor: Finished recording mouse shortcut", source: "ContentView")
         return nil
     }
 
@@ -883,8 +966,27 @@ struct ContentView: View {
     }
 
     private func shortcutConflictMessage(for shortcut: HotkeyShortcut, target: ShortcutRecordingTarget) -> String? {
+        if shortcut.isMouseShortcut {
+            guard target.allowsMouseShortcut else {
+                return "Mouse clicks can only be assigned to Primary Dictation Shortcut"
+            }
+
+            if shortcut.isUnmodifiedLeftOrRightClick, let mouseButton = shortcut.mouseButton {
+                return "\(HotkeyShortcut.mouseButtonToString(mouseButton)) needs a modifier key"
+            }
+        }
+
+        let replacingPrimaryIndex = target.primaryDictationReplacementIndex
+        for (index, configuredShortcut) in self.primaryDictationShortcuts.enumerated() where replacingPrimaryIndex != index {
+            if configuredShortcut == shortcut {
+                return "Duplicate with Primary Dictation Shortcut"
+            }
+            if shortcut.conflictsWith(configuredShortcut) {
+                return "Overlaps Primary Dictation Shortcut — use a different modifier key"
+            }
+        }
+
         let configuredShortcuts: [(ShortcutRecordingTarget, HotkeyShortcut)] = [
-            (.primaryDictation, self.hotkeyShortcut),
             (.secondaryDictation, self.promptModeHotkeyShortcut),
             (.command, self.commandModeHotkeyShortcut),
             (.edit, self.rewriteModeHotkeyShortcut),
@@ -928,10 +1030,8 @@ struct ContentView: View {
 
     private func applyRecordedShortcut(_ shortcut: HotkeyShortcut, to target: ShortcutRecordingTarget) {
         switch target {
-        case .primaryDictation:
-            self.hotkeyShortcut = shortcut
-            SettingsStore.shared.hotkeyShortcut = shortcut
-            self.hotkeyManager?.updateShortcut(shortcut)
+        case let .primaryDictation(edit):
+            self.applyPrimaryDictationShortcut(shortcut, edit: edit)
         case .secondaryDictation:
             self.promptModeHotkeyShortcut = shortcut
             SettingsStore.shared.promptModeHotkeyShortcut = shortcut
@@ -960,6 +1060,21 @@ struct ContentView: View {
                 userInfo: ["shortcut": shortcut]
             )
         }
+    }
+
+    private func applyPrimaryDictationShortcut(_ shortcut: HotkeyShortcut, edit: PrimaryDictationShortcutEdit) {
+        var shortcuts = self.primaryDictationShortcuts
+        switch edit {
+        case .add:
+            shortcuts.append(shortcut)
+        case let .replace(index):
+            if shortcuts.indices.contains(index) {
+                shortcuts[index] = shortcut
+            } else {
+                shortcuts.append(shortcut)
+            }
+        }
+        self.primaryDictationShortcuts = shortcuts
     }
 
     private func setShortcutTargetEnabled(_ enabled: Bool, for target: ShortcutRecordingTarget) {
@@ -1297,7 +1412,7 @@ struct ContentView: View {
             inputDevices: self.$inputDevices,
             outputDevices: self.$outputDevices,
             accessibilityEnabled: self.$accessibilityEnabled,
-            hotkeyShortcut: self.$hotkeyShortcut,
+            primaryDictationShortcuts: self.$primaryDictationShortcuts,
             activeShortcutRecordingTarget: self.$activeShortcutRecordingTarget,
             shortcutRecordingMessage: self.$shortcutRecordingMessage,
             commandModeShortcut: self.$commandModeHotkeyShortcut,
@@ -2895,7 +3010,7 @@ struct ContentView: View {
 
         self.hotkeyManager = GlobalHotkeyManager(
             asrService: self.asr,
-            shortcut: self.hotkeyShortcut,
+            primaryShortcuts: self.primaryDictationShortcuts,
             promptModeShortcut: self.promptModeHotkeyShortcut,
             commandModeShortcut: self.commandModeHotkeyShortcut,
             rewriteModeShortcut: self.rewriteModeHotkeyShortcut,
@@ -3488,6 +3603,15 @@ extension ContentView {
         return AXIsProcessTrusted()
     }
 
+    @discardableResult
+    private func refreshAccessibilityPermissionState() -> Bool {
+        let trusted = self.checkAccessibilityPermissions()
+        if trusted != self.accessibilityEnabled {
+            self.accessibilityEnabled = trusted
+        }
+        return trusted
+    }
+
     func openAccessibilitySettings() {
         let requestID = UUID()
         self.accessibilityGuideRequestID = requestID
@@ -3592,7 +3716,7 @@ extension ContentView {
     private func showAccessibilityGuidePanel(requestID: UUID) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
             guard self.accessibilityGuideRequestID == requestID else { return }
-            guard !AXIsProcessTrusted() else {
+            guard !self.refreshAccessibilityPermissionState() else {
                 self.finishAccessibilityPermissionFlow()
                 return
             }
@@ -3637,6 +3761,7 @@ extension ContentView {
             panel.contentView = NSHostingView(
                 rootView: AccessibilitySettingsFloatingGuideView(
                     appURL: self.draggableAccessibilityAppURL,
+                    appName: self.accessibilityAppDisplayName,
                     onReturnToApp: {
                         self.cancelAccessibilityPermissionFlow()
                     },
@@ -3709,6 +3834,7 @@ extension ContentView {
 
                 if isTrusted {
                     await MainActor.run {
+                        self.refreshAccessibilityPermissionState()
                         self.finishAccessibilityPermissionFlow()
                     }
                     return
@@ -3731,11 +3857,22 @@ extension ContentView {
     }
 
     private var draggableAccessibilityAppURL: URL {
+        let runningAppURL = Bundle.main.bundleURL
+        if runningAppURL.pathExtension == "app",
+           FileManager.default.fileExists(atPath: runningAppURL.path)
+        {
+            return runningAppURL
+        }
+
         let installedURL = URL(fileURLWithPath: "/Applications/FluidVoice.app")
         if FileManager.default.fileExists(atPath: installedURL.path) {
             return installedURL
         }
         return Bundle.main.bundleURL
+    }
+
+    private var accessibilityAppDisplayName: String {
+        Bundle.main.fluidAppDisplayName
     }
 
     func restartApp() {
@@ -3753,9 +3890,9 @@ extension ContentView {
     }
 
     func startAccessibilityPolling() {
-        // Don't poll if already enabled or if we've already auto-restarted once
+        // Keep polling until macOS reports the current process is trusted. The restart guard
+        // only prevents restart loops; it must not prevent the UI from noticing permission changes.
         guard !self.accessibilityEnabled else { return }
-        guard !UserDefaults.standard.bool(forKey: self.hasAutoRestartedForAccessibilityKey) else { return }
 
         // Cancel any existing polling task
         self.accessibilityPollingTask?.cancel()
@@ -3769,13 +3906,18 @@ extension ContentView {
                 let nowTrusted = AXIsProcessTrusted()
                 if nowTrusted && !self.accessibilityEnabled {
                     await MainActor.run {
-                        DebugLogger.shared.info("Accessibility permission granted! Auto-restarting app...", source: "ContentView")
+                        DebugLogger.shared.info("Accessibility permission granted", source: "ContentView")
+                        self.refreshAccessibilityPermissionState()
                         self.finishAccessibilityPermissionFlow()
 
-                        // Mark that we've auto-restarted to prevent loops
-                        UserDefaults.standard.set(true, forKey: self.hasAutoRestartedForAccessibilityKey)
+                        guard !UserDefaults.standard.bool(forKey: self.hasAutoRestartedForAccessibilityKey) else {
+                            self.hotkeyManager?.reinitialize()
+                            return
+                        }
 
-                        // Give user brief moment to see any UI feedback
+                        // Mark that we've auto-restarted to prevent loops.
+                        UserDefaults.standard.set(true, forKey: self.hasAutoRestartedForAccessibilityKey)
+                        DebugLogger.shared.info("Auto-restarting app after accessibility grant", source: "ContentView")
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                             self.restartApp()
                         }
@@ -3796,6 +3938,7 @@ extension ContentView {
 
 private struct AccessibilitySettingsFloatingGuideView: View {
     let appURL: URL
+    let appName: String
     let onReturnToApp: () -> Void
     let onClose: () -> Void
 
@@ -3819,7 +3962,7 @@ private struct AccessibilitySettingsFloatingGuideView: View {
                         value: self.isArrowRaised
                     )
 
-                Text("Drag FluidVoice into the Accessibility apps list as shown")
+                Text("Drag \(self.appName) into the Accessibility apps list as shown")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.78))
                     .lineLimit(1)
@@ -3854,14 +3997,14 @@ private struct AccessibilitySettingsFloatingGuideView: View {
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
-                .help("Return to FluidVoice")
+                .help("Return to \(self.appName)")
 
                 Image(nsImage: self.appIcon)
                     .resizable()
                     .frame(width: 34, height: 34)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                Text("FluidVoice")
+                Text(self.appName)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.92))
 
@@ -3895,7 +4038,7 @@ private struct AccessibilitySettingsFloatingGuideView: View {
             .onDrag {
                 NSItemProvider(object: self.appURL as NSURL)
             }
-            .accessibilityLabel("Drag FluidVoice to the Accessibility list")
+            .accessibilityLabel("Drag \(self.appName) to the Accessibility list")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
@@ -3917,7 +4060,7 @@ private struct AccessibilitySettingsFloatingGuideView: View {
 
 private extension ContentView {
     func reloadSettingsStateAfterBackupRestore() {
-        self.hotkeyShortcut = SettingsStore.shared.hotkeyShortcut
+        self.primaryDictationShortcuts = SettingsStore.shared.primaryDictationShortcuts
         self.promptModeHotkeyShortcut = SettingsStore.shared.promptModeHotkeyShortcut
         self.commandModeHotkeyShortcut = SettingsStore.shared.commandModeHotkeyShortcut
         self.rewriteModeHotkeyShortcut = SettingsStore.shared.rewriteModeHotkeyShortcut
@@ -3940,7 +4083,7 @@ private extension ContentView {
         self.savedProviders = SettingsStore.shared.savedProviders
         self.selectedProviderID = SettingsStore.shared.selectedProviderID
 
-        self.hotkeyManager?.updateShortcut(self.hotkeyShortcut)
+        self.hotkeyManager?.updatePrimaryShortcuts(self.primaryDictationShortcuts)
         self.hotkeyManager?.updatePromptModeShortcut(self.promptModeHotkeyShortcut)
         self.hotkeyManager?.updatePromptModeShortcutEnabled(self.isPromptModeShortcutEnabled)
         self.hotkeyManager?.updatePromptShortcutAssignments(SettingsStore.shared.dictationPromptShortcutAssignments())

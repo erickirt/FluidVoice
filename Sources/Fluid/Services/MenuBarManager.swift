@@ -24,12 +24,12 @@ final class MenuBarManager: NSObject, ObservableObject, NSMenuDelegate {
     private weak var asrService: ASRService?
     private var cancellables = Set<AnyCancellable>()
 
-    // Overlay management (persistent, independent of window lifecycle)
+    /// Overlay management (persistent, independent of window lifecycle)
     private var overlayVisible: Bool = false
 
-    // Track when AI processing is active.
-    // When recording stops, ASRService flips `isRunning` to false, which would normally hide the
-    // overlay. During post-processing we want the overlay to stay visible until processing ends.
+    /// Track when AI processing is active.
+    /// When recording stops, ASRService flips `isRunning` to false, which would normally hide the
+    /// overlay. During post-processing we want the overlay to stay visible until processing ends.
     private var isProcessingActive: Bool = false
 
     @Published var isRecording: Bool = false
@@ -38,21 +38,21 @@ final class MenuBarManager: NSObject, ObservableObject, NSMenuDelegate {
     /// `ContentView` consumes this and clears it.
     @Published var requestedNavigationDestination: MenuBarNavigationDestination? = nil
 
-    // Track current overlay mode for notch
+    /// Track current overlay mode for notch
     private var currentOverlayMode: OverlayMode = .dictation
 
     // Track pending overlay operations to prevent spam
     private var pendingShowOperation: DispatchWorkItem?
     private var pendingHideOperation: DispatchWorkItem?
     private var pendingProcessingShowOperation: DispatchWorkItem?
-    // Show immediately so users see the processing state right away.
+    /// Show immediately so users see the processing state right away.
     private let processingVisualDelay: DispatchTimeInterval = .milliseconds(0)
-    // Debounce the hide so a fast transcription doesn't flash the processing
-    // overlay for a single frame. 80ms is under the perception threshold but
-    // long enough to coalesce a quick show->hide cycle.
+    /// Debounce the hide so a fast transcription doesn't flash the processing
+    /// overlay for a single frame. 80ms is under the perception threshold but
+    /// long enough to coalesce a quick show->hide cycle.
     private let processingHideDelay: DispatchTimeInterval = .milliseconds(80)
 
-    // Subscription for forwarding audio levels to expanded command notch
+    /// Subscription for forwarding audio levels to expanded command notch
     private var expandedModeAudioSubscription: AnyCancellable?
 
     override init() {
@@ -484,8 +484,8 @@ final class MenuBarManager: NSObject, ObservableObject, NSMenuDelegate {
 
     private func updateMenuItemsText() {
         // Update status text with hotkey info
-        let hotkeyShortcut = SettingsStore.shared.hotkeyShortcut
-        let hotkeyInfo = hotkeyShortcut.displayString.isEmpty ? "" : " (\(hotkeyShortcut.displayString))"
+        let hotkeyDisplay = SettingsStore.shared.primaryDictationShortcutDisplayString
+        let hotkeyInfo = hotkeyDisplay.isEmpty ? "" : " (\(hotkeyDisplay))"
         let statusTitle = self.isRecording ? "Recording...\(hotkeyInfo)" : "Ready to Record\(hotkeyInfo)"
         self.statusMenuItem?.title = statusTitle
         self.microphoneMenuItem?.isEnabled = true

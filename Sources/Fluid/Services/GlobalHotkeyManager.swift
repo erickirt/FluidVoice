@@ -9,6 +9,11 @@ private nonisolated enum HotkeyHoldModeType: Hashable {
     case promptAssignment
 }
 
+private nonisolated enum ActivePrimaryShortcutPress: Equatable {
+    case keyboard(UInt16)
+    case mouse(Int)
+}
+
 private final nonisolated class HotkeyState: @unchecked Sendable {
     private let lock = NSLock()
     var isKeyPressed = false
@@ -28,6 +33,7 @@ private final nonisolated class HotkeyState: @unchecked Sendable {
     var automaticPressStartTimes: [HotkeyHoldModeType: Date] = [:]
     var automaticPressWasTargetActive: [HotkeyHoldModeType: Bool] = [:]
     var automaticPressStartedTypes: Set<HotkeyHoldModeType> = []
+    var activePrimaryShortcutPress: ActivePrimaryShortcutPress?
 
     func withLock<T>(_ block: () -> T) -> T {
         self.lock.lock()
@@ -42,7 +48,7 @@ final class GlobalHotkeyManager: NSObject {
     private nonisolated(unsafe) var eventTap: CFMachPort?
     private nonisolated(unsafe) var runLoopSource: CFRunLoopSource?
     private let asrService: ASRService
-    private var shortcut: HotkeyShortcut
+    private var primaryShortcuts: [HotkeyShortcut]
     private var promptModeShortcut: HotkeyShortcut
     private var commandModeShortcut: HotkeyShortcut
     private var rewriteModeShortcut: HotkeyShortcut
@@ -110,6 +116,11 @@ final class GlobalHotkeyManager: NSObject {
     private nonisolated var isPromptAssignmentKeyPressed: Bool {
         get { self.state.withLock { self.state.isPromptAssignmentKeyPressed } }
         set { self.state.withLock { self.state.isPromptAssignmentKeyPressed = newValue } }
+    }
+
+    private nonisolated var activePrimaryShortcutPress: ActivePrimaryShortcutPress? {
+        get { self.state.withLock { self.state.activePrimaryShortcutPress } }
+        set { self.state.withLock { self.state.activePrimaryShortcutPress = newValue } }
     }
 
     private nonisolated var pressedModifierKeyCodes: Set<UInt16> {
@@ -266,7 +277,7 @@ final class GlobalHotkeyManager: NSObject {
 
     init(
         asrService: ASRService,
-        shortcut: HotkeyShortcut,
+        primaryShortcuts: [HotkeyShortcut],
         promptModeShortcut: HotkeyShortcut,
         commandModeShortcut: HotkeyShortcut,
         rewriteModeShortcut: HotkeyShortcut,
@@ -288,7 +299,7 @@ final class GlobalHotkeyManager: NSObject {
         isShortcutCaptureActiveProvider: (() -> Bool)? = nil
     ) {
         self.asrService = asrService
-        self.shortcut = shortcut
+        self.primaryShortcuts = primaryShortcuts
         self.promptModeShortcut = promptModeShortcut
         self.commandModeShortcut = commandModeShortcut
         self.rewriteModeShortcut = rewriteModeShortcut
@@ -333,9 +344,9 @@ final class GlobalHotkeyManager: NSObject {
         self.commandModeCallback = callback
     }
 
-    func updateShortcut(_ newShortcut: HotkeyShortcut) {
-        self.shortcut = newShortcut
-        DebugLogger.shared.info("Updated transcription hotkey", source: "GlobalHotkeyManager")
+    func updatePrimaryShortcuts(_ newShortcuts: [HotkeyShortcut]) {
+        self.primaryShortcuts = newShortcuts
+        DebugLogger.shared.info("Updated transcription hotkeys", source: "GlobalHotkeyManager")
     }
 
     func updateCommandModeShortcut(_ newShortcut: HotkeyShortcut) {
@@ -441,6 +452,12 @@ final class GlobalHotkeyManager: NSObject {
         let eventMask = (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.keyUp.rawValue)
             | (1 << CGEventType.flagsChanged.rawValue)
+            | (1 << CGEventType.leftMouseDown.rawValue)
+            | (1 << CGEventType.leftMouseUp.rawValue)
+            | (1 << CGEventType.rightMouseDown.rawValue)
+            | (1 << CGEventType.rightMouseUp.rawValue)
+            | (1 << CGEventType.otherMouseDown.rawValue)
+            | (1 << CGEventType.otherMouseUp.rawValue)
 
         self.eventTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -491,9 +508,95 @@ final class GlobalHotkeyManager: NSObject {
 
         self.eventTap = nil
         self.runLoopSource = nil
+        self.clearPrimaryShortcutPressState()
     }
 
-    // swiftlint:disable cyclomatic_complexity function_body_length
+    private nonisolated func clearPrimaryShortcutPressState() {
+        let task = self.state.withLock { () -> Task<Void, Never>? in
+            guard self.state.activePrimaryShortcutPress != nil || self.state.isKeyPressed else { return nil }
+            self.state.activePrimaryShortcutPress = nil
+            self.state.isKeyPressed = false
+            self.state.holdModeStartTriggeredTypes.remove(.transcription)
+            self.state.automaticPressStartTimes.removeValue(forKey: .transcription)
+            self.state.automaticPressWasTargetActive.removeValue(forKey: .transcription)
+            self.state.automaticPressStartedTypes.remove(.transcription)
+            _ = self.state.pendingReleaseStopTokens.removeValue(forKey: .transcription)
+            return self.state.pendingReleaseStopTasks.removeValue(forKey: .transcription)
+        }
+        task?.cancel()
+    }
+
+    private func markOtherInputDuringModifierOnly() {
+        guard self.modifierOnlyKeyDown else { return }
+        self.otherKeyPressedDuringModifier = true
+        if let pending = self.pendingHoldModeStart {
+            pending.cancel()
+            self.pendingHoldModeStart = nil
+            self.pendingHoldModeType = nil
+            DebugLogger.shared.info("Another input pressed - cancelled pending hold mode start", source: "GlobalHotkeyManager")
+        }
+    }
+
+    private func mouseButton(from event: CGEvent) -> Int {
+        Int(event.getIntegerValueField(.mouseEventButtonNumber))
+    }
+
+    private func beginPrimaryShortcutPress(_ press: ActivePrimaryShortcutPress) -> Bool {
+        self.state.withLock {
+            guard self.state.activePrimaryShortcutPress == nil, !self.state.isKeyPressed else {
+                return false
+            }
+            self.state.activePrimaryShortcutPress = press
+            return true
+        }
+    }
+
+    private func finishPrimaryShortcutPress(_ press: ActivePrimaryShortcutPress) -> Bool {
+        self.state.withLock {
+            guard self.state.activePrimaryShortcutPress == press else {
+                return false
+            }
+            self.state.activePrimaryShortcutPress = nil
+            return true
+        }
+    }
+
+    private func primaryModifierOnlyBehavior(for shortcut: HotkeyShortcut) -> ModifierOnlyShortcutBehavior {
+        .init(
+            shortcut: shortcut,
+            isEnabled: true,
+            holdModeType: .transcription,
+            holdStartCancelledMessage: "Transcription hold start cancelled - key combo detected",
+            holdStartMessage: "Transcription modifier held (hold mode) - starting after delay",
+            holdReleaseMessage: "Transcription modifier released (hold mode) - stopping",
+            toggleIgnoredMessage: "Transcription modifier released but another key was pressed - ignoring",
+            isModeKeyPressed: { self.isKeyPressed },
+            setModeKeyPressed: { self.isKeyPressed = $0 },
+            onHoldStart: { self.startRecordingIfNeeded() },
+            onToggleRelease: {
+                if self.asrService.isRunning {
+                    let isSameMode = self.isDictateRecordingProvider?() ?? false
+                    DebugLogger.shared.info(
+                        "Hotkey route | pressed=dictate(mod) | active=\(isSameMode ? "dictate" : "other") | asrRunning=true | action=\(isSameMode ? "stop" : "switch")",
+                        source: "GlobalHotkeyManager"
+                    )
+                    if isSameMode {
+                        self.stopRecordingIfNeeded()
+                    } else {
+                        self.triggerDictationMode()
+                    }
+                } else {
+                    DebugLogger.shared.info(
+                        "Hotkey route | pressed=dictate(mod) | active=none | asrRunning=false | action=start",
+                        source: "GlobalHotkeyManager"
+                    )
+                    self.triggerDictationMode()
+                }
+            },
+            isTargetModeActive: { self.isDictateRecordingProvider?() ?? false }
+        )
+    }
+
     private func handleKeyEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if let tapRecoveryResult = self.handleTapDisableEvent(type: type, event: event) {
             return tapRecoveryResult
@@ -516,17 +619,7 @@ final class GlobalHotkeyManager: NSObject {
 
         switch type {
         case .keyDown:
-            // If a modifier-only shortcut key is being held and this is a different key, mark it
-            if self.modifierOnlyKeyDown {
-                self.otherKeyPressedDuringModifier = true
-                // Cancel any pending hold mode start (user is doing a key combo, not just modifier)
-                if let pending = self.pendingHoldModeStart {
-                    pending.cancel()
-                    self.pendingHoldModeStart = nil
-                    self.pendingHoldModeType = nil
-                    DebugLogger.shared.info("Another key pressed - cancelled pending hold mode start", source: "GlobalHotkeyManager")
-                }
-            }
+            self.markOtherInputDuringModifierOnly()
 
             // Observe post-transcription edits (do not consume the event).
             Task {
@@ -607,7 +700,7 @@ final class GlobalHotkeyManager: NSObject {
             if self.handlePromptModeKeyDown(keyCode: keyCode, modifiers: eventModifiers) { return nil }
 
             // Check command mode hotkey first
-            if self.commandModeShortcutEnabled, self.matchesCommandModeShortcut(keyCode: keyCode, modifiers: eventModifiers) {
+            if self.commandModeShortcutEnabled, self.commandModeShortcut.matches(keyCode: keyCode, modifiers: eventModifiers) {
                 switch self.hotkeyMode {
                 case .hold:
                     // Press and hold: start on keyDown, stop on keyUp
@@ -658,7 +751,7 @@ final class GlobalHotkeyManager: NSObject {
 
             // Check dedicated rewrite mode hotkey
             if self.rewriteModeShortcutEnabled {
-                if self.matchesRewriteModeShortcut(keyCode: keyCode, modifiers: eventModifiers) {
+                if self.rewriteModeShortcut.matches(keyCode: keyCode, modifiers: eventModifiers) {
                     switch self.hotkeyMode {
                     case .hold:
                         // Press and hold: start on keyDown, stop on keyUp
@@ -708,83 +801,10 @@ final class GlobalHotkeyManager: NSObject {
                 }
             }
 
-            // Then check transcription hotkey
-            if self.matchesShortcut(keyCode: keyCode, modifiers: eventModifiers) {
-                switch self.hotkeyMode {
-                case .hold:
-                    if !self.isKeyPressed {
-                        self.cancelPendingReleaseStop(for: .transcription)
-                        self.clearHoldModeStartTriggered(for: .transcription)
-                        self.isKeyPressed = true
-                        if self.asrService.isRunning {
-                            let isSameMode = self.isDictateRecordingProvider?() ?? false
-                            DebugLogger.shared.debug(
-                                "GlobalHotkeyManager: dictation hold-press path",
-                                source: "GlobalHotkeyManager"
-                            )
-                            DebugLogger.shared.info(
-                                "Hotkey route | pressed=dictate | active=\(isSameMode ? "dictate" : "other") | asrRunning=true | action=\(isSameMode ? "stop" : "switch")",
-                                source: "GlobalHotkeyManager"
-                            )
-                            if !isSameMode {
-                                self.triggerDictationMode()
-                            }
-                        } else {
-                            DebugLogger.shared.info(
-                                "Hotkey route | pressed=dictate | active=none | asrRunning=false | action=start",
-                                source: "GlobalHotkeyManager"
-                            )
-                            self.startRecordingIfNeeded()
-                        }
-                        self.markHoldModeStartTriggered(for: .transcription)
-                    }
-                case .automatic:
-                    if !self.isKeyPressed {
-                        self.isKeyPressed = true
-                        let isSameMode = self.asrService.isRunning && (self.isDictateRecordingProvider?() ?? false)
-                        self.beginAutomaticPress(for: .transcription, wasTargetActive: isSameMode)
-                        if self.asrService.isRunning {
-                            DebugLogger.shared.info(
-                                "Hotkey route | pressed=dictate | active=\(isSameMode ? "dictate" : "other") | asrRunning=true | action=\(isSameMode ? "release-stop" : "switch")",
-                                source: "GlobalHotkeyManager"
-                            )
-                            if !isSameMode {
-                                self.triggerDictationMode()
-                                self.markAutomaticPressStarted(for: .transcription)
-                            }
-                        } else {
-                            DebugLogger.shared.info(
-                                "Hotkey route | pressed=dictate | active=none | asrRunning=false | action=start",
-                                source: "GlobalHotkeyManager"
-                            )
-                            self.triggerDictationMode()
-                            self.markAutomaticPressStarted(for: .transcription)
-                        }
-                    }
-                case .toggle:
-                    if self.asrService.isRunning {
-                        let isSameMode = self.isDictateRecordingProvider?() ?? false
-                        DebugLogger.shared.debug(
-                            "GlobalHotkeyManager: dictation tap path while already running",
-                            source: "GlobalHotkeyManager"
-                        )
-                        DebugLogger.shared.info(
-                            "Hotkey route | pressed=dictate | active=\(isSameMode ? "dictate" : "other") | asrRunning=true | action=\(isSameMode ? "stop" : "switch")",
-                            source: "GlobalHotkeyManager"
-                        )
-                        if isSameMode {
-                            self.stopRecordingIfNeeded()
-                        } else {
-                            self.triggerDictationMode()
-                        }
-                    } else {
-                        DebugLogger.shared.info(
-                            "Hotkey route | pressed=dictate | active=none | asrRunning=false | action=start",
-                            source: "GlobalHotkeyManager"
-                        )
-                        self.triggerDictationMode()
-                    }
-                }
+            // Then check transcription hotkeys
+            if let shortcut = self.primaryShortcuts.first(where: { $0.matches(keyCode: keyCode, modifiers: eventModifiers) }) {
+                guard self.beginPrimaryShortcutPress(.keyboard(shortcut.keyCode)) else { return nil }
+                self.handlePrimaryDictationTriggerDown()
                 return nil
             }
 
@@ -851,20 +871,25 @@ final class GlobalHotkeyManager: NSObject {
 
             // Transcription key up
             // Note: Only check keyCode, not modifiers - user may release modifier before/with main key
-            if self.isKeyPressed, keyCode == self.shortcut.keyCode {
-                switch self.hotkeyMode {
-                case .hold:
-                    self.isKeyPressed = false
-                    _ = self.finishHoldModeStartTriggered(for: .transcription)
-                    self.stopRecordingAfterRelease(for: .transcription, label: "Transcription")
-                case .automatic:
-                    self.isKeyPressed = false
-                    self.handleAutomaticKeyRelease(for: .transcription, label: "Transcription")
-                case .toggle:
-                    break
-                }
+            if self.finishPrimaryShortcutPress(.keyboard(keyCode)) {
+                self.handlePrimaryDictationTriggerUp()
                 return nil
             }
+
+        case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+            self.markOtherInputDuringModifierOnly()
+            let mouseButton = self.mouseButton(from: event)
+            if self.primaryShortcuts.contains(where: { $0.matchesMouse(button: mouseButton, modifiers: eventModifiers) }) {
+                guard self.beginPrimaryShortcutPress(.mouse(mouseButton)) else { return nil }
+                self.handlePrimaryDictationTriggerDown()
+                return nil
+            }
+
+        case .leftMouseUp, .rightMouseUp, .otherMouseUp:
+            let mouseButton = self.mouseButton(from: event)
+            guard self.finishPrimaryShortcutPress(.mouse(mouseButton)) else { break }
+            self.handlePrimaryDictationTriggerUp()
+            return nil
 
         case .flagsChanged:
             if HotkeyShortcut.modifierFlag(forKeyCode: keyCode) != nil {
@@ -942,50 +967,19 @@ final class GlobalHotkeyManager: NSObject {
                 modifiers: eventModifiers
             ) { return nil }
 
-            if self.handleModifierOnlyShortcutFlagsChanged(
-                behavior: .init(
-                    shortcut: self.shortcut,
-                    isEnabled: true,
-                    holdModeType: .transcription,
-                    holdStartCancelledMessage: "Transcription hold start cancelled - key combo detected",
-                    holdStartMessage: "Transcription modifier held (hold mode) - starting after delay",
-                    holdReleaseMessage: "Transcription modifier released (hold mode) - stopping",
-                    toggleIgnoredMessage: "Transcription modifier released but another key was pressed - ignoring",
-                    isModeKeyPressed: { self.isKeyPressed },
-                    setModeKeyPressed: { self.isKeyPressed = $0 },
-                    onHoldStart: { self.startRecordingIfNeeded() },
-                    onToggleRelease: {
-                        if self.asrService.isRunning {
-                            let isSameMode = self.isDictateRecordingProvider?() ?? false
-                            DebugLogger.shared.info(
-                                "Hotkey route | pressed=dictate(mod) | active=\(isSameMode ? "dictate" : "other") | asrRunning=true | action=\(isSameMode ? "stop" : "switch")",
-                                source: "GlobalHotkeyManager"
-                            )
-                            if isSameMode {
-                                self.stopRecordingIfNeeded()
-                            } else {
-                                self.triggerDictationMode()
-                            }
-                        } else {
-                            DebugLogger.shared.info(
-                                "Hotkey route | pressed=dictate(mod) | active=none | asrRunning=false | action=start",
-                                source: "GlobalHotkeyManager"
-                            )
-                            self.triggerDictationMode()
-                        }
-                    },
-                    isTargetModeActive: { self.isDictateRecordingProvider?() ?? false }
-                ),
-                keyCode: keyCode,
-                modifiers: eventModifiers
-            ) { return nil }
+            for shortcut in self.primaryShortcuts where shortcut.isModifierOnlyShortcut {
+                if self.handleModifierOnlyShortcutFlagsChanged(
+                    behavior: self.primaryModifierOnlyBehavior(for: shortcut),
+                    keyCode: keyCode,
+                    modifiers: eventModifiers
+                ) { return nil }
+            }
 
         default:
             break
         }
 
         return Unmanaged.passUnretained(event)
-        // swiftlint:enable cyclomatic_complexity function_body_length
     }
 
     private func handleTapDisableEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -1089,6 +1083,98 @@ final class GlobalHotkeyManager: NSObject {
             self.stopRecordingAfterRelease(for: type, label: label)
         } else {
             DebugLogger.shared.debug("\(label) hold (\(duration)s) ignored - no automatic start", source: "GlobalHotkeyManager")
+        }
+    }
+
+    private func handlePrimaryDictationTriggerDown() {
+        switch self.hotkeyMode {
+        case .hold:
+            if !self.isKeyPressed {
+                self.cancelPendingReleaseStop(for: .transcription)
+                self.clearHoldModeStartTriggered(for: .transcription)
+                self.isKeyPressed = true
+                if self.asrService.isRunning {
+                    let isSameMode = self.isDictateRecordingProvider?() ?? false
+                    DebugLogger.shared.debug(
+                        "GlobalHotkeyManager: dictation hold-press path",
+                        source: "GlobalHotkeyManager"
+                    )
+                    DebugLogger.shared.info(
+                        "Hotkey route | pressed=dictate | active=\(isSameMode ? "dictate" : "other") | asrRunning=true | action=\(isSameMode ? "stop" : "switch")",
+                        source: "GlobalHotkeyManager"
+                    )
+                    if !isSameMode {
+                        self.triggerDictationMode()
+                    }
+                } else {
+                    DebugLogger.shared.info(
+                        "Hotkey route | pressed=dictate | active=none | asrRunning=false | action=start",
+                        source: "GlobalHotkeyManager"
+                    )
+                    self.startRecordingIfNeeded()
+                }
+                self.markHoldModeStartTriggered(for: .transcription)
+            }
+        case .automatic:
+            if !self.isKeyPressed {
+                self.isKeyPressed = true
+                let isSameMode = self.asrService.isRunning && (self.isDictateRecordingProvider?() ?? false)
+                self.beginAutomaticPress(for: .transcription, wasTargetActive: isSameMode)
+                if self.asrService.isRunning {
+                    DebugLogger.shared.info(
+                        "Hotkey route | pressed=dictate | active=\(isSameMode ? "dictate" : "other") | asrRunning=true | action=\(isSameMode ? "release-stop" : "switch")",
+                        source: "GlobalHotkeyManager"
+                    )
+                    if !isSameMode {
+                        self.triggerDictationMode()
+                        self.markAutomaticPressStarted(for: .transcription)
+                    }
+                } else {
+                    DebugLogger.shared.info(
+                        "Hotkey route | pressed=dictate | active=none | asrRunning=false | action=start",
+                        source: "GlobalHotkeyManager"
+                    )
+                    self.triggerDictationMode()
+                    self.markAutomaticPressStarted(for: .transcription)
+                }
+            }
+        case .toggle:
+            if self.asrService.isRunning {
+                let isSameMode = self.isDictateRecordingProvider?() ?? false
+                DebugLogger.shared.debug(
+                    "GlobalHotkeyManager: dictation tap path while already running",
+                    source: "GlobalHotkeyManager"
+                )
+                DebugLogger.shared.info(
+                    "Hotkey route | pressed=dictate | active=\(isSameMode ? "dictate" : "other") | asrRunning=true | action=\(isSameMode ? "stop" : "switch")",
+                    source: "GlobalHotkeyManager"
+                )
+                if isSameMode {
+                    self.stopRecordingIfNeeded()
+                } else {
+                    self.triggerDictationMode()
+                }
+            } else {
+                DebugLogger.shared.info(
+                    "Hotkey route | pressed=dictate | active=none | asrRunning=false | action=start",
+                    source: "GlobalHotkeyManager"
+                )
+                self.triggerDictationMode()
+            }
+        }
+    }
+
+    private func handlePrimaryDictationTriggerUp() {
+        switch self.hotkeyMode {
+        case .hold:
+            self.isKeyPressed = false
+            _ = self.finishHoldModeStartTriggered(for: .transcription)
+            self.stopRecordingAfterRelease(for: .transcription, label: "Transcription")
+        case .automatic:
+            self.isKeyPressed = false
+            self.handleAutomaticKeyRelease(for: .transcription, label: "Transcription")
+        case .toggle:
+            break
         }
     }
 
@@ -1269,6 +1355,7 @@ final class GlobalHotkeyManager: NSObject {
         self.isCommandModeKeyPressed = false
         self.isRewriteKeyPressed = false
         self.isPromptAssignmentKeyPressed = false
+        self.activePrimaryShortcutPress = nil
 
         if shouldStopActiveHold {
             switch reason {
@@ -1284,7 +1371,7 @@ final class GlobalHotkeyManager: NSObject {
     }
 
     private func handlePromptModeKeyDown(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool {
-        guard self.promptModeShortcutEnabled, self.matchesPromptModeShortcut(keyCode: keyCode, modifiers: modifiers) else { return false }
+        guard self.promptModeShortcutEnabled, self.promptModeShortcut.matches(keyCode: keyCode, modifiers: modifiers) else { return false }
         switch self.hotkeyMode {
         case .hold:
             if !self.isPromptModeKeyPressed {
@@ -1515,6 +1602,7 @@ final class GlobalHotkeyManager: NSObject {
     private func triggerPromptMode() {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
+            guard self.canTriggerRecordingAction("Prompt mode hotkey") else { return }
             DebugLogger.shared.info("Prompt mode hotkey triggered", source: "GlobalHotkeyManager")
             await self.promptModeCallback?()
         }
@@ -1523,6 +1611,7 @@ final class GlobalHotkeyManager: NSObject {
     private func triggerPromptSelection(_ selection: SettingsStore.DictationPromptSelection) {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
+            guard self.canTriggerRecordingAction("Prompt selection hotkey") else { return }
             DebugLogger.shared.info("Prompt selection hotkey triggered", source: "GlobalHotkeyManager")
             await self.promptSelectionCallback?(selection)
         }
@@ -1531,6 +1620,7 @@ final class GlobalHotkeyManager: NSObject {
     private func triggerCommandMode() {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
+            guard self.canTriggerRecordingAction("Command mode hotkey") else { return }
             DebugLogger.shared.info("Command mode hotkey triggered", source: "GlobalHotkeyManager")
             DebugLogger.shared.debug(
                 "GlobalHotkeyManager: command callback path, isRunning=\(self.asrService.isRunning), isReady=\(self.asrService.isAsrReady)",
@@ -1543,6 +1633,7 @@ final class GlobalHotkeyManager: NSObject {
     private func triggerRewriteMode() {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
+            guard self.canTriggerRecordingAction("Rewrite mode hotkey") else { return }
             DebugLogger.shared.info("Rewrite mode hotkey triggered", source: "GlobalHotkeyManager")
             DebugLogger.shared.debug(
                 "GlobalHotkeyManager: rewrite callback path, isRunning=\(self.asrService.isRunning), isReady=\(self.asrService.isAsrReady)",
@@ -1555,6 +1646,7 @@ final class GlobalHotkeyManager: NSObject {
     private func triggerDictationMode() {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
+            guard self.canTriggerRecordingAction("Dictate mode hotkey") else { return }
             let model = SettingsStore.shared.selectedSpeechModel
             DebugLogger.shared.info("Dictate mode hotkey triggered", source: "GlobalHotkeyManager")
             DebugLogger.shared.debug(
@@ -1595,6 +1687,7 @@ final class GlobalHotkeyManager: NSObject {
         self.isCommandModeKeyPressed = false
         self.isRewriteKeyPressed = false
         self.isPromptAssignmentKeyPressed = false
+        self.activePrimaryShortcutPress = nil
 
         if shouldStopActivePress {
             self.stopRecordingIfNeeded()
@@ -1606,21 +1699,22 @@ final class GlobalHotkeyManager: NSObject {
         self.setHotkeyMode(enable ? .hold : .toggle)
     }
 
-    private func toggleRecording() {
-        // Capture state at event time to prevent race conditions
-        let shouldStop = self.asrService.isRunning
-        let alreadyProcessing = self.isProcessingStop
+    private func canTriggerRecordingAction(_ label: String) -> Bool {
+        guard !self.isProcessingStop else {
+            DebugLogger.shared.debug("Ignoring \(label) - stop already processing", source: "GlobalHotkeyManager")
+            return false
+        }
+        return true
+    }
 
+    private func toggleRecording() {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
 
             // Prevent new operations while stop is processing
-            if alreadyProcessing {
-                DebugLogger.shared.debug("Ignoring toggle - stop already in progress", source: "GlobalHotkeyManager")
-                return
-            }
+            guard self.canTriggerRecordingAction("toggle") else { return }
 
-            if shouldStop {
+            if self.asrService.isRunning {
                 await self.stopRecordingInternal()
             } else {
                 // Use callback if available, otherwise fallback to direct start
@@ -1634,20 +1728,13 @@ final class GlobalHotkeyManager: NSObject {
     }
 
     private func startRecordingIfNeeded() {
-        // Capture state at event time
-        let alreadyRunning = self.asrService.isRunning
-        let alreadyProcessing = self.isProcessingStop
-
         Task { @MainActor [weak self] in
             guard let self = self else { return }
 
             // Prevent starting while stop is processing
-            if alreadyProcessing {
-                DebugLogger.shared.debug("Ignoring start - stop in progress", source: "GlobalHotkeyManager")
-                return
-            }
+            guard self.canTriggerRecordingAction("start") else { return }
 
-            if !alreadyRunning {
+            if !self.asrService.isRunning {
                 // Use callback if available, otherwise fallback to direct start
                 if let callback = self.startRecordingCallback {
                     await callback()
@@ -1691,30 +1778,6 @@ final class GlobalHotkeyManager: NSObject {
         } else {
             await self.asrService.stopWithoutTranscription()
         }
-    }
-
-    private func matchesShortcut(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool {
-        let relevantModifiers: NSEvent.ModifierFlags = modifiers.intersection([.function, .command, .option, .control, .shift])
-        let shortcutModifiers = self.shortcut.modifierFlags.intersection([.function, .command, .option, .control, .shift])
-        return keyCode == self.shortcut.keyCode && relevantModifiers == shortcutModifiers
-    }
-
-    private func matchesPromptModeShortcut(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool {
-        let relevantModifiers: NSEvent.ModifierFlags = modifiers.intersection([.function, .command, .option, .control, .shift])
-        let shortcutModifiers = self.promptModeShortcut.modifierFlags.intersection([.function, .command, .option, .control, .shift])
-        return keyCode == self.promptModeShortcut.keyCode && relevantModifiers == shortcutModifiers
-    }
-
-    private func matchesCommandModeShortcut(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool {
-        let relevantModifiers: NSEvent.ModifierFlags = modifiers.intersection([.function, .command, .option, .control, .shift])
-        let shortcutModifiers = self.commandModeShortcut.modifierFlags.intersection([.function, .command, .option, .control, .shift])
-        return keyCode == self.commandModeShortcut.keyCode && relevantModifiers == shortcutModifiers
-    }
-
-    private func matchesRewriteModeShortcut(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool {
-        let relevantModifiers: NSEvent.ModifierFlags = modifiers.intersection([.function, .command, .option, .control, .shift])
-        let shortcutModifiers = self.rewriteModeShortcut.modifierFlags.intersection([.function, .command, .option, .control, .shift])
-        return keyCode == self.rewriteModeShortcut.keyCode && relevantModifiers == shortcutModifiers
     }
 
     func isEventTapEnabled() -> Bool {

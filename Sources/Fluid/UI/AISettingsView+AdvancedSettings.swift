@@ -962,9 +962,10 @@ extension AIEnhancementSettingsView {
                 } else {
                     self.promptRoutingScopeRow(mode: mode)
 
-                    Text(isSelectedAppsOnly
-                        ? "Custom prompts only run in apps listed in App Overrides."
-                        : "Custom prompts run based on your shortcut or the app you're in."
+                    Text(
+                        isSelectedAppsOnly
+                            ? "Custom prompts only run in apps listed in App Overrides."
+                            : "Custom prompts run based on your shortcut or the app you're in."
                     )
                     .font(.caption2)
                     .foregroundStyle(self.theme.palette.secondaryText)
@@ -1141,9 +1142,10 @@ extension AIEnhancementSettingsView {
                 .foregroundStyle(self.theme.palette.accent)
                 .frame(width: 18, height: 18)
 
-            Text(mode.normalized == .dictate
-                ? "No default enhancement. Add app overrides to use prompts in selected apps."
-                : "Default edit stays built-in. App overrides can use custom prompts."
+            Text(
+                mode.normalized == .dictate
+                    ? "No default enhancement. Add app overrides to use prompts in selected apps."
+                    : "Default edit stays built-in. App overrides can use custom prompts."
             )
             .font(.caption2)
             .foregroundStyle(self.theme.palette.secondaryText)
@@ -1730,7 +1732,7 @@ extension AIEnhancementSettingsView {
                         Spacer()
                     }
 
-                    let hotkeyDisplay = self.settings.hotkeyShortcut.displayString
+                    let hotkeyDisplay = self.settings.primaryDictationShortcutDisplayString
                     let canTest = self.viewModel.isAIPostProcessingConfiguredForDictation()
 
                     Toggle(isOn: Binding(

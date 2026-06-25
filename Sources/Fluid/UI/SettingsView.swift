@@ -33,7 +33,7 @@ struct SettingsView: View {
     @Binding var inputDevices: [AudioDevice.Device]
     @Binding var outputDevices: [AudioDevice.Device]
     @Binding var accessibilityEnabled: Bool
-    @Binding var hotkeyShortcut: HotkeyShortcut
+    @Binding var primaryDictationShortcuts: [HotkeyShortcut]
     @Binding var activeShortcutRecordingTarget: ShortcutRecordingTarget?
     @Binding var shortcutRecordingMessage: String?
     @Binding var commandModeShortcut: HotkeyShortcut
@@ -120,6 +120,10 @@ struct SettingsView: View {
 
     private var currentAppVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+    }
+
+    private var appDisplayName: String {
+        Bundle.main.fluidAppDisplayName
     }
 
     private var launchAtStartupBinding: Binding<Bool> {
@@ -589,7 +593,11 @@ struct SettingsView: View {
                                     title: "How to enable microphone access:",
                                     steps: self.asr.micStatus == .notDetermined
                                         ? ["Click **Grant Access** above", "Choose **Allow** in the system dialog"]
-                                        : ["Click **Open Settings** above", "Find **FluidVoice** in the microphone list", "Toggle **FluidVoice ON** to allow access"]
+                                        : [
+                                            "Click **Open Settings** above",
+                                            "Find **\(self.appDisplayName)** in the microphone list",
+                                            "Toggle **\(self.appDisplayName) ON** to allow access",
+                                        ]
                                 )
                             }
                         }
@@ -653,31 +661,15 @@ struct SettingsView: View {
                                 // MARK: - Shortcuts Section
 
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Keyboard Shortcuts")
+                                    Text("Shortcuts")
                                         .font(.subheadline.weight(.medium))
                                         .foregroundStyle(.secondary)
 
-                                    Text("Changes usually apply immediately. If a new shortcut does not respond, restart FluidVoice.")
+                                    Text("Primary dictation can use a keyboard shortcut or allowed mouse button. Changes usually apply immediately.")
                                         .font(.caption)
                                         .foregroundStyle(.tertiary)
 
-                                    self.shortcutRow(
-                                        content: .init(
-                                            icon: "mic.fill",
-                                            iconColor: .secondary,
-                                            title: "Primary Dictation Shortcut",
-                                            description: "Defaults to raw transcription, but can use Off, Default, or any custom prompt."
-                                        ),
-                                        shortcut: self.hotkeyShortcut,
-                                        isRecording: self.isRecording(.primaryDictation),
-                                        isAnyRecordingActive: self.isRecordingAnyShortcut,
-                                        recordingMessage: self.isRecording(.primaryDictation) ? self.shortcutRecordingMessage : nil,
-                                        onChangePressed: {
-                                            DebugLogger.shared.debug("Starting to record new transcribe shortcut", source: "SettingsView")
-                                            self.shortcutRecordingMessage = nil
-                                            self.activeShortcutRecordingTarget = .primaryDictation
-                                        }
-                                    )
+                                    self.primaryDictationShortcutsList()
                                     self.dictationPromptPicker(for: .primary)
                                     Divider().opacity(0.2).padding(.vertical, 4)
 
@@ -970,8 +962,8 @@ struct SettingsView: View {
                                     steps: [
                                         "Click **Open Accessibility Settings** above",
                                         "In the Accessibility window, click the **+ button**",
-                                        "Navigate to Applications and select **FluidVoice**",
-                                        "Click **Open**, then toggle **FluidVoice ON** in the list",
+                                        "Select **\(self.appDisplayName)**; use **Reveal in Finder** below if needed",
+                                        "Click **Open**, then toggle **\(self.appDisplayName) ON** in the list",
                                     ],
                                     warningStyle: true
                                 )
@@ -2028,6 +2020,150 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
+    private func primaryDictationShortcutsList() -> some View {
+        let addTarget = ShortcutRecordingTarget.primaryDictation(.add)
+        let isAdding = self.isRecording(addTarget)
+
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Image(systemName: "mic.fill")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Primary Dictation Shortcuts")
+                        .font(.body)
+                    Text("Use any keyboard shortcut, auxiliary mouse button, or modified click.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Button {
+                    if isAdding {
+                        self.shortcutRecordingMessage = nil
+                        self.activeShortcutRecordingTarget = nil
+                    } else {
+                        DebugLogger.shared.debug("Starting to record new primary dictation shortcut", source: "SettingsView")
+                        self.shortcutRecordingMessage = nil
+                        self.activeShortcutRecordingTarget = addTarget
+                    }
+                } label: {
+                    Label(isAdding ? "Cancel" : "Add shortcut", systemImage: isAdding ? "xmark" : "plus")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(!isAdding && self.isRecordingAnyShortcut)
+            }
+
+            ForEach(Array(self.primaryDictationShortcuts.enumerated()), id: \.offset) { index, shortcut in
+                self.primaryDictationShortcutRow(shortcut: shortcut, index: index)
+            }
+
+            if isAdding {
+                self.primaryDictationShortcutCaptureStatus(for: addTarget)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func primaryDictationShortcutRow(shortcut: HotkeyShortcut, index: Int) -> some View {
+        let target = ShortcutRecordingTarget.primaryDictation(.replace(index))
+        let isRecording = self.isRecording(target)
+
+        HStack(spacing: 10) {
+            Color.clear
+                .frame(width: 20)
+
+            if isRecording {
+                self.shortcutCapturePill()
+            } else {
+                self.shortcutDisplayPill(shortcut.displayString)
+            }
+
+            Button(isRecording ? "Cancel" : "Change") {
+                if isRecording {
+                    self.shortcutRecordingMessage = nil
+                    self.activeShortcutRecordingTarget = nil
+                } else {
+                    DebugLogger.shared.debug("Starting to record replacement primary dictation shortcut", source: "SettingsView")
+                    self.shortcutRecordingMessage = nil
+                    self.activeShortcutRecordingTarget = target
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(!isRecording && self.isRecordingAnyShortcut)
+
+            Button("Remove") {
+                guard self.primaryDictationShortcuts.count > 1,
+                      self.primaryDictationShortcuts.indices.contains(index)
+                else { return }
+                self.primaryDictationShortcuts.remove(at: index)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(self.primaryDictationShortcuts.count <= 1 || self.isRecordingAnyShortcut)
+
+            if isRecording,
+               let recordingMessage = self.shortcutRecordingMessage,
+               !recordingMessage.isEmpty
+            {
+                Text(recordingMessage)
+                    .font(.caption)
+                    .foregroundStyle(self.theme.palette.warning)
+            }
+        }
+    }
+
+    private func primaryDictationShortcutCaptureStatus(for target: ShortcutRecordingTarget) -> some View {
+        HStack(spacing: 10) {
+            Color.clear
+                .frame(width: 20)
+
+            self.shortcutCapturePill()
+
+            if self.isRecording(target),
+               let recordingMessage = self.shortcutRecordingMessage,
+               !recordingMessage.isEmpty
+            {
+                Text(recordingMessage)
+                    .font(.caption)
+                    .foregroundStyle(self.theme.palette.warning)
+            }
+        }
+    }
+
+    private func shortcutCapturePill() -> some View {
+        Text("Press shortcut...")
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.orange)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(.orange.opacity(0.2))
+            )
+    }
+
+    private func shortcutDisplayPill(_ text: String) -> some View {
+        Text(text)
+            .font(.caption.monospaced().weight(.medium))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(.quaternary.opacity(0.5))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .stroke(.primary.opacity(0.15), lineWidth: 1)
+                    )
+            )
+    }
+
+    @ViewBuilder
     private func shortcutRow(
         content: ShortcutRowContent,
         shortcut: HotkeyShortcut,
@@ -2061,6 +2197,7 @@ struct SettingsView: View {
                         .toggleStyle(.switch)
                         .tint(self.theme.palette.accent)
                         .labelsHidden()
+                        .disabled(isAnyRecordingActive)
                 }
             }
 
@@ -2069,36 +2206,22 @@ struct SettingsView: View {
                     .frame(width: 20)
 
                 if isRecording && enabledValue {
-                    Text("Press shortcut...")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(.orange.opacity(0.2))
-                        )
+                    self.shortcutCapturePill()
                 } else {
-                    Text(shortcut.displayString)
-                        .font(.caption.monospaced().weight(.medium))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(.quaternary.opacity(0.5))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                        .stroke(.primary.opacity(0.15), lineWidth: 1)
-                                )
-                        )
+                    self.shortcutDisplayPill(shortcut.displayString)
                 }
 
-                Button("Change") {
-                    onChangePressed()
+                Button(isRecording ? "Cancel" : "Change") {
+                    if isRecording {
+                        self.shortcutRecordingMessage = nil
+                        self.activeShortcutRecordingTarget = nil
+                    } else {
+                        onChangePressed()
+                    }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(isAnyRecordingActive || !enabledValue)
+                .disabled(!isRecording && (isAnyRecordingActive || !enabledValue))
 
                 if isRecording, let recordingMessage, !recordingMessage.isEmpty {
                     Text(recordingMessage)
