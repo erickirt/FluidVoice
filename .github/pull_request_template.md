@@ -5,6 +5,7 @@ Brief description of what this PR does.
 - [ ] 🐞 Bug fix (non-breaking change which fixes an issue)
 - [ ] ✨ New feature (non-breaking change which adds functionality)
 - [ ] 💥 Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] 🧹 Chore
 - [ ] 📝 Documentation update
 
 ## Related Issues
@@ -16,7 +17,6 @@ Brief description of what this PR does.
 - [ ] Tested on macOS [version]
 - [ ] Ran linter locally: `swiftlint --strict --config .swiftlint.yml Sources`
 - [ ] Ran formatter locally: `swiftformat --config .swiftformat Sources`
-- [ ] Built locally with Fluid Intelligence: `sh build_with_FI_incremental.sh`
 
 ## Notes
 - Add any important reviewer context, rollout notes, or known tradeoffs here.
