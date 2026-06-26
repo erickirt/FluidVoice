@@ -18,6 +18,7 @@ final class DictationE2ETests: XCTestCase {
     private let selectedProviderIDKey = "SelectedProviderID"
     private let availableModelsByProviderKey = "AvailableModelsByProvider"
     private let selectedModelByProviderKey = "SelectedModelByProvider"
+    private let customDictionaryEntriesKey = "CustomDictionaryEntries"
     private let commandModeLinkedToGlobalKey = "CommandModeLinkedToGlobal"
     private let commandModeSelectedProviderIDKey = "CommandModeSelectedProviderID"
     private let commandModeSelectedModelKey = "CommandModeSelectedModel"
@@ -66,6 +67,264 @@ final class DictationE2ETests: XCTestCase {
             XCTAssertNil(defaults.object(forKey: self.enableTranscriptionSoundsKey))
             XCTAssertEqual(defaults.string(forKey: self.transcriptionStartSoundKey), SettingsStore.TranscriptionStartSound.fluidSfx2.rawValue)
         }
+    }
+
+    func testDictionaryTransferDocument_encodesSimpleUserFormat() throws {
+        let document = DictionaryTransferDocument(
+            replacements: [
+                DictionaryTransferReplacement(from: ["fluid voice", "fluid boys"], to: "FluidVoice"),
+            ],
+            customWords: ["FluidVoice", "GEMBA-E"]
+        )
+
+        let data = try DictionaryTransferService.shared.encode(document)
+        let json = String(data: data, encoding: .utf8) ?? ""
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let replacements = try XCTUnwrap(root["replacements"] as? [[String: Any]])
+        let firstReplacement = try XCTUnwrap(replacements.first)
+
+        XCTAssertEqual(firstReplacement["from"] as? [String], ["fluid voice", "fluid boys"])
+        XCTAssertEqual(firstReplacement["to"] as? String, "FluidVoice")
+        XCTAssertEqual(root["customWords"] as? [String], ["FluidVoice", "GEMBA-E"])
+        XCTAssertFalse(json.contains("\"triggers\""))
+        XCTAssertFalse(json.contains("\"replacement\""))
+        XCTAssertFalse(json.contains("\"aliases\""))
+    }
+
+    func testDictionaryTransferImport_replaceMapsSimpleFormatToStores() throws {
+        let document = DictionaryTransferDocument(
+            replacements: [
+                DictionaryTransferReplacement(from: [" Fluid Voice ", "FLUID BOYS", ""], to: " FluidVoice "),
+            ],
+            customWords: [" FluidVoice ", "fluidvoice", " Barath "]
+        )
+        let existingReplacement = SettingsStore.CustomDictionaryEntry(triggers: ["old"], replacement: "Old")
+        let existingWord = ParakeetVocabularyStore.VocabularyConfig.Term(text: "OldWord", weight: 13.0)
+
+        let state = try DictionaryTransferService.importState(
+            document: document,
+            mode: .replace,
+            currentReplacements: [existingReplacement],
+            currentCustomWords: [existingWord]
+        )
+
+        XCTAssertEqual(state.replacements.count, 1)
+        XCTAssertEqual(state.replacements.first?.triggers, ["fluid voice", "fluid boys"])
+        XCTAssertEqual(state.replacements.first?.replacement, "FluidVoice")
+        XCTAssertEqual(state.customWords.map(\.text), ["FluidVoice", "Barath"])
+        XCTAssertEqual(state.customWords.map(\.weight), [10.0, 10.0])
+    }
+
+    func testDictionaryTransferImport_mergeDedupesAndMovesDuplicateTriggers() throws {
+        let oldReplacement = SettingsStore.CustomDictionaryEntry(
+            triggers: ["fluid voice", "old trigger"],
+            replacement: "Old"
+        )
+        let existingReplacement = SettingsStore.CustomDictionaryEntry(
+            triggers: ["fluid boys"],
+            replacement: "FluidVoice"
+        )
+        let existingWord = ParakeetVocabularyStore.VocabularyConfig.Term(
+            text: "Barath",
+            weight: 13.0,
+            aliases: ["barath w"]
+        )
+        let document = DictionaryTransferDocument(
+            replacements: [
+                DictionaryTransferReplacement(from: ["fluid voice", "fluid boys"], to: "FluidVoice"),
+            ],
+            customWords: ["barath", "GEMBA-E"]
+        )
+
+        let state = try DictionaryTransferService.importState(
+            document: document,
+            mode: .merge,
+            currentReplacements: [oldReplacement, existingReplacement],
+            currentCustomWords: [existingWord]
+        )
+
+        let fluidVoiceEntry = try XCTUnwrap(state.replacements.first { $0.replacement == "FluidVoice" })
+        let oldEntry = try XCTUnwrap(state.replacements.first { $0.replacement == "Old" })
+        let barathTerm = try XCTUnwrap(state.customWords.first { $0.text == "Barath" })
+        let gembaeTerm = try XCTUnwrap(state.customWords.first { $0.text == "GEMBA-E" })
+
+        XCTAssertEqual(Set(fluidVoiceEntry.triggers), Set(["fluid voice", "fluid boys"]))
+        XCTAssertEqual(oldEntry.triggers, ["old trigger"])
+        XCTAssertEqual(barathTerm.weight, 13.0)
+        XCTAssertEqual(barathTerm.aliases, ["barath w"])
+        XCTAssertEqual(gembaeTerm.weight, 10.0)
+    }
+
+    func testDictionaryTransferImport_acceptsAppStyleReplacementKeysAndSingleFromValue() throws {
+        let json = """
+        {
+          "replacements": [
+            {
+              "from": "fluid voice",
+              "to": "FluidVoice"
+            },
+            {
+              "triggers": ["gemba e"],
+              "replacement": "GEMBA-E"
+            }
+          ]
+        }
+        """
+
+        let document = try DictionaryTransferService.shared.decode(Data(json.utf8))
+        let state = try DictionaryTransferService.importState(
+            document: document,
+            mode: .replace,
+            currentReplacements: [],
+            currentCustomWords: []
+        )
+
+        XCTAssertEqual(state.replacements.map(\.triggers), [["fluid voice"], ["gemba e"]])
+        XCTAssertEqual(state.replacements.map(\.replacement), ["FluidVoice", "GEMBA-E"])
+    }
+
+    func testDictionaryTransferImport_acceptsLocalAPIReplacementItemsResponse() throws {
+        let json = """
+        {
+          "count": 1,
+          "items": [
+            {
+              "triggers": ["fluid voice"],
+              "replacement": "FluidVoice"
+            }
+          ]
+        }
+        """
+
+        let document = try DictionaryTransferService.shared.decode(Data(json.utf8))
+        let state = try DictionaryTransferService.importState(
+            document: document,
+            mode: .replace,
+            currentReplacements: [],
+            currentCustomWords: []
+        )
+
+        XCTAssertEqual(state.replacements.first?.triggers, ["fluid voice"])
+        XCTAssertEqual(state.replacements.first?.replacement, "FluidVoice")
+        XCTAssertEqual(state.customWords.count, 0)
+    }
+
+    func testDictionaryTransferImportFeedsActualReplacementPath() throws {
+        defer { ASRService.invalidateDictionaryCache() }
+        let document = DictionaryTransferDocument(
+            replacements: [
+                DictionaryTransferReplacement(from: ["fluid voice"], to: "FluidVoice"),
+            ],
+            customWords: []
+        )
+        let state = try DictionaryTransferService.importState(
+            document: document,
+            mode: .replace,
+            currentReplacements: [],
+            currentCustomWords: []
+        )
+
+        self.withRestoredDefaults(keys: [self.customDictionaryEntriesKey]) {
+            SettingsStore.shared.customDictionaryEntries = state.replacements
+            ASRService.invalidateDictionaryCache()
+
+            XCTAssertEqual(
+                ASRService.applyCustomDictionary("I use fluid voice daily."),
+                "I use FluidVoice daily."
+            )
+        }
+    }
+
+    func testCustomDictionaryReplacementTreatsReplacementTextLiterally() {
+        defer { ASRService.invalidateDictionaryCache() }
+        let entry = SettingsStore.CustomDictionaryEntry(
+            triggers: ["dollar path"],
+            replacement: #"$5 \path"#
+        )
+
+        self.withRestoredDefaults(keys: [self.customDictionaryEntriesKey]) {
+            SettingsStore.shared.customDictionaryEntries = [entry]
+            ASRService.invalidateDictionaryCache()
+
+            XCTAssertEqual(
+                ASRService.applyCustomDictionary("Use dollar path now."),
+                #"Use $5 \path now."#
+            )
+        }
+    }
+
+    func testDictionaryTransferImport_rejectsInvalidReplacementTriggerType() {
+        let json = """
+        {
+          "replacements": [
+            {
+              "from": 42,
+              "to": "FluidVoice"
+            }
+          ]
+        }
+        """
+
+        XCTAssertThrowsError(try DictionaryTransferService.shared.decode(Data(json.utf8)))
+    }
+
+    func testDictionaryTransferImport_acceptsParakeetVocabularyTermsFile() throws {
+        let json = """
+        {
+          "alpha": 2.8,
+          "terms": [
+            {
+              "text": "FluidVoice",
+              "aliases": ["fluid voice"],
+              "weight": 10.0
+            },
+            {
+              "text": "GEMBA-E"
+            }
+          ]
+        }
+        """
+
+        let document = try DictionaryTransferService.shared.decode(Data(json.utf8))
+        let state = try DictionaryTransferService.importState(
+            document: document,
+            mode: .replace,
+            currentReplacements: [],
+            currentCustomWords: []
+        )
+
+        XCTAssertEqual(state.replacements.count, 0)
+        XCTAssertEqual(state.customWords.map(\.text), ["FluidVoice", "GEMBA-E"])
+        XCTAssertEqual(state.customWords.map(\.weight), [10.0, 10.0])
+    }
+
+    func testDictionaryTransferImport_acceptsLocalAPICustomWordsResponse() throws {
+        let json = """
+        {
+          "count": 2,
+          "items": [
+            {
+              "text": "FluidVoice",
+              "weight": 10.0,
+              "aliases": ["fluid voice"]
+            },
+            {
+              "text": "Barath"
+            }
+          ]
+        }
+        """
+
+        let document = try DictionaryTransferService.shared.decode(Data(json.utf8))
+        let state = try DictionaryTransferService.importState(
+            document: document,
+            mode: .replace,
+            currentReplacements: [],
+            currentCustomWords: []
+        )
+
+        XCTAssertEqual(state.replacements.count, 0)
+        XCTAssertEqual(state.customWords.map(\.text), ["FluidVoice", "Barath"])
     }
 
     func testDictationEndToEnd_whisperTiny_transcribesFixture() async throws {

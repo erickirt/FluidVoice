@@ -6,7 +6,9 @@
 //  Created: 2025-12-21
 //
 
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct CustomDictionaryView: View {
     @Environment(\.theme) private var theme
@@ -80,13 +82,31 @@ struct CustomDictionaryView: View {
 
     private var pageHeader: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "text.book.closed.fill")
-                    .font(.title2)
-                    .foregroundStyle(self.theme.palette.accent)
-                Text("Custom Dictionary")
-                    .font(.title2)
-                    .fontWeight(.semibold)
+            HStack(alignment: .center, spacing: 12) {
+                HStack {
+                    Image(systemName: "text.book.closed.fill")
+                        .font(.title2)
+                        .foregroundStyle(self.theme.palette.accent)
+                    Text("Custom Dictionary")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                }
+
+                Spacer(minLength: 16)
+
+                HStack(spacing: 8) {
+                    Button(action: self.exportDictionary) {
+                        Label("Export", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    Button(action: self.importDictionary) {
+                        Label("Import", systemImage: "square.and.arrow.down")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
             }
 
             Text("Fix recurring transcription mistakes with Instant Replacement, or add Custom Words for names and product terms.")
@@ -459,6 +479,94 @@ struct CustomDictionaryView: View {
             self.boostStatusMessage = "Couldn't save custom words: \(error.localizedDescription)"
             self.boostHasError = true
         }
+    }
+
+    private func exportDictionary() {
+        do {
+            let panel = NSSavePanel()
+            panel.canCreateDirectories = true
+            panel.allowedContentTypes = [.json]
+            panel.nameFieldStringValue = DictionaryTransferService.shared.suggestedFilename()
+
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+
+            let document = try DictionaryTransferService.shared.makeExportDocument()
+            let data = try DictionaryTransferService.shared.encode(document)
+            try data.write(to: url, options: .atomic)
+
+            self.presentInfoAlert(
+                title: "Dictionary Exported",
+                message: "Saved \(document.replacements.count) replacement rules and \(document.customWords.count) custom words."
+            )
+        } catch {
+            self.presentErrorAlert(title: "Dictionary Export Failed", message: error.localizedDescription)
+        }
+    }
+
+    private func importDictionary() {
+        do {
+            let panel = NSOpenPanel()
+            panel.canChooseDirectories = false
+            panel.canChooseFiles = true
+            panel.allowsMultipleSelection = false
+            panel.allowedContentTypes = [.json]
+
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+
+            let data = try Data(contentsOf: url)
+            let document = try DictionaryTransferService.shared.decode(data)
+            guard let mode = self.confirmDictionaryImport(document) else { return }
+
+            let summary = try DictionaryTransferService.shared.restore(document, mode: mode)
+            self.entries = SettingsStore.shared.customDictionaryEntries
+            self.loadBoostTerms()
+
+            self.presentInfoAlert(
+                title: "Dictionary Imported",
+                message: "Now using \(summary.replacementCount) replacement rules and \(summary.customWordCount) custom words."
+            )
+        } catch {
+            self.presentErrorAlert(title: "Dictionary Import Failed", message: error.localizedDescription)
+        }
+    }
+
+    private func confirmDictionaryImport(_ document: DictionaryTransferDocument) -> DictionaryTransferImportMode? {
+        let confirm = NSAlert()
+        confirm.messageText = "Import this dictionary?"
+        confirm.informativeText = """
+        Found \(document.replacements.count) replacement rules and \(document.customWords.count) custom words.
+
+        Merge adds them to your current dictionary. Replace clears the current dictionary first.
+        """
+        confirm.alertStyle = .warning
+        confirm.addButton(withTitle: "Merge")
+        confirm.addButton(withTitle: "Replace")
+        confirm.addButton(withTitle: "Cancel")
+
+        switch confirm.runModal() {
+        case .alertFirstButtonReturn:
+            return .merge
+        case .alertSecondButtonReturn:
+            return .replace
+        default:
+            return nil
+        }
+    }
+
+    private func presentInfoAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.runModal()
+    }
+
+    private func presentErrorAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .critical
+        alert.runModal()
     }
 
     private func deleteBoostTerm(at index: Int) {
