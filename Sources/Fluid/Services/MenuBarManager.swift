@@ -304,6 +304,7 @@ final class MenuBarManager: NSObject, ObservableObject, NSMenuDelegate {
 
         // Track processing state to prevent hide during AI refinement
         self.isProcessingActive = processing
+        self.updateMenuItemsText()
 
         if processing {
             self.pendingProcessingShowOperation?.cancel()
@@ -390,6 +391,7 @@ final class MenuBarManager: NSObject, ObservableObject, NSMenuDelegate {
 
         // Create menu
         self.menu = NSMenu()
+        self.menu?.autoenablesItems = false
         self.menu?.delegate = self
         statusItem.menu = self.menu
 
@@ -585,7 +587,9 @@ final class MenuBarManager: NSObject, ObservableObject, NSMenuDelegate {
     }
 
     @objc private func copyLastTranscript(_ sender: Any?) {
-        guard let text = TranscriptionHistoryStore.shared.latestClipboardText else {
+        guard self.canCopyLastTranscript,
+              let text = TranscriptionHistoryStore.shared.latestClipboardText
+        else {
             DebugLogger.shared.info("Menu action: Copy last transcript requested but history is empty", source: "MenuBarManager")
             return
         }
