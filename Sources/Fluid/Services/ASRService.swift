@@ -94,6 +94,7 @@ final class ASRService: ObservableObject {
     @Published var downloadProgress: Double? = nil
     @Published var downloadingModelId: String? = nil // Tracks which model is currently being downloaded
     @Published private(set) var isCancellingModelDownload: Bool = false
+    @Published private(set) var isDictionaryTrainingCaptureActive: Bool = false
 
     private var isStarting: Bool = false // Guard against re-entrant start() calls
     private var hasCompletedFirstTranscription: Bool = false // Track if model has warmed up with first transcription
@@ -839,7 +840,7 @@ final class ASRService: ObservableObject {
     /// ## Errors
     /// If audio session configuration fails, the method will silently fail
     /// and `isRunning` will remain `false`. Check the debug logs for details.
-    func start() async {
+    func start(forDictionaryTraining: Bool = false) async {
         DebugLogger.shared.info("🎤 START() called - beginning recording session", source: "ASRService")
 
         guard self.micStatus == .authorized else {
@@ -882,6 +883,7 @@ final class ASRService: ObservableObject {
 
         self.isStarting = true
         defer { self.isStarting = false }
+        self.isDictionaryTrainingCaptureActive = false
 
         do {
             DebugLogger.shared.debug("⚙️ Calling configureSession()...", source: "ASRService")
@@ -907,6 +909,7 @@ final class ASRService: ObservableObject {
             }
 
             self.isRunning = true
+            self.isDictionaryTrainingCaptureActive = forDictionaryTraining
             DebugLogger.shared.info("✅ isRunning set to TRUE", source: "ASRService")
 
             // Start monitoring the currently bound device for disconnection
@@ -919,15 +922,18 @@ final class ASRService: ObservableObject {
 
             // Only start streaming for models that support it (large Whisper models are too slow)
             let model = SettingsStore.shared.selectedSpeechModel
-            if model.supportsStreaming {
+            if model.supportsStreaming, !forDictionaryTraining {
                 DebugLogger.shared.debug("📡 Starting streaming transcription...", source: "ASRService")
                 self.benchmarkLog("streaming_timer_start intervalMs=\(Int((self.streamingChunkDurationSeconds * 1000).rounded())) minSamples=\(self.minimumStreamingPreviewSamples)")
                 self.startStreamingTranscription()
+            } else if forDictionaryTraining {
+                DebugLogger.shared.debug("⏸️ Skipping streaming for dictionary training sample", source: "ASRService")
             } else {
                 DebugLogger.shared.debug("⏸️ Skipping streaming - model '\(model.displayName)' does not support real-time chunk processing", source: "ASRService")
             }
             DebugLogger.shared.info("✅ START() completed successfully", source: "ASRService")
         } catch {
+            self.isDictionaryTrainingCaptureActive = false
             DebugLogger.shared.error("Failed to start ASR session: \(error)", source: "ASRService")
 
             // Resume media if we paused it before the failure
@@ -995,17 +1001,25 @@ final class ASRService: ObservableObject {
     ///   final transcription pass. Use this for immediate stop cues that
     ///   shouldn't wait on finalization. Only invoked when capture was actually
     ///   running (i.e. not when `stop()` early-returns because `isRunning` is false).
-    func stop(onCaptureStopped: (@MainActor () -> Void)? = nil) async -> String {
+    func stop(
+        onCaptureStopped: (@MainActor () -> Void)? = nil,
+        forDictionaryTraining: Bool = false
+    ) async -> String {
         DebugLogger.shared.info("🛑 STOP() called - beginning shutdown sequence", source: "ASRService")
         self.lastCompletedAudioSnapshot = nil
         let stopStartedAt = Date().timeIntervalSince1970
         self.benchmarkLog("stop_start ageMs=\(self.elapsedMilliseconds(since: self.benchmarkRecordingStartedAt)) bufferedSamples=\(self.audioBuffer.count)")
 
         guard self.isRunning else {
+            self.isDictionaryTrainingCaptureActive = false
             DebugLogger.shared.warning("⚠️ STOP() - not running, returning empty string", source: "ASRService")
             return ""
         }
-        defer { self.applyPendingParakeetVocabularyReloadIfNeeded() }
+        let useDictionaryTrainingPath = forDictionaryTraining || self.isDictionaryTrainingCaptureActive
+        defer {
+            self.applyPendingParakeetVocabularyReloadIfNeeded()
+            self.isDictionaryTrainingCaptureActive = false
+        }
 
         self.audioRouteRecoveryTask?.cancel()
         self.audioRouteRecoveryTask = nil
@@ -1021,7 +1035,9 @@ final class ASRService: ObservableObject {
         self.audioCapturePipeline.setRecordingEnabled(false)
         DebugLogger.shared.debug("✅ Capture pipeline disabled", source: "ASRService")
 
-        await self.runFastPreviewStopGraceIfNeeded()
+        if !useDictionaryTrainingPath {
+            await self.runFastPreviewStopGraceIfNeeded()
+        }
 
         // CRITICAL: Set isRunning to false before teardown so in-flight chunks stop safely.
         DebugLogger.shared.debug("🚫 Setting isRunning = false...", source: "ASRService")
@@ -1136,8 +1152,19 @@ final class ASRService: ObservableObject {
             let finalStartedAt = Date().timeIntervalSince1970
             let result: ASRTranscriptionResult
             let finalSource: String
-            if let fluidProvider = provider as? FluidAudioProvider,
-               let cachedResult = await fluidProvider.transcribeCachedStreamingPreviewIfAvailable(pcm)
+            if useDictionaryTrainingPath {
+                if let fluidProvider = provider as? FluidAudioProvider {
+                    result = try await self.transcriptionExecutor.run { [fluidProvider] in
+                        try await fluidProvider.transcribeDictionaryTraining(pcm)
+                    }
+                } else {
+                    result = try await self.transcriptionExecutor.run { [provider] in
+                        try await provider.transcribeFinal(pcm)
+                    }
+                }
+                finalSource = "dictionaryTraining"
+            } else if let fluidProvider = provider as? FluidAudioProvider,
+                      let cachedResult = await fluidProvider.transcribeCachedStreamingPreviewIfAvailable(pcm)
             {
                 result = cachedResult
                 finalSource = "livePreview"
@@ -1175,11 +1202,17 @@ final class ASRService: ObservableObject {
             }
 
             // Do not update self.finalText here to avoid instant binding insert in playground
-            let cleanedText = ASRService.applyCustomDictionary(ASRService.removeFillerWords(result.text))
-            self.recordWordBoostHitIfAny(transcribedText: cleanedText)
-            DebugLogger.shared.debug("After post-processing: '\(cleanedText)'", source: "ASRService")
-            self.benchmarkLog("stop_end result=success totalMs=\(self.elapsedMilliseconds(since: stopStartedAt)) recordingAgeMs=\(self.elapsedMilliseconds(since: self.benchmarkRecordingStartedAt)) cleanedChars=\(cleanedText.count)")
-            if SettingsStore.shared.saveTranscriptionHistory,
+            let textWithoutFillers = ASRService.removeFillerWords(result.text)
+            let outputText = useDictionaryTrainingPath
+                ? textWithoutFillers
+                : ASRService.applyCustomDictionary(textWithoutFillers)
+            if !useDictionaryTrainingPath {
+                self.recordWordBoostHitIfAny(transcribedText: outputText)
+            }
+            DebugLogger.shared.debug("After post-processing: '\(outputText)'", source: "ASRService")
+            self.benchmarkLog("stop_end result=success totalMs=\(self.elapsedMilliseconds(since: stopStartedAt)) recordingAgeMs=\(self.elapsedMilliseconds(since: self.benchmarkRecordingStartedAt)) cleanedChars=\(outputText.count)")
+            if !useDictionaryTrainingPath,
+               SettingsStore.shared.saveTranscriptionHistory,
                SettingsStore.shared.saveAudioWithTranscriptionHistory,
                !capturedPCM.isEmpty
             {
@@ -1196,7 +1229,7 @@ final class ASRService: ObservableObject {
                 DebugLogger.shared.info("🎵 Resumed system media after transcription", source: "ASRService")
             }
 
-            return cleanedText
+            return outputText
         } catch {
             DebugLogger.shared.error("ASR transcription failed: \(error)", source: "ASRService")
             DebugLogger.shared.error("Error details: \(error.localizedDescription)", source: "ASRService")
@@ -1307,7 +1340,10 @@ final class ASRService: ObservableObject {
 
     func stopWithoutTranscription() async {
         guard self.isRunning else { return }
-        defer { self.applyPendingParakeetVocabularyReloadIfNeeded() }
+        defer {
+            self.applyPendingParakeetVocabularyReloadIfNeeded()
+            self.isDictionaryTrainingCaptureActive = false
+        }
 
         self.audioRouteRecoveryTask?.cancel()
         self.audioRouteRecoveryTask = nil
