@@ -1786,6 +1786,10 @@ final class GlobalHotkeyManager: NSObject {
             DebugLogger.shared.debug("Ignoring \(label) - stop already processing", source: "GlobalHotkeyManager")
             return false
         }
+        guard !self.asrService.isDictionaryTrainingCaptureActive else {
+            DebugLogger.shared.debug("Ignoring \(label) - dictionary training capture is active", source: "GlobalHotkeyManager")
+            return false
+        }
         return true
     }
 
@@ -1835,6 +1839,10 @@ final class GlobalHotkeyManager: NSObject {
                 DebugLogger.shared.debug("Ignoring stop - already processing", source: "GlobalHotkeyManager")
                 return
             }
+            guard !self.asrService.isDictionaryTrainingCaptureActive else {
+                DebugLogger.shared.debug("Ignoring stop - dictionary training capture is active", source: "GlobalHotkeyManager")
+                return
+            }
 
             guard self.asrService.isRunning else {
                 return
@@ -1847,6 +1855,10 @@ final class GlobalHotkeyManager: NSObject {
     @MainActor
     private func stopRecordingInternal() async {
         guard self.asrService.isRunning else { return }
+        guard !self.asrService.isDictionaryTrainingCaptureActive else {
+            DebugLogger.shared.debug("Stop ignored - dictionary training capture is active", source: "GlobalHotkeyManager")
+            return
+        }
         guard !self.isProcessingStop else {
             DebugLogger.shared.debug("Stop already in progress, ignoring", source: "GlobalHotkeyManager")
             return
