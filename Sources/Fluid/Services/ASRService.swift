@@ -728,14 +728,7 @@ final class ASRService: ObservableObject {
     }
 
     private func resolvedInputDeviceForCapture() -> AudioDevice.Device? {
-        if SettingsStore.shared.microphoneSelectionMode == .manual,
-           let preferredUID = SettingsStore.shared.preferredInputDeviceUID,
-           preferredUID.isEmpty == false,
-           let preferredDevice = AudioDevice.getInputDevice(byUID: preferredUID)
-        {
-            return preferredDevice
-        }
-        return AudioDevice.getDefaultInputDevice()
+        AppServices.shared.microphonePreferenceCoordinator.inputDeviceForCapture()
     }
 
     /// Prepares the direct device callback without starting hardware IO. This
@@ -1909,10 +1902,34 @@ final class ASRService: ObservableObject {
     private func bindPreferredInputDeviceIfNeeded() -> Bool {
         DebugLogger.shared.debug("bindPreferredInputDeviceIfNeeded() - Starting input device binding", source: "ASRService")
 
-        DebugLogger.shared.info(
-            "Using current macOS default input device. Manual microphone mode reasserts the preferred device before engine start.",
+        guard SettingsStore.shared.microphoneSelectionMode == .manual else {
+            DebugLogger.shared.info("Using current macOS default input device", source: "ASRService")
+            return true
+        }
+
+        guard let device = self.resolvedInputDeviceForCapture() else {
+            DebugLogger.shared.error(
+                "No input device available for manual microphone capture.",
+                source: "ASRService"
+            )
+            return false
+        }
+
+        DebugLogger.shared.debug(
+            "Attempting to bind AVAudioEngine input to capture device '\(device.name)' (uid: \(device.uid))",
             source: "ASRService"
         )
+
+        let ok = self.setEngineInputDevice(deviceID: device.id, deviceUID: device.uid, deviceName: device.name)
+        if ok == false {
+            DebugLogger.shared.warning(
+                "Failed to bind engine input to '\(device.name)' (uid: \(device.uid)). Trying system default input.",
+                source: "ASRService"
+            )
+            return self.tryBindToSystemDefaultInput()
+        }
+
+        DebugLogger.shared.info("✅ Bound AVAudioEngine input to '\(device.name)'", source: "ASRService")
         return true
     }
 

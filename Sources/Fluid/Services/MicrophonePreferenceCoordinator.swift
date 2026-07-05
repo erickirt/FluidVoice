@@ -98,6 +98,18 @@ final class MicrophonePreferenceCoordinator: ObservableObject {
         return result
     }
 
+    func inputDeviceForCapture() -> AudioDevice.Device? {
+        if self.settings.microphoneSelectionMode == .manual,
+           let preferredUID = self.settings.preferredInputDeviceUID,
+           preferredUID.isEmpty == false,
+           let preferredDevice = self.devices.listInputDevices().first(where: { $0.uid == preferredUID })
+        {
+            return preferredDevice
+        }
+
+        return self.devices.defaultInputDevice()
+    }
+
     func stabilizePreferredInputAfterHardwareChange(reason: String) {
         self.stabilizationTask?.cancel()
         self.stabilizationTask = Task { [weak self] in

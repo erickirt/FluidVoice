@@ -418,6 +418,31 @@ final class HotkeyShortcutTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testMicrophoneCoordinatorResolvesManualPreferredInputForCapture() throws {
+        try self.withRestoredDefaults(keys: [
+            self.microphoneSelectionModeKey,
+            self.preferredInputDeviceUIDKey,
+        ]) {
+            SettingsStore.shared.microphoneSelectionMode = .manual
+            SettingsStore.shared.preferredInputDeviceUID = "studio-mic"
+            let studioMic = Self.device(uid: "studio-mic", name: "Studio Mic")
+            let devices = FakeAudioDeviceManager(
+                inputs: [
+                    Self.device(uid: "internal", name: "MacBook Pro Microphone"),
+                    studioMic,
+                ],
+                defaultInputUID: "internal"
+            )
+            let coordinator = MicrophonePreferenceCoordinator(settings: .shared, devices: devices)
+
+            let resolved = coordinator.inputDeviceForCapture()
+
+            XCTAssertEqual(resolved, studioMic)
+            XCTAssertEqual(devices.setInputCalls, [])
+        }
+    }
+
     private static func device(uid: String, name: String) -> AudioDevice.Device {
         AudioDevice.Device(
             id: AudioObjectID(abs(uid.hashValue % 100_000) + 1),
