@@ -110,7 +110,7 @@ export function validatePullRequest({ body = "", changedFiles = [] } = {}) {
   const screenshots = section(body, "Screenshots / Video");
   const visualFiles = findVisualFiles(changedFiles);
   const attestsNoVisualChange = hasNoVisualChangeAttestation(screenshots);
-  const requiresMedia = visualFiles.length > 0 || !attestsNoVisualChange;
+  const requiresMedia = visualFiles.length > 0 && !attestsNoVisualChange;
 
   const checks = [
     ["Description", hasNonPlaceholderContent(description)],
@@ -119,7 +119,7 @@ export function validatePullRequest({ body = "", changedFiles = [] } = {}) {
     ["Testing", hasTestingEvidence(testing)],
     [
       "Screenshots / Video",
-      requiresMedia ? hasMedia(screenshots) : attestsNoVisualChange,
+      attestsNoVisualChange || hasMedia(screenshots),
     ],
   ];
 

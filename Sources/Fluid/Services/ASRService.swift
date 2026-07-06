@@ -1466,14 +1466,8 @@ final class ASRService: ObservableObject {
             let result: ASRTranscriptionResult
             let finalSource: String
             if useDictionaryTrainingPath {
-                if let fluidProvider = provider as? FluidAudioProvider {
-                    result = try await self.transcriptionExecutor.run { [fluidProvider] in
-                        try await fluidProvider.transcribeDictionaryTraining(pcm)
-                    }
-                } else {
-                    result = try await self.transcriptionExecutor.run { [provider] in
-                        try await provider.transcribeFinal(pcm)
-                    }
+                result = try await self.transcriptionExecutor.run { [provider] in
+                    try await provider.transcribeDictionaryTraining(pcm)
                 }
                 finalSource = "dictionaryTraining"
             } else {

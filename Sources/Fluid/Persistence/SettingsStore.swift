@@ -21,6 +21,7 @@ final class SettingsStore: ObservableObject {
     static let privateAIDictationSystemOverheadTokens = 1280
     static let privateAIDictationMinimumOutputTokens = 256
     static let privateAIDictationRoundTripTokenCost = 2.75
+    private static let forcedOnboardingResetIntroducedAt = Date(timeIntervalSince1970: 1_782_091_732)
     private let defaults = UserDefaults.standard
     private let keychain = KeychainService.shared
     private(set) var launchAtStartupEnabled = false
@@ -2299,10 +2300,14 @@ final class SettingsStore: ObservableObject {
     private func repairForcedOnboardingResetIfNeeded() {
         // 1.6.2 briefly used OnboardingGeneration to force every install through onboarding.
         // Restore existing users who were reset by that migration while keeping fresh installs intact.
+        let hadOpenedBeforeForcedReset = AnalyticsIdentityStore.shared.firstOpenAt.map {
+            $0 < Self.forcedOnboardingResetIntroducedAt
+        } ?? false
+        let hasExistingInstallSignal = self.hasLegacyUsageSignals() || hadOpenedBeforeForcedReset
         guard self.defaults.object(forKey: Keys.onboardingGeneration) != nil,
               self.defaults.bool(forKey: Keys.onboardingCompleted) == false,
               self.defaults.bool(forKey: Keys.manualOnboardingResetRequested) == false,
-              self.hasLegacyUsageSignals()
+              hasExistingInstallSignal
         else { return }
 
         objectWillChange.send()
