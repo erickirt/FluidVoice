@@ -419,7 +419,39 @@ final class DictationE2ETests: XCTestCase {
         }
     }
 
-    func testSpokenPunctuationFormattingCleansSymbolCommaNoise() {
+    func testSpokenPunctuationFormattingKeepsBareDotInProse() {
+        self.withRestoredDefaults(keys: [self.autoConvertPunctuationEnabledKey]) {
+            UserDefaults.standard.set(true, forKey: self.autoConvertPunctuationEnabledKey)
+
+            XCTAssertEqual(
+                ASRService.applySpokenPunctuationFormatting("the polka dot dress"),
+                "the polka dot dress"
+            )
+            XCTAssertEqual(
+                ASRService.applySpokenPunctuationFormatting("example dot com"),
+                "example.com"
+            )
+            XCTAssertEqual(
+                ASRService.applySpokenPunctuationFormatting("version 1 dot 2"),
+                "version 1.2"
+            )
+        }
+    }
+
+    func testSpokenPunctuationFormattingPreservesSlashCommandSpacing() {
+        self.withRestoredDefaults(keys: [self.autoConvertPunctuationEnabledKey]) {
+            UserDefaults.standard.set(true, forKey: self.autoConvertPunctuationEnabledKey)
+
+            let text = ASRService.applySpokenPunctuationFormatting("Run slash status and open src slash services")
+            XCTAssertEqual(text, "Run slash status and open src/services")
+            XCTAssertEqual(
+                ASRService.applySlashCommandFormatting(text),
+                "Run /status and open src/services"
+            )
+        }
+    }
+
+    func testSpokenPunctuationFormattingCleansGeneratedCommaNoise() {
         self.withRestoredDefaults(keys: [self.autoConvertPunctuationEnabledKey]) {
             UserDefaults.standard.set(true, forKey: self.autoConvertPunctuationEnabledKey)
 
@@ -428,19 +460,7 @@ final class DictationE2ETests: XCTestCase {
                 "---"
             )
             XCTAssertEqual(
-                ASRService.applySpokenPunctuationFormatting("-,-,-"),
-                "---"
-            )
-            XCTAssertEqual(
-                ASRService.applySpokenPunctuationFormatting("-, -, -"),
-                "- - -"
-            )
-            XCTAssertEqual(
-                ASRService.applySpokenPunctuationFormatting("+, =, %"),
-                "+ = %"
-            )
-            XCTAssertEqual(
-                ASRService.applySpokenPunctuationFormatting("50, %"),
+                ASRService.applySpokenPunctuationFormatting("50 comma percent"),
                 "50%"
             )
             XCTAssertEqual(
@@ -454,6 +474,29 @@ final class DictationE2ETests: XCTestCase {
             XCTAssertEqual(
                 ASRService.applySpokenPunctuationFormatting("question mark comma exclamation mark"),
                 "?!"
+            )
+        }
+    }
+
+    func testSpokenPunctuationFormattingPreservesExistingCommasNearSymbols() {
+        self.withRestoredDefaults(keys: [self.autoConvertPunctuationEnabledKey]) {
+            UserDefaults.standard.set(true, forKey: self.autoConvertPunctuationEnabledKey)
+
+            XCTAssertEqual(
+                ASRService.applySpokenPunctuationFormatting("Thanks, @Sam"),
+                "Thanks, @Sam"
+            )
+            XCTAssertEqual(
+                ASRService.applySpokenPunctuationFormatting("Use C++, now"),
+                "Use C++, now"
+            )
+            XCTAssertEqual(
+                ASRService.applySpokenPunctuationFormatting("-,-,-"),
+                "-,-,-"
+            )
+            XCTAssertEqual(
+                ASRService.applySpokenPunctuationFormatting("50, %"),
+                "50, %"
             )
         }
     }

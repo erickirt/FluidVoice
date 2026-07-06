@@ -61,6 +61,8 @@ private enum SpokenPunctuationFormatter {
         let symbol: String
         let spacing: Spacing
         var requiresSymbolContext = false
+        var requiresDotContext = false
+        var requiresSlashPathContext = false
         var requiresAtSignPunctuationApp = false
     }
 
@@ -91,6 +93,11 @@ private enum SpokenPunctuationFormatter {
     private enum OutputPart {
         case text(String)
         case punctuation(symbol: String, spacing: Spacing)
+
+        var isHorizontalWhitespaceText: Bool {
+            guard case let .text(text) = self, !text.isEmpty else { return false }
+            return text.allSatisfy(\.isHorizontalWhitespace)
+        }
     }
 
     private static let rulesByFirstWord: [String: [PhraseRule]] = {
@@ -115,7 +122,7 @@ private enum SpokenPunctuationFormatter {
         let context = FormattingContext(appName: appName, bundleID: bundleID, windowTitle: windowTitle)
         let tokens = self.tokenize(text)
         guard tokens.contains(where: { $0.normalizedWord != nil }) else {
-            return self.cleanSymbolCommaNoise(in: text)
+            return text
         }
 
         var output: [OutputPart] = []
@@ -132,7 +139,7 @@ private enum SpokenPunctuationFormatter {
             }
         }
 
-        return self.cleanSymbolCommaNoise(in: self.render(output))
+        return self.render(self.removingGeneratedCommaNoise(from: output))
     }
 
     private static func makeRules() -> [PhraseRule] {
@@ -149,7 +156,8 @@ private enum SpokenPunctuationFormatter {
             self.rules(
                 symbol: ".",
                 spacing: .noSpaceAround,
-                phrases: ["dot"]
+                phrases: ["dot"],
+                requiresDotContext: true
             ) +
             self.rules(
                 symbol: "?",
@@ -179,7 +187,8 @@ private enum SpokenPunctuationFormatter {
             self.rules(
                 symbol: "/",
                 spacing: .noSpaceAround,
-                phrases: ["slash", "forward slash", "forwardslash"]
+                phrases: ["slash", "forward slash", "forwardslash"],
+                requiresSlashPathContext: true
             ) +
             self.rules(
                 symbol: "\\",
@@ -361,6 +370,8 @@ private enum SpokenPunctuationFormatter {
         spacing: Spacing,
         phrases: [String],
         requiresSymbolContext: Bool = false,
+        requiresDotContext: Bool = false,
+        requiresSlashPathContext: Bool = false,
         requiresAtSignPunctuationApp: Bool = false
     ) -> [PhraseRule] {
         phrases.compactMap { phrase in
@@ -374,6 +385,8 @@ private enum SpokenPunctuationFormatter {
                 symbol: symbol,
                 spacing: spacing,
                 requiresSymbolContext: requiresSymbolContext,
+                requiresDotContext: requiresDotContext,
+                requiresSlashPathContext: requiresSlashPathContext,
                 requiresAtSignPunctuationApp: requiresAtSignPunctuationApp
             )
         }
@@ -444,6 +457,10 @@ private enum SpokenPunctuationFormatter {
             if matched,
                !rule.requiresSymbolContext ||
                self.hasSymbolContext(in: tokens, startIndex: index, endIndex: cursor),
+               !rule.requiresDotContext ||
+               self.hasDotContext(in: tokens, startIndex: index, endIndex: cursor),
+               !rule.requiresSlashPathContext ||
+               self.hasSlashPathContext(in: tokens, startIndex: index, endIndex: cursor),
                !rule.requiresAtSignPunctuationApp || context.isAtSignPunctuationApp
             {
                 return (rule, cursor)
@@ -473,12 +490,83 @@ private enum SpokenPunctuationFormatter {
         return false
     }
 
+    private static func hasDotContext(in tokens: [Token], startIndex: Int, endIndex: Int) -> Bool {
+        let previousIndex = self.significantTokenIndex(before: startIndex, in: tokens)
+        let nextIndex = self.significantTokenIndex(atOrAfter: endIndex, in: tokens)
+        let previous = previousIndex.map { tokens[$0] }
+        let next = nextIndex.map { tokens[$0] }
+
+        if previous.map(self.isPathSymbolText) == true || next.map(self.isPathSymbolText) == true {
+            return true
+        }
+
+        let previousWord = previous?.normalizedWord
+        let nextWord = next?.normalizedWord
+        if let previousWord, let nextWord {
+            if self.dotSuffixWords.contains(nextWord) {
+                return !self.dotRejectedPreviousWords.contains(previousWord)
+            }
+            if self.dotPrefixWords.contains(previousWord) {
+                return true
+            }
+            return self.isShortSymbolOperand(tokens[previousIndex ?? startIndex]) &&
+                self.isShortSymbolOperand(tokens[nextIndex ?? endIndex])
+        }
+
+        if let previousWord {
+            return self.dotPrefixWords.contains(previousWord)
+        }
+
+        if let nextWord {
+            return self.dotSuffixWords.contains(nextWord)
+        }
+
+        return false
+    }
+
+    private static func hasSlashPathContext(in tokens: [Token], startIndex: Int, endIndex: Int) -> Bool {
+        if self.hasSlashPathContextToken(before: startIndex, in: tokens) ||
+            self.hasSlashPathContextToken(atOrAfter: endIndex, in: tokens)
+        {
+            return true
+        }
+
+        if let previousSlashIndex = self.significantTokenIndex(before: startIndex, in: tokens),
+           self.isSpokenSlashToken(tokens[previousSlashIndex])
+        {
+            return self.hasSlashPathContextToken(before: previousSlashIndex, in: tokens)
+        }
+
+        if let nextSlashIndex = self.significantTokenIndex(atOrAfter: endIndex, in: tokens),
+           self.isSpokenSlashToken(tokens[nextSlashIndex])
+        {
+            return self.hasSlashPathContextToken(atOrAfter: nextSlashIndex + 1, in: tokens)
+        }
+
+        return false
+    }
+
+    private static func hasSlashPathContextToken(before index: Int, in tokens: [Token]) -> Bool {
+        guard let tokenIndex = self.significantTokenIndex(before: index, in: tokens) else { return false }
+        return self.isSlashPathContextToken(tokens[tokenIndex])
+    }
+
+    private static func hasSlashPathContextToken(atOrAfter index: Int, in tokens: [Token]) -> Bool {
+        guard let tokenIndex = self.significantTokenIndex(atOrAfter: index, in: tokens) else { return false }
+        return self.isSlashPathContextToken(tokens[tokenIndex])
+    }
+
     private static func significantToken(before index: Int, in tokens: [Token]) -> Token? {
+        guard let tokenIndex = self.significantTokenIndex(before: index, in: tokens) else { return nil }
+        return tokens[tokenIndex]
+    }
+
+    private static func significantTokenIndex(before index: Int, in tokens: [Token]) -> Int? {
         guard index > 0 else { return nil }
         var cursor = index - 1
         while cursor >= 0 {
             if !tokens[cursor].isHorizontalWhitespaceText {
-                return tokens[cursor]
+                return cursor
             }
             if cursor == 0 { break }
             cursor -= 1
@@ -487,10 +575,15 @@ private enum SpokenPunctuationFormatter {
     }
 
     private static func significantToken(atOrAfter index: Int, in tokens: [Token]) -> Token? {
+        guard let tokenIndex = self.significantTokenIndex(atOrAfter: index, in: tokens) else { return nil }
+        return tokens[tokenIndex]
+    }
+
+    private static func significantTokenIndex(atOrAfter index: Int, in tokens: [Token]) -> Int? {
         var cursor = index
         while cursor < tokens.count {
             if !tokens[cursor].isHorizontalWhitespaceText {
-                return tokens[cursor]
+                return cursor
             }
             cursor += 1
         }
@@ -513,6 +606,106 @@ private enum SpokenPunctuationFormatter {
         case let .text(text):
             return text.contains { self.symbolCommaCleanupCharacters.contains($0) }
         }
+    }
+
+    private static func isSlashPathContextToken(_ token: Token) -> Bool {
+        switch token {
+        case let .word(_, normalized):
+            return self.slashPathContextWords.contains(normalized) ||
+                self.dotSuffixWords.contains(normalized) ||
+                normalized.allSatisfy(\.isASCIIDigit)
+        case .text:
+            return self.isPathSymbolText(token)
+        }
+    }
+
+    private static func isPathSymbolText(_ token: Token) -> Bool {
+        guard case let .text(text) = token else { return false }
+        return text.contains { self.pathContextCharacters.contains($0) }
+    }
+
+    private static func isSpokenSlashToken(_ token: Token) -> Bool {
+        token.normalizedWord == "slash" || token.normalizedWord == "forwardslash"
+    }
+
+    private static func removingGeneratedCommaNoise(from parts: [OutputPart]) -> [OutputPart] {
+        guard parts.contains(where: { part in
+            if case let .punctuation(symbol, _) = part { return symbol == "," }
+            return false
+        }) else {
+            return parts
+        }
+
+        var result: [OutputPart] = []
+        for index in parts.indices {
+            if case let .punctuation(symbol, _) = parts[index],
+               symbol == ",",
+               self.shouldRemoveGeneratedComma(at: index, in: parts)
+            {
+                continue
+            }
+            result.append(parts[index])
+        }
+        return result
+    }
+
+    private static func shouldRemoveGeneratedComma(at index: Int, in parts: [OutputPart]) -> Bool {
+        let previous = self.significantPart(before: index, in: parts)
+        let next = self.significantPart(after: index, in: parts)
+
+        if self.isGeneratedPunctuationPair(previous, next) {
+            return true
+        }
+
+        if case let .some(.punctuation(symbol, _)) = next,
+           symbol == "%",
+           self.partEndsWithASCIIDigit(previous)
+        {
+            return true
+        }
+
+        return false
+    }
+
+    private static func significantPart(before index: Int, in parts: [OutputPart]) -> OutputPart? {
+        guard index > 0 else { return nil }
+        var cursor = index - 1
+        while cursor >= 0 {
+            if !parts[cursor].isHorizontalWhitespaceText {
+                return parts[cursor]
+            }
+            if cursor == 0 { break }
+            cursor -= 1
+        }
+        return nil
+    }
+
+    private static func significantPart(after index: Int, in parts: [OutputPart]) -> OutputPart? {
+        var cursor = index + 1
+        while cursor < parts.count {
+            if !parts[cursor].isHorizontalWhitespaceText {
+                return parts[cursor]
+            }
+            cursor += 1
+        }
+        return nil
+    }
+
+    private static func isGeneratedPunctuationPair(_ previous: OutputPart?, _ next: OutputPart?) -> Bool {
+        guard case let .punctuation(previousSymbol, _) = previous,
+              case let .punctuation(nextSymbol, _) = next,
+              let previousCharacter = previousSymbol.first,
+              let nextCharacter = nextSymbol.first
+        else {
+            return false
+        }
+        return self.punctuationPairCommaCleanupCharacters.contains(previousCharacter) &&
+            self.punctuationPairCommaCleanupCharacters.contains(nextCharacter)
+    }
+
+    private static func partEndsWithASCIIDigit(_ part: OutputPart?) -> Bool {
+        guard case let .text(text) = part else { return false }
+        return text.last?.isASCIIDigit == true
     }
 
     private static func render(_ parts: [OutputPart]) -> String {
@@ -607,78 +800,36 @@ private enum SpokenPunctuationFormatter {
         ["+", "=", "%", "-", "—", "–", "/", "\\", "@", "#", "$", "&", "*", "_", "|", "~", "^", "<", ">"]
     )
 
+    private static let pathContextCharacters = Set<Character>(
+        [".", "/", "\\", ":", "@", "_", "~"]
+    )
+
+    private static let dotSuffixWords: Set<String> = [
+        "ai", "app", "c", "ca", "co", "com", "cpp", "css", "dev", "edu", "go",
+        "gov", "h", "hpp", "html", "in", "io", "js", "json", "md", "me", "mm",
+        "net", "org", "plist", "py", "rb", "rs", "sh", "swift", "ts", "txt",
+        "uk", "us", "xml", "yaml", "yml", "zip",
+    ]
+
+    private static let dotPrefixWords: Set<String> = [
+        "api", "app", "cdn", "docs", "file", "ftp", "http", "https", "localhost",
+        "server", "staging", "v1", "v2", "v3", "web", "www",
+    ]
+
+    private static let dotRejectedPreviousWords: Set<String> = [
+        "a", "an", "my", "our", "that", "the", "their", "this", "your",
+    ]
+
+    private static let slashPathContextWords: Set<String> = [
+        "api", "applications", "bin", "desktop", "documents", "downloads", "etc",
+        "file", "files", "folder", "home", "http", "https", "lib", "library",
+        "local", "path", "private", "src", "source", "sources", "tmp", "url",
+        "user", "users", "usr", "var", "volumes", "www",
+    ]
+
     private static let punctuationPairCommaCleanupCharacters = Set<Character>(
         ["+", "=", "%", "-", "—", "–", "/", "\\", "@", "#", "$", "&", "*", "_", "|", "~", "^", "<", ">", "(", ")", "[", "]", "{", "}", "\"", "'", "`", ".", "?", "!", ":", ";"]
     )
-
-    private static func cleanSymbolCommaNoise(in text: String) -> String {
-        guard text.contains(",") else { return text }
-
-        var result = ""
-        var index = text.startIndex
-        while index < text.endIndex {
-            let character = text[index]
-            if character == ",",
-               self.shouldRemoveComma(
-                   previous: self.previousNonWhitespaceCharacter(in: result),
-                   next: self.nextNonWhitespaceCharacter(in: text, after: index)
-               )
-            {
-                index = self.indexAfterSkippableComma(
-                    in: text,
-                    at: index,
-                    previous: self.previousNonWhitespaceCharacter(in: result),
-                    next: self.nextNonWhitespaceCharacter(in: text, after: index)
-                )
-            } else {
-                result.append(character)
-                index = text.index(after: index)
-            }
-        }
-
-        return result
-    }
-
-    private static func shouldRemoveComma(previous: Character?, next: Character?) -> Bool {
-        let isNextToSymbol = previous.map { self.symbolCommaCleanupCharacters.contains($0) } == true ||
-            next.map { self.symbolCommaCleanupCharacters.contains($0) } == true
-        let isBetweenPunctuationPair = previous.map { self.punctuationPairCommaCleanupCharacters.contains($0) } == true &&
-            next.map { self.punctuationPairCommaCleanupCharacters.contains($0) } == true
-        return isNextToSymbol || isBetweenPunctuationPair
-    }
-
-    private static func indexAfterSkippableComma(
-        in text: String,
-        at index: String.Index,
-        previous: Character?,
-        next: Character?
-    ) -> String.Index {
-        var nextIndex = text.index(after: index)
-        if next == "%",
-           previous?.isASCIIDigit == true
-        {
-            while nextIndex < text.endIndex, text[nextIndex].isHorizontalWhitespace {
-                nextIndex = text.index(after: nextIndex)
-            }
-        }
-        return nextIndex
-    }
-
-    private static func previousNonWhitespaceCharacter(in text: String) -> Character? {
-        text.reversed().first { !$0.isHorizontalWhitespace }
-    }
-
-    private static func nextNonWhitespaceCharacter(in text: String, after index: String.Index) -> Character? {
-        var cursor = text.index(after: index)
-        while cursor < text.endIndex {
-            let character = text[cursor]
-            if !character.isHorizontalWhitespace {
-                return character
-            }
-            cursor = text.index(after: cursor)
-        }
-        return nil
-    }
 }
 
 private extension Character {
