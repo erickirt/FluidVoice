@@ -18,8 +18,11 @@ final class TemperatureSupportTests: XCTestCase {
             "claude-sonnet-5",
             "claude-fable-5",
             "claude-mythos-5",
-            // Provider-prefixed IDs (e.g. OpenRouter) must match too
+            // Provider-prefixed and dotted IDs (e.g. OpenRouter) must match too
             "anthropic/claude-sonnet-5",
+            "anthropic/claude-opus-4.7",
+            "anthropic/claude-opus-4.8",
+            "anthropic/claude-opus-4.8-fast",
         ]
         for model in unsupported {
             XCTAssertTrue(
@@ -39,7 +42,18 @@ final class TemperatureSupportTests: XCTestCase {
     }
 
     func testTemperatureSupported_olderAndNonAnthropicModels() {
-        for model in ["gpt-4.1", "claude-sonnet-4-6", "claude-sonnet-4-20250514", "gemini-2.5-flash", "llama3"] {
+        let supported = [
+            "gpt-4.1",
+            "claude-sonnet-4-6",
+            "claude-sonnet-4-20250514",
+            "gemini-2.5-flash",
+            "llama3",
+            // Dotted OpenRouter IDs for models that still accept temperature
+            "anthropic/claude-sonnet-4.6",
+            "anthropic/claude-sonnet-4.5",
+            "anthropic/claude-opus-4.5",
+        ]
+        for model in supported {
             XCTAssertFalse(
                 SettingsStore.shared.isTemperatureUnsupported(model),
                 "\(model) still supports `temperature` and should keep receiving it"
