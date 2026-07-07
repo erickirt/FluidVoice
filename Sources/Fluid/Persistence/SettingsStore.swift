@@ -2667,11 +2667,17 @@ final class SettingsStore: ObservableObject {
 
     /// Whether the model rejects the `temperature` parameter.
     /// Covers reasoning models plus Anthropic models that have deprecated temperature
-    /// (Claude Opus 4.7+, which use extended thinking by default).
+    /// (Opus 4.7+, Sonnet 5, Fable/Mythos 5 — Sonnet 4.6 and older still accept it).
     func isTemperatureUnsupported(_ model: String) -> Bool {
         if self.isReasoningModel(model) { return true }
-        let modelLower = model.lowercased()
+        // Normalize version separators so dotted IDs (e.g. OpenRouter's
+        // anthropic/claude-opus-4.8) match the hyphenated forms below.
+        let modelLower = model.lowercased().replacingOccurrences(of: ".", with: "-")
         return modelLower.contains("claude-opus-4-7")
+            || modelLower.contains("claude-opus-4-8")
+            || modelLower.contains("claude-sonnet-5")
+            || modelLower.contains("claude-fable")
+            || modelLower.contains("claude-mythos")
     }
 
     /// Whether to display thinking tokens in the UI (Command Mode, Rewrite Mode)
