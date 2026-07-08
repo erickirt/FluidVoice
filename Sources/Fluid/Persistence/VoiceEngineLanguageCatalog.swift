@@ -286,6 +286,7 @@ enum VoiceEngineLanguageCatalog {
 
     private static let whisperModelOrder: [SettingsStore.SpeechModel] = [
         .whisperSmall,
+        .whisperLargeTurbo,
     ]
 
     private static let appleSpeechAnalyzerLocaleMap: [String: String] = [
