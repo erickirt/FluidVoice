@@ -347,9 +347,10 @@ struct WelcomeView: View {
                                 title: "How to Use",
                                 systemImage: "play.fill",
                                 color: self.theme.palette.accent,
-                                isExpanded: self.$isHowToUseExpanded,
-                                accessories: { EmptyView() }
+                                isExpanded: self.$isHowToUseExpanded
                             ) {
+                                EmptyView()
+                            } content: {
                                 VStack(alignment: .leading, spacing: 10) {
                                     self.howToStep(number: 1, title: "Start Recording", description: "Press your hotkey (default: Right Option/Alt) or click the button")
                                     self.howToStep(number: 2, title: "Speak Clearly", description: "Speak naturally - works best in quiet environments")
@@ -440,6 +441,7 @@ struct WelcomeView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Text(title))
             .accessibilityValue(Text(isExpanded.wrappedValue ? "Expanded" : "Collapsed"))
+            .accessibilityHint(Text("Activates to expand or collapse"))
 
             if isExpanded.wrappedValue {
                 content()
