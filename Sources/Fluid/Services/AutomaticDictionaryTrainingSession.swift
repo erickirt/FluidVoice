@@ -133,6 +133,7 @@ final class AutomaticDictionaryTrainingSession: ObservableObject {
         self.screen = .training
         self.statusMessage = ""
         self.hasError = false
+        Task { await DictionaryTrainingEndpointMonitor.shared.prepare() }
     }
 
     func returnToChoice() {
@@ -172,6 +173,7 @@ final class AutomaticDictionaryTrainingSession: ObservableObject {
     func cancel() {
         self.isCancelled = true
         self.discardCurrentCapture = true
+        DictionaryTrainingEndpointMonitor.shared.stop()
         switch self.capturePhase {
         case .starting:
             self.stopRequestedDuringStart = true
@@ -229,9 +231,13 @@ final class AutomaticDictionaryTrainingSession: ObservableObject {
             self.capturePhase = .recording
             self.statusMessage = "Listening..."
         }
+        DictionaryTrainingEndpointMonitor.shared.start(asr: self.asr) { [weak self] in
+            self?.handleAutomaticSpeechEnd()
+        }
     }
 
     private func stopCapture() async {
+        DictionaryTrainingEndpointMonitor.shared.stop()
         switch self.capturePhase {
         case .starting:
             self.stopRequestedDuringStart = true
@@ -243,8 +249,16 @@ final class AutomaticDictionaryTrainingSession: ObservableObject {
         }
     }
 
+    private func handleAutomaticSpeechEnd() {
+        guard self.capturePhase == .starting || self.capturePhase == .recording else { return }
+        self.statusMessage = "Stopping..."
+        self.stopTask?.cancel()
+        self.stopTask = Task { await self.stopCapture() }
+    }
+
     private func finishCapture() async {
         guard self.capturePhase == .recording || self.capturePhase == .starting else { return }
+        DictionaryTrainingEndpointMonitor.shared.stop()
         self.capturePhase = .processing
         self.stopRequestedDuringStart = false
         self.hasError = false

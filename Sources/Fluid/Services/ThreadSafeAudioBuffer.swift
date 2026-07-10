@@ -2,7 +2,7 @@ import Foundation
 
 /// A thread-safe wrapper around a float array to prevent data races between
 /// the audio engine (background thread) and the ASR service (main thread).
-final class ThreadSafeAudioBuffer {
+final nonisolated class ThreadSafeAudioBuffer {
     private var buffer: [Float] = []
     private let lock = NSLock()
 
@@ -33,6 +33,20 @@ final class ThreadSafeAudioBuffer {
         defer { lock.unlock() }
         let safeLength = min(length, buffer.count)
         return Array(self.buffer[0..<safeLength])
+    }
+
+    /// Returns an exact range when enough samples are available.
+    func getRange(startingAt start: Int, count: Int) -> [Float] {
+        self.lock.lock()
+        defer { lock.unlock() }
+        guard start >= 0,
+              count > 0,
+              start <= self.buffer.count,
+              count <= self.buffer.count - start
+        else {
+            return []
+        }
+        return Array(self.buffer[start..<(start + count)])
     }
 
     /// Returns a copy of the entire buffer

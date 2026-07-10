@@ -1775,6 +1775,7 @@ struct CustomDictionaryView: View {
         self.isTrainingActive = true
         self.trainingHasError = false
         self.trainingStatusMessage = ""
+        Task { await DictionaryTrainingEndpointMonitor.shared.prepare() }
     }
 
     private func startTrainingSample() async {
@@ -1798,10 +1799,15 @@ struct CustomDictionaryView: View {
 
         if self.trainingStopRequestedDuringStart {
             await self.finishTrainingSampleStop()
+            return
+        }
+        DictionaryTrainingEndpointMonitor.shared.start(asr: self.asr) {
+            self.handleAutomaticTrainingSpeechEnd()
         }
     }
 
     private func stopTrainingSample() async {
+        DictionaryTrainingEndpointMonitor.shared.stop()
         guard self.isTrainingRecording else { return }
         guard !self.trainingStopRequestedDuringStart else { return }
 
@@ -1815,8 +1821,14 @@ struct CustomDictionaryView: View {
         await self.finishTrainingSampleStop()
     }
 
+    private func handleAutomaticTrainingSpeechEnd() {
+        guard self.isTrainingRecording else { return }
+        Task { await self.stopTrainingSample() }
+    }
+
     private func finishTrainingSampleStop() async {
         guard self.isTrainingRecording else { return }
+        DictionaryTrainingEndpointMonitor.shared.stop()
         self.isTrainingRecording = false
         self.isTrainingStarting = false
         self.trainingStopRequestedDuringStart = false

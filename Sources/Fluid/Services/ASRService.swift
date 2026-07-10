@@ -52,14 +52,6 @@ private actor TranscriptionExecutor {
 /// The service is designed to work seamlessly with macOS system APIs and provides
 /// robust error handling and performance optimization.
 ///
-/// ## Usage
-/// ```swift
-/// let asrService = ASRService()
-/// await asrService.start() // Begin recording
-/// // ... speak ...
-/// let transcribedText = await asrService.stop() // Stop and get transcription
-/// ```
-///
 /// ## Language Support
 /// The service supports multiple models with varying language capabilities:
 /// - **Parakeet TDT v3** (Default): Automatically detects and transcribes 25 European languages:
@@ -916,6 +908,10 @@ final class ASRService: ObservableObject {
         let snapshot = self.lastCompletedAudioSnapshot
         self.lastCompletedAudioSnapshot = nil
         return snapshot
+    }
+
+    func dictionaryTrainingAudioChunk(at offset: Int, count: Int) -> [Float] {
+        self.audioBuffer.getRange(startingAt: offset, count: count)
     }
 
     private var streamingChunkDurationSeconds: Double {
