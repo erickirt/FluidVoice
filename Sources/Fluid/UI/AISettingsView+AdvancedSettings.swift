@@ -962,6 +962,10 @@ extension AIEnhancementSettingsView {
                 } else {
                     self.promptRoutingScopeRow(mode: mode)
 
+                    if mode.normalized == .dictate {
+                        self.customPromptOnlyToggleRow
+                    }
+
                     Text(
                         isSelectedAppsOnly
                             ? "Custom prompts only run in apps listed in App Overrides."
@@ -1692,6 +1696,10 @@ extension AIEnhancementSettingsView {
                         self.promptTest.updateDraftPromptText(combined)
                     }
                 }
+
+                if self.viewModel.draftPromptMode == .dictate {
+                    self.baseDictationPromptReference
+                }
             }
 
             if self.viewModel.draftPromptMode != .dictate {
@@ -1907,6 +1915,32 @@ extension AIEnhancementSettingsView {
         }
         .onChange(of: self.viewModel.savedProviders) { _, _ in
             self.autoDisablePromptTestIfNeeded()
+        }
+    }
+
+    private var baseDictationPromptReference: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Built-in Base Prompt")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("Reference only. Copy any parts you want into a custom prompt.")
+                .font(.caption2)
+                .foregroundStyle(self.theme.palette.secondaryText)
+
+            PromptTextView(
+                text: .constant(SettingsStore.baseDictationPromptText()),
+                isEditable: false,
+                font: NSFont.monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+            )
+            .frame(height: 110)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(self.theme.palette.contentBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(self.theme.palette.cardBorder, lineWidth: 1)
+                    )
+            )
         }
     }
 

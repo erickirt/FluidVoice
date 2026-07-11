@@ -81,12 +81,12 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
     @Published var showKeychainPermissionAlert: Bool = false
     @Published var keychainPermissionMessage: String = ""
 
-    // Reasoning config change tracker (triggers view updates)
+    /// Reasoning config change tracker (triggers view updates)
     @Published var reasoningConfigVersion: Int = 0
 
     // MARK: - Cached Provider Items (for scroll performance)
 
-    // These are cached to avoid recomputing on every view body evaluation
+    /// These are cached to avoid recomputing on every view body evaluation
     struct ProviderItemData: Identifiable, Hashable {
         let id: String
         let name: String
@@ -97,7 +97,9 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         let bundleID: String
         let name: String
 
-        var id: String { self.bundleID }
+        var id: String {
+            self.bundleID
+        }
     }
 
     @Published var cachedProviderItems: [ProviderItemData] = []
@@ -110,6 +112,7 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
     @Published var appPromptBindingErrorMessage: String = ""
     @Published var selectedDictationPromptID: String? = nil
     @Published var selectedEditPromptID: String? = nil
+    @Published var sendCustomPromptOnly: Bool = false
     @Published var promptEditorMode: PromptEditorMode? = nil
     @Published var draftPromptName: String = ""
     @Published var draftPromptText: String = ""
@@ -165,6 +168,7 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         self.appPromptBindings = self.settings.appPromptBindings
         self.selectedDictationPromptID = self.settings.selectedDictationPromptID
         self.selectedEditPromptID = self.settings.selectedEditPromptID
+        self.sendCustomPromptOnly = self.settings.sendCustomPromptOnly
         self.isDictationPromptOff = self.settings.isDictationPromptOff
         self.isEditPromptOff = self.settings.isEditPromptOff
 
@@ -1884,6 +1888,11 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         self.isEditPromptOff = self.settings.isEditPromptOff
     }
 
+    func setSendCustomPromptOnly(_ sendOnly: Bool) {
+        self.settings.sendCustomPromptOnly = sendOnly
+        self.sendCustomPromptOnly = self.settings.sendCustomPromptOnly
+    }
+
     func isPrimaryDictationPromptSelectionOff() -> Bool {
         return self.settings.isDictationPromptOff
     }
@@ -1992,6 +2001,7 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
     private func refreshPromptSelectionState() {
         self.selectedDictationPromptID = self.settings.selectedDictationPromptID
         self.selectedEditPromptID = self.settings.selectedEditPromptID
+        self.sendCustomPromptOnly = self.settings.sendCustomPromptOnly
         self.isDictationPromptOff = self.settings.isDictationPromptOff
         self.isEditPromptOff = self.settings.isEditPromptOff
     }

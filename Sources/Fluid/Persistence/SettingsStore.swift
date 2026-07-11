@@ -371,6 +371,14 @@ final class SettingsStore: ObservableObject {
         }
     }
 
+    var sendCustomPromptOnly: Bool {
+        get { self.defaults.bool(forKey: Keys.sendCustomPromptOnly) }
+        set {
+            objectWillChange.send()
+            self.defaults.set(newValue, forKey: Keys.sendCustomPromptOnly)
+        }
+    }
+
     var isEditPromptOff: Bool {
         get { self.defaults.bool(forKey: Keys.editPromptOff) }
         set {
@@ -1066,7 +1074,7 @@ final class SettingsStore: ObservableObject {
                         profile: profile,
                         appBinding: binding,
                         promptBody: body,
-                        systemPrompt: Self.combineBasePrompt(for: normalizedMode, with: body)
+                        systemPrompt: self.systemPrompt(forCustomProfileBody: body, mode: normalizedMode)
                     )
                 }
             }
@@ -1095,7 +1103,7 @@ final class SettingsStore: ObservableObject {
                     profile: profile,
                     appBinding: nil,
                     promptBody: body,
-                    systemPrompt: Self.combineBasePrompt(for: normalizedMode, with: body)
+                    systemPrompt: self.systemPrompt(forCustomProfileBody: body, mode: normalizedMode)
                 )
             }
         }
@@ -1145,7 +1153,7 @@ final class SettingsStore: ObservableObject {
             }
             let body = Self.stripBasePrompt(for: .dictate, from: profile.prompt)
             if !body.isEmpty {
-                return Self.combineBasePrompt(for: .dictate, with: body)
+                return self.systemPrompt(forCustomProfileBody: body, mode: .dictate)
             }
             return self.effectiveSystemPrompt(for: .dictate, appBundleID: appBundleID)
         }
@@ -1218,6 +1226,15 @@ final class SettingsStore: ObservableObject {
             promptBody: defaultBody,
             systemPrompt: Self.combineBasePrompt(for: mode, with: defaultBody)
         )
+    }
+
+    private func systemPrompt(forCustomProfileBody body: String, mode: PromptMode) -> String {
+        let normalizedMode = mode.normalized
+        let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedMode == .dictate, self.sendCustomPromptOnly {
+            return trimmedBody
+        }
+        return Self.combineBasePrompt(for: normalizedMode, with: trimmedBody)
     }
 
     // MARK: - Model Reasoning Configuration
@@ -4578,6 +4595,7 @@ private extension SettingsStore {
         static let dictationPromptProfiles = "DictationPromptProfiles"
         static let appPromptBindings = "AppPromptBindings"
         static let selectedDictationPromptID = "SelectedDictationPromptID"
+        static let sendCustomPromptOnly = "SendCustomPromptOnly"
         static let editPromptOff = "EditPromptOff"
         static let selectedEditPromptID = "SelectedEditPromptID"
         static let selectedWritePromptID = "SelectedWritePromptID" // legacy fallback key
