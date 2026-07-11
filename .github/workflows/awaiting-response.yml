@@ -3,6 +3,8 @@ name: Close Older Issues Awaiting Response
 on:
   issues:
     types: [labeled]
+  issue_comment:
+    types: [created]
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch:

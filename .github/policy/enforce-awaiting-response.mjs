@@ -4,6 +4,7 @@ import {
   ensureLabel,
   githubRequest,
   paginate,
+  removeLabel,
   repoContext,
   upsertIssueComment,
 } from "./github-api.mjs";
@@ -15,7 +16,6 @@ const LABEL = {
 };
 const CUTOFF = new Date("2026-07-08T00:00:00Z");
 const DAYS_BEFORE_CLOSE = 3;
-const WARNING_MARKER = "<!-- fluidvoice-awaiting-response-warning -->";
 const CLOSE_MARKER = "<!-- fluidvoice-awaiting-response-close -->";
 
 function eventPayload() {
@@ -53,19 +53,7 @@ async function warnOrClose(context, issue, now = new Date()) {
     labeledAt.getTime() + DAYS_BEFORE_CLOSE * 24 * 60 * 60 * 1000,
   );
 
-  if (now < closesAt) {
-    await upsertIssueComment(
-      context,
-      issue.number,
-      WARNING_MARKER,
-      [
-        "This issue is awaiting a response and will be closed three days after the label was applied.",
-        "",
-        "Remove the `awaiting response` label to cancel automatic closure.",
-      ].join("\n"),
-    );
-    return;
-  }
+  if (now < closesAt) return;
 
   await upsertIssueComment(
     context,
@@ -101,6 +89,18 @@ async function scanLabeledIssues(context) {
 async function main() {
   const context = repoContext();
   await ensureLabel(context, LABEL);
+
+  if (process.env.GITHUB_EVENT_NAME === "issue_comment") {
+    const event = eventPayload();
+    const hasLabel = event.issue?.labels?.some(
+      (label) => (typeof label === "string" ? label : label.name) === LABEL.name,
+    );
+
+    if (event.action === "created" && !event.issue?.pull_request && hasLabel) {
+      await removeLabel(context, event.issue.number, LABEL.name);
+    }
+    return;
+  }
 
   if (process.env.GITHUB_EVENT_NAME === "issues") {
     const event = eventPayload();
