@@ -9,6 +9,49 @@ final class HotkeyShortcutTests: XCTestCase {
     private let pasteLastTranscriptionShortcutKey = "PasteLastTranscriptionHotkeyShortcut"
     private let pasteLastTranscriptionEnabledKey = "PasteLastTranscriptionShortcutEnabled"
 
+    func testCoreAudioFrameCountUsesActualBufferChannelLayout() {
+        XCTAssertEqual(fv_core_audio_buffer_frame_count(512 * 4, 4, 1), 512)
+        XCTAssertEqual(fv_core_audio_buffer_frame_count(512 * 8, 4, 2), 512)
+        XCTAssertEqual(fv_core_audio_buffer_frame_count(512 * 12, 4, 3), 512)
+
+        // Three non-interleaved buffers each contain one channel and must each
+        // report 512 frames, never the 170-frame failure observed in the field.
+        for _ in 0..<3 {
+            XCTAssertEqual(fv_core_audio_buffer_frame_count(512 * 4, 4, 1), 512)
+        }
+    }
+
+    func testDirectCaptureDurationMismatchFilter() {
+        XCTAssertFalse(ASRService.directCaptureDurationIsMismatched(
+            capturedMilliseconds: 100,
+            elapsedMilliseconds: 499
+        ))
+        XCTAssertFalse(ASRService.directCaptureDurationIsMismatched(
+            capturedMilliseconds: 460,
+            elapsedMilliseconds: 500
+        ))
+        XCTAssertFalse(ASRService.directCaptureDurationIsMismatched(
+            capturedMilliseconds: 700,
+            elapsedMilliseconds: 1000
+        ))
+        XCTAssertFalse(ASRService.directCaptureDurationIsMismatched(
+            capturedMilliseconds: 1300,
+            elapsedMilliseconds: 1000
+        ))
+        XCTAssertTrue(ASRService.directCaptureDurationIsMismatched(
+            capturedMilliseconds: 333,
+            elapsedMilliseconds: 1000
+        ))
+        XCTAssertTrue(ASRService.directCaptureDurationIsMismatched(
+            capturedMilliseconds: 1500,
+            elapsedMilliseconds: 1000
+        ))
+        XCTAssertFalse(ASRService.directCaptureShouldDisable(afterFailureCount: 1))
+        XCTAssertFalse(ASRService.directCaptureShouldDisable(afterFailureCount: 2))
+        XCTAssertTrue(ASRService.directCaptureShouldDisable(afterFailureCount: 3))
+        XCTAssertTrue(ASRService.directCaptureShouldDisable(afterFailureCount: 4))
+    }
+
     func testLegacyKeyboardShortcutPayloadDefaultsToKeyboardKind() throws {
         let json = #"{"keyCode":61,"modifierFlagsRawValue":0}"#
         let data = try XCTUnwrap(json.data(using: .utf8))

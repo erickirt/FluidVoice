@@ -20,6 +20,17 @@ typedef struct {
     uint64_t sequence;
 } FVCoreAudioPacket;
 
+/// Layout helpers shared by capture and deterministic tests.
+uint32_t fv_core_audio_buffer_bytes_per_frame(
+    uint32_t bytesPerSample,
+    uint32_t channelCount
+);
+uint32_t fv_core_audio_buffer_frame_count(
+    uint32_t dataByteSize,
+    uint32_t bytesPerSample,
+    uint32_t channelCount
+);
+
 /// Creates a prepared, input-only capture for one physical Core Audio device.
 /// The device is not started and the microphone is not active until start.
 int32_t fv_core_audio_capture_create(

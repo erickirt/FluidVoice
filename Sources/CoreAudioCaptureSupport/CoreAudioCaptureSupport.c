@@ -171,6 +171,27 @@ static inline float fv_read_sample(
     }
 }
 
+uint32_t fv_core_audio_buffer_bytes_per_frame(
+    uint32_t bytesPerSample,
+    uint32_t channelCount
+) {
+    if (bytesPerSample == 0 || channelCount == 0 ||
+        bytesPerSample > UINT32_MAX / channelCount) {
+        return 0;
+    }
+    return bytesPerSample * channelCount;
+}
+
+uint32_t fv_core_audio_buffer_frame_count(
+    uint32_t dataByteSize,
+    uint32_t bytesPerSample,
+    uint32_t channelCount
+) {
+    const uint32_t bytesPerFrame =
+        fv_core_audio_buffer_bytes_per_frame(bytesPerSample, channelCount);
+    return bytesPerFrame == 0 ? 0 : dataByteSize / bytesPerFrame;
+}
+
 static uint32_t fv_frame_count(
     const FVCapture *capture,
     const AudioBufferList *inputData
@@ -182,7 +203,19 @@ static uint32_t fv_frame_count(
         if (buffer->mData == NULL || buffer->mDataByteSize == 0) {
             continue;
         }
-        const uint32_t frames = buffer->mDataByteSize / capture->format.mBytesPerFrame;
+        // Derive the stride from the actual AudioBuffer layout. Core Audio can
+        // expose one buffer per channel even when the device's virtual ASBD
+        // temporarily reports the stream-wide interleaved byte stride during
+        // a route change. Using ASBD.mBytesPerFrame in that state turns a
+        // 512-frame, 3-buffer callback into 170 frames and speeds audio up 3x.
+        const uint32_t frames = fv_core_audio_buffer_frame_count(
+            buffer->mDataByteSize,
+            capture->bytesPerSample,
+            buffer->mNumberChannels
+        );
+        if (frames == 0) {
+            continue;
+        }
         if (frames < frameCount) {
             frameCount = frames;
         }
@@ -242,8 +275,10 @@ static OSStatus fv_io_proc(
 
         const uint8_t *data = (const uint8_t *) buffer->mData;
         const uint32_t channelCount = buffer->mNumberChannels;
+        const uint32_t bufferBytesPerFrame =
+            fv_core_audio_buffer_bytes_per_frame(capture->bytesPerSample, channelCount);
         for (uint32_t frame = 0; frame < frameCount; ++frame) {
-            const uint8_t *frameData = data + frame * capture->format.mBytesPerFrame;
+            const uint8_t *frameData = data + frame * bufferBytesPerFrame;
             float sum = 0.0f;
             for (uint32_t channel = 0; channel < channelCount; ++channel) {
                 sum += fv_read_sample(

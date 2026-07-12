@@ -2520,6 +2520,9 @@ private extension SettingsView {
                     get: { self.settings.experimentalDirectAudioCaptureEnabled },
                     set: { enabled in
                         self.settings.experimentalDirectAudioCaptureEnabled = enabled
+                        if enabled {
+                            self.settings.directAudioCaptureConsecutiveFailures = 0
+                        }
                         self.asr.refreshAudioCaptureBackendPreference()
                     }
                 )
