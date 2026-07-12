@@ -892,8 +892,10 @@ final class DictationE2ETests: XCTestCase {
         try FileManager.default.createDirectory(at: modelDirectory, withIntermediateDirectories: true)
 
         let model = SettingsStore.SpeechModel.whisperTiny
-        let ggufURL = modelDirectory.appendingPathComponent(model.whisperModelFile!)
-        let legacyURL = modelDirectory.appendingPathComponent(model.legacyWhisperModelFile!)
+        let ggufFilename = try XCTUnwrap(model.whisperModelFile)
+        let legacyFilename = try XCTUnwrap(model.legacyWhisperModelFile)
+        let ggufURL = modelDirectory.appendingPathComponent(ggufFilename)
+        let legacyURL = modelDirectory.appendingPathComponent(legacyFilename)
         try Self.createSparseFile(at: ggufURL, size: model.expectedDownloadBytes)
         try Data([0x01, 0x02, 0x03]).write(to: legacyURL)
 
