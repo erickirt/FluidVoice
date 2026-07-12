@@ -407,16 +407,15 @@ final class WhisperProvider: TranscriptionProvider {
     }
 
     private func downloadFile(from url: URL, to destination: URL, progressHandler: ((Double) -> Void)?) async throws {
-        let delegate = DownloadProgressDelegate(onProgress: progressHandler)
-        let session = URLSession(configuration: self.urlSession.configuration, delegate: delegate, delegateQueue: nil)
-        defer { session.finishTasksAndInvalidate() }
-
         var temporaryURL: URL?
         do {
-            let (downloadedURL, response) = try await withTaskCancellationHandler {
-                try await session.download(from: url)
-            } onCancel: {
-                session.invalidateAndCancel()
+            let (downloadedURL, response) = try await ProgressiveFileDownloader.download(
+                from: url,
+                configuration: self.urlSession.configuration
+            ) { totalBytesWritten, totalBytesExpectedToWrite in
+                guard totalBytesExpectedToWrite > 0 else { return }
+                let pct = min(0.999, Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
+                progressHandler?(pct)
             }
             temporaryURL = downloadedURL
             try Task.checkCancellation()
@@ -470,7 +469,6 @@ final class WhisperProvider: TranscriptionProvider {
             if let temporaryURL {
                 try? FileManager.default.removeItem(at: temporaryURL)
             }
-            session.invalidateAndCancel()
             let nsError = error as NSError
             if Task.isCancelled
                 || error is CancellationError
@@ -482,29 +480,5 @@ final class WhisperProvider: TranscriptionProvider {
         }
         try Task.checkCancellation()
         progressHandler?(1.0)
-    }
-
-    private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-        private let onProgress: ((Double) -> Void)?
-
-        init(onProgress: ((Double) -> Void)?) {
-            self.onProgress = onProgress
-        }
-
-        func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-            // The async URLSession API owns completion; this delegate only reports bytes.
-        }
-
-        func urlSession(
-            _ session: URLSession,
-            downloadTask: URLSessionDownloadTask,
-            didWriteData bytesWritten: Int64,
-            totalBytesWritten: Int64,
-            totalBytesExpectedToWrite: Int64
-        ) {
-            guard totalBytesExpectedToWrite > 0 else { return }
-            let pct = min(0.999, Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
-            self.onProgress?(pct)
-        }
     }
 }
