@@ -15,8 +15,6 @@ struct CustomDictionaryView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var appServices: AppServices
 
-    private var asr: ASRService { self.appServices.asr }
-
     @State private var entries: [SettingsStore.CustomDictionaryEntry] = SettingsStore.shared.customDictionaryEntries
     @State private var boostTerms: [ParakeetVocabularyStore.VocabularyConfig.Term] = []
     @State private var editingEntry: SettingsStore.CustomDictionaryEntry?
@@ -2278,6 +2276,8 @@ struct CustomDictionaryView: View {
 }
 
 private extension CustomDictionaryView {
+    var asr: ASRService { self.appServices.asr }
+
     var trainedReplacementButtonTitle: String {
         self.trainingAlreadyCorrectWithoutReplacement ? "Nothing to Save" : "Add Replacement"
     }

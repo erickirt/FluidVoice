@@ -2953,6 +2953,7 @@ final class SettingsStore: ObservableObject {
             fillerWords: self.fillerWords,
             removeFillerWordsEnabled: self.removeFillerWordsEnabled,
             autoConvertPunctuationEnabled: self.autoConvertPunctuationEnabled,
+            literalDictationFormattingEnabled: self.literalDictationFormattingEnabled,
             punctuationDictionaryPrefix: self.punctuationDictionaryPrefix,
             punctuationDictionaryRules: self.punctuationDictionaryRules,
             gaavModeEnabled: self.gaavModeEnabled,
@@ -3071,6 +3072,9 @@ final class SettingsStore: ObservableObject {
         self.removeFillerWordsEnabled = payload.removeFillerWordsEnabled
         if let autoConvertPunctuationEnabled = payload.autoConvertPunctuationEnabled {
             self.autoConvertPunctuationEnabled = autoConvertPunctuationEnabled
+        }
+        if let literalDictationFormattingEnabled = payload.literalDictationFormattingEnabled {
+            self.literalDictationFormattingEnabled = literalDictationFormattingEnabled
         }
         if let punctuationDictionaryPrefix = payload.punctuationDictionaryPrefix {
             self.punctuationDictionaryPrefix = punctuationDictionaryPrefix
@@ -3686,6 +3690,14 @@ final class SettingsStore: ObservableObject {
         set {
             objectWillChange.send()
             self.defaults.set(newValue, forKey: Keys.autoConvertPunctuationEnabled)
+        }
+    }
+
+    var literalDictationFormattingEnabled: Bool {
+        get { self.defaults.object(forKey: Keys.literalDictationFormattingEnabled) as? Bool ?? false }
+        set {
+            objectWillChange.send()
+            self.defaults.set(newValue, forKey: Keys.literalDictationFormattingEnabled)
         }
     }
 
@@ -4832,6 +4844,7 @@ private extension SettingsStore {
         static let fillerWords = "FillerWords"
         static let removeFillerWordsEnabled = "RemoveFillerWordsEnabled"
         static let autoConvertPunctuationEnabled = "AutoConvertPunctuationEnabled"
+        static let literalDictationFormattingEnabled = "LiteralDictationFormattingEnabled"
         static let punctuationDictionaryPrefix = "PunctuationDictionaryPrefix"
         static let punctuationDictionaryRules = "PunctuationDictionaryRules"
 

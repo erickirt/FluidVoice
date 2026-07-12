@@ -940,6 +940,18 @@ struct SettingsView: View {
                                     Divider().opacity(0.2)
 
                                     self.optionToggleRow(
+                                        title: "Slash Commands & @ Formatting",
+                                        description: "When on, \"slash status\" becomes \"/status\"; \"tag Paul\", \"mention Paul\", \"at sign Paul\", and \"at the rate Paul\" become \"@Paul\". " +
+                                            "In chat apps, \"at Paul\" also works. Turn it off to leave all of these unchanged.",
+                                        isOn: Binding(
+                                            get: { SettingsStore.shared.literalDictationFormattingEnabled },
+                                            set: { SettingsStore.shared.literalDictationFormattingEnabled = $0 }
+                                        ),
+                                        allowsDescriptionWrapping: true
+                                    )
+                                    Divider().opacity(0.2)
+
+                                    self.optionToggleRow(
                                         title: "Space Between Dictations",
                                         description: "Add spacing so consecutive dictations chain without manually pressing the spacebar.",
                                         isOn: Binding(
@@ -1986,7 +1998,8 @@ struct SettingsView: View {
     private func optionToggleRow(
         title: String,
         description: String,
-        isOn: Binding<Bool>
+        isOn: Binding<Bool>,
+        allowsDescriptionWrapping: Bool = false
     ) -> some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
@@ -1996,9 +2009,13 @@ struct SettingsView: View {
                 Text(description)
                     .font(self.theme.typography.bodySmall)
                     .foregroundStyle(self.settingsSecondaryText)
+                    .fixedSize(horizontal: false, vertical: allowsDescriptionWrapping)
             }
+            .frame(maxWidth: allowsDescriptionWrapping ? .infinity : nil, alignment: .leading)
 
-            Spacer()
+            if !allowsDescriptionWrapping {
+                Spacer()
+            }
 
             Toggle("", isOn: isOn)
                 .toggleStyle(.switch)

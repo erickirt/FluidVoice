@@ -76,6 +76,7 @@ struct SettingsBackupPayload: Codable, Equatable {
     let fillerWords: [String]
     let removeFillerWordsEnabled: Bool
     let autoConvertPunctuationEnabled: Bool?
+    let literalDictationFormattingEnabled: Bool?
     let punctuationDictionaryPrefix: String?
     // swiftlint:disable:next discouraged_optional_collection
     let punctuationDictionaryRules: [SettingsStore.PunctuationDictionaryRule]?

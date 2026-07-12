@@ -20,6 +20,7 @@ final class DictationE2ETests: XCTestCase {
     private let selectedModelByProviderKey = "SelectedModelByProvider"
     private let customDictionaryEntriesKey = "CustomDictionaryEntries"
     private let autoConvertPunctuationEnabledKey = "AutoConvertPunctuationEnabled"
+    private let literalDictationFormattingEnabledKey = "LiteralDictationFormattingEnabled"
     private let punctuationDictionaryPrefixKey = "PunctuationDictionaryPrefix"
     private let punctuationDictionaryRulesKey = "PunctuationDictionaryRules"
     private let commandModeLinkedToGlobalKey = "CommandModeLinkedToGlobal"
@@ -352,6 +353,26 @@ final class DictationE2ETests: XCTestCase {
             ASRService.applySlashCommandFormatting(text),
             text
         )
+    }
+
+    func testLiteralFormattingCanBeDisabled() {
+        self.withRestoredDefaults(keys: [self.literalDictationFormattingEnabledKey]) {
+            UserDefaults.standard.removeObject(forKey: self.literalDictationFormattingEnabledKey)
+            XCTAssertFalse(SettingsStore.shared.literalDictationFormattingEnabled)
+
+            UserDefaults.standard.set(false, forKey: self.literalDictationFormattingEnabledKey)
+
+            XCTAssertEqual(ASRService.applySlashCommandFormatting("slash compact"), "slash compact")
+            XCTAssertEqual(ASRService.applyMentionFormatting("mention Paul"), "mention Paul")
+            XCTAssertEqual(
+                ASRService.makeDictationLiteralOutputPlan(
+                    for: "/compact ",
+                    appName: "Codex",
+                    bundleID: "com.openai.codex"
+                ).plainText,
+                "/compact "
+            )
+        }
     }
 
     func testMentionFormattingExplicitPhrasesWorkWithoutAppContext() {

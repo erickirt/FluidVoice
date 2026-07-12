@@ -156,6 +156,8 @@ private enum DictationLiteralFormatter {
         bundleID: String? = nil,
         windowTitle: String? = nil
     ) -> String {
+        guard SettingsStore.shared.literalDictationFormattingEnabled else { return text }
+
         let commandFormatted = self.applySlashCommandFormatting(text)
         return self.applyMentionFormatting(
             commandFormatted,
@@ -166,6 +168,7 @@ private enum DictationLiteralFormatter {
     }
 
     static func applySlashCommandFormatting(_ text: String) -> String {
+        guard SettingsStore.shared.literalDictationFormattingEnabled else { return text }
         guard !text.isEmpty,
               text.contains("/") || text.range(of: "slash", options: .caseInsensitive) != nil
         else {
@@ -190,6 +193,7 @@ private enum DictationLiteralFormatter {
         bundleID: String? = nil,
         windowTitle: String? = nil
     ) -> String {
+        guard SettingsStore.shared.literalDictationFormattingEnabled else { return text }
         guard !text.isEmpty,
               text.range(of: "at ", options: .caseInsensitive) != nil ||
               text.range(of: "tag ", options: .caseInsensitive) != nil ||
@@ -235,6 +239,7 @@ private enum DictationLiteralFormatter {
         bundleID: String? = nil,
         windowTitle: String? = nil
     ) -> String {
+        guard SettingsStore.shared.literalDictationFormattingEnabled else { return text }
         guard text.last?.isHorizontalWhitespace == true else { return text }
 
         let withoutTrailingWhitespace = self.removingTrailingHorizontalWhitespace(from: text)
