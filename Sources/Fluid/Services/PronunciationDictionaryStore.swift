@@ -16,6 +16,17 @@ struct PronunciationDictionaryProfile: Codable, Identifiable, Sendable {
     var id: String { "\(self.dictionaryEntryID.uuidString):\(self.modelKey)" }
 }
 
+enum PronunciationDictionaryStoreError: LocalizedError, Equatable {
+    case inconsistentEnrollment
+
+    var errorDescription: String? {
+        switch self {
+        case .inconsistentEnrollment:
+            "Pronunciation samples must use the same model and embedding size."
+        }
+    }
+}
+
 actor PronunciationDictionaryStore {
     static let shared = PronunciationDictionaryStore()
 
@@ -54,7 +65,7 @@ actor PronunciationDictionaryStore {
     ) throws {
         guard let first = enrollments.first, !first.values.isEmpty else { return }
         guard enrollments.allSatisfy({ $0.modelKey == modelKey && $0.values.count == first.values.count }) else {
-            throw CocoaError(.fileWriteInapplicableStringEncoding)
+            throw PronunciationDictionaryStoreError.inconsistentEnrollment
         }
         self.loadIfNeeded()
         var profiles = self.document?.profiles ?? []

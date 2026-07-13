@@ -679,9 +679,7 @@ final nonisolated class ProgressiveFileDownloader: @unchecked Sendable {
             }
 
             do {
-                let retainedURL = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("FluidVoiceDownload-\(UUID().uuidString)")
-                try FileManager.default.copyItem(at: location, to: retainedURL)
+                let retainedURL = try ProgressiveFileDownloader.retainDownloadedFile(at: location)
                 self.storeResult(.success((retainedURL, response)))
             } catch {
                 self.storeResult(.failure(error))
@@ -699,7 +697,7 @@ final nonisolated class ProgressiveFileDownloader: @unchecked Sendable {
                 let result = self.lock.withLock { self.downloadResult }
                 self.finish(result ?? .failure(URLError(.badServerResponse)))
             }
-            self.session?.finishTasksAndInvalidate()
+            session.finishTasksAndInvalidate()
         }
 
         private func storeResult(_ result: Result<(URL, URLResponse), Error>) {
@@ -715,6 +713,16 @@ final nonisolated class ProgressiveFileDownloader: @unchecked Sendable {
             }
             completion?(result)
         }
+    }
+
+    static func retainDownloadedFile(
+        at location: URL,
+        fileManager: FileManager = .default
+    ) throws -> URL {
+        let retainedURL = fileManager.temporaryDirectory
+            .appendingPathComponent("FluidVoiceDownload-\(UUID().uuidString)")
+        try fileManager.moveItem(at: location, to: retainedURL)
+        return retainedURL
     }
 
     static func download(

@@ -722,6 +722,92 @@ final class DictationE2ETests: XCTestCase {
         XCTAssertEqual(candidate?.correctedText, "Barath")
     }
 
+    func testAutomaticDictionaryCorrectionDetectsInsertionAtDictationEnd() {
+        let before = "Barat"
+        let after = "Barath"
+        let insertedRange = NSRange(location: 0, length: (before as NSString).length)
+        let change = AutomaticDictionaryCorrectionDetector.textChange(before: before, after: after)
+
+        XCTAssertNotNil(change)
+        if let change {
+            XCTAssertTrue(AutomaticDictionaryCorrectionDetector.isWordContinuationAtInsertedRangeEnd(
+                change,
+                after: after,
+                insertedRange: insertedRange
+            ))
+        }
+        let candidate = AutomaticDictionaryCorrectionDetector.candidate(
+            before: before,
+            after: after,
+            insertedRange: insertedRange,
+            allowsInsertionAtEnd: true
+        )
+        XCTAssertEqual(candidate?.heardText, "Barat")
+        XCTAssertEqual(candidate?.correctedText, "Barath")
+    }
+
+    func testAutomaticDictionaryCorrectionRejectsNewWordAtDictationEnd() {
+        let before = "FluidVoice works"
+        let after = "FluidVoice works well"
+        let insertedRange = NSRange(location: 0, length: (before as NSString).length)
+        let change = AutomaticDictionaryCorrectionDetector.textChange(before: before, after: after)
+
+        XCTAssertNotNil(change)
+        if let change {
+            XCTAssertFalse(AutomaticDictionaryCorrectionDetector.isWordContinuationAtInsertedRangeEnd(
+                change,
+                after: after,
+                insertedRange: insertedRange
+            ))
+        }
+    }
+
+    func testPronunciationReplacementPreservesPunctuationAndSpacing() {
+        let replacements = [
+            FluidAudioProvider.PronunciationTextReplacement(wordRange: 1...1, label: "Barath"),
+        ]
+
+        XCTAssertEqual(
+            FluidAudioProvider.applyingPronunciationReplacements(
+                to: "Hi,  Barad! How are you?",
+                wordTexts: ["Hi,", "Barad!", "How", "are", "you?"],
+                replacements: replacements
+            ),
+            "Hi,  Barath! How are you?"
+        )
+    }
+
+    func testPronunciationStoreRejectsInconsistentEnrollments() async {
+        let store = PronunciationDictionaryStore()
+        let enrollments = [
+            PronunciationEnrollmentCapture(values: [1, 2], sourceFrameCount: 1, modelKey: "model-a"),
+            PronunciationEnrollmentCapture(values: [1], sourceFrameCount: 1, modelKey: "model-b"),
+        ]
+
+        do {
+            try await store.upsert(
+                dictionaryEntryID: UUID(),
+                label: "Barath",
+                modelKey: "model-a",
+                enrollments: enrollments
+            )
+            XCTFail("Expected inconsistent enrollment validation to fail")
+        } catch {
+            XCTAssertEqual(error as? PronunciationDictionaryStoreError, .inconsistentEnrollment)
+        }
+    }
+
+    func testProgressiveDownloaderRetainsFileByMovingIt() throws {
+        let source = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FluidVoiceDownloadSource-\(UUID().uuidString)")
+        try Data([1, 2, 3]).write(to: source)
+        let retained = try ProgressiveFileDownloader.retainDownloadedFile(at: source)
+        defer { try? FileManager.default.removeItem(at: retained) }
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertEqual(try Data(contentsOf: retained), Data([1, 2, 3]))
+    }
+
     func testAutomaticDictionaryCorrectionIgnoresTypingAfterDictation() {
         let before = "FluidVoice works"
         let after = "FluidVoice works well"

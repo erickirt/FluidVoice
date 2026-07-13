@@ -81,10 +81,15 @@ enum AutomaticDictionaryCorrectionDetector {
     static func candidate(
         before: String,
         after: String,
-        insertedRange: NSRange
+        insertedRange: NSRange,
+        allowsInsertionAtEnd: Bool = false
     ) -> AutomaticDictionaryCorrectionCandidate? {
         guard let change = self.textChange(before: before, after: after),
-              self.isChangeInsideInsertedRange(change, insertedRange: insertedRange)
+              self.isChangeInsideInsertedRange(
+                  change,
+                  insertedRange: insertedRange,
+                  allowsInsertionAtEnd: allowsInsertionAtEnd
+              )
         else {
             return nil
         }
@@ -113,6 +118,21 @@ enum AutomaticDictionaryCorrectionDetector {
             heardText: heard,
             correctedText: corrected
         )
+    }
+
+    static func isWordContinuationAtInsertedRangeEnd(
+        _ change: AutomaticDictionaryTextChange,
+        after: String,
+        insertedRange: NSRange
+    ) -> Bool {
+        guard change.oldRange.length == 0,
+              change.oldRange.location == NSMaxRange(insertedRange),
+              NSMaxRange(change.newRange) <= (after as NSString).length
+        else { return false }
+        let insertedText = (after as NSString).substring(with: change.newRange)
+        return !insertedText.isEmpty && insertedText.unicodeScalars.allSatisfy {
+            !self.boundaryCharacters.contains($0)
+        }
     }
 
     static func correctedTokenRange(before: String, after: String) -> NSRange? {
@@ -447,10 +467,15 @@ final class AutomaticDictionaryCorrectionTracker {
             return
         }
 
+        let allowsInsertionAtEnd = AutomaticDictionaryCorrectionDetector.isWordContinuationAtInsertedRangeEnd(
+            change,
+            after: currentValue,
+            insertedRange: session.insertedRange
+        )
         let isInside = AutomaticDictionaryCorrectionDetector.isChangeInsideInsertedRange(
             change,
             insertedRange: session.insertedRange,
-            allowsInsertionAtEnd: session.pendingCorrection != nil
+            allowsInsertionAtEnd: allowsInsertionAtEnd
         )
 
         if var pending = session.pendingCorrection {
@@ -648,7 +673,8 @@ final class AutomaticDictionaryCorrectionTracker {
         let candidate = AutomaticDictionaryCorrectionDetector.candidate(
             before: pending.beforeValue,
             after: pending.afterValue,
-            insertedRange: pending.insertedRange
+            insertedRange: pending.insertedRange,
+            allowsInsertionAtEnd: true
         )
         self.stopObservation()
 

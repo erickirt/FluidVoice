@@ -903,6 +903,7 @@ final class ASRService: ObservableObject {
         self.directAudioInput?.invalidate()
         self.directAudioInput = nil
         await self.stopStreamingTimerAndAwait()
+        guard self.isRunning else { return }
         self.audioBuffer.clear(keepingCapacity: true)
         self.lastProcessedSampleCount = 0
         self.benchmarkLastChunkSampleCount = 0

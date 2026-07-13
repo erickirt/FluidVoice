@@ -5,6 +5,11 @@ import FluidAudio
 /// TranscriptionProvider implementation using FluidAudio (optimized for Apple Silicon)
 /// This wraps the existing FluidAudio-based ASR for use on Apple Silicon Macs.
 final class FluidAudioProvider: TranscriptionProvider {
+    struct PronunciationTextReplacement {
+        let wordRange: ClosedRange<Int>
+        let label: String
+    }
+
     let name = "FluidAudio (Apple Silicon Optimized)"
 
     /// Whether this provider is supported on the current system.
@@ -380,18 +385,51 @@ final class FluidAudioProvider: TranscriptionProvider {
         }
         guard !accepted.isEmpty else { return result.text }
 
-        let replacementByStart = Dictionary(uniqueKeysWithValues: accepted.compactMap { candidate in
-            candidate.wordIndices.first.map { ($0, candidate) }
-        })
-        var output: [String] = []
-        for index in words.indices {
-            if let candidate = replacementByStart[index] {
-                output.append(candidate.label)
-            } else if !claimed.contains(index) {
-                output.append(words[index].text)
-            }
+        let replacements = accepted.compactMap { candidate -> PronunciationTextReplacement? in
+            guard let first = candidate.wordIndices.first, let last = candidate.wordIndices.last else { return nil }
+            return PronunciationTextReplacement(wordRange: first...last, label: candidate.label)
         }
-        return output.joined(separator: " ")
+        return Self.applyingPronunciationReplacements(
+            to: result.text,
+            wordTexts: words.map(\.text),
+            replacements: replacements
+        )
+    }
+
+    static func applyingPronunciationReplacements(
+        to text: String,
+        wordTexts: [String],
+        replacements: [PronunciationTextReplacement]
+    ) -> String {
+        let source = text as NSString
+        var searchLocation = 0
+        var ranges: [NSRange] = []
+        let trimSet = CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
+
+        for wordText in wordTexts {
+            let searchableWord = wordText.trimmingCharacters(in: trimSet)
+            guard !searchableWord.isEmpty, searchLocation <= source.length else { return text }
+            let searchRange = NSRange(location: searchLocation, length: source.length - searchLocation)
+            let range = source.range(of: searchableWord, options: .caseInsensitive, range: searchRange)
+            guard range.location != NSNotFound else { return text }
+            ranges.append(range)
+            searchLocation = NSMaxRange(range)
+        }
+
+        let edits = replacements.compactMap { replacement -> (NSRange, String)? in
+            guard ranges.indices.contains(replacement.wordRange.lowerBound),
+                  ranges.indices.contains(replacement.wordRange.upperBound)
+            else { return nil }
+            let start = ranges[replacement.wordRange.lowerBound].location
+            let end = NSMaxRange(ranges[replacement.wordRange.upperBound])
+            return (NSRange(location: start, length: end - start), replacement.label)
+        }.sorted { $0.0.location > $1.0.location }
+
+        let output = NSMutableString(string: text)
+        for (range, label) in edits {
+            output.replaceCharacters(in: range, with: label)
+        }
+        return output as String
     }
 
     private func logFinalBenchmark(
