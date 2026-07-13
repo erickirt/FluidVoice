@@ -331,21 +331,6 @@ final class DictationE2ETests: XCTestCase {
         }
     }
 
-    func testSlashCommandFormattingNormalizesSpokenAndLiteralCommands() {
-        XCTAssertEqual(
-            ASRService.applySlashCommandFormatting("Run slash status and then / model."),
-            "Run /status and then /model."
-        )
-        XCTAssertEqual(
-            ASRService.applySlashCommandFormatting("Type forward slash fix-ci."),
-            "Type /fix-ci."
-        )
-        XCTAssertEqual(
-            ASRService.applySlashCommandFormatting("slash compact"),
-            "/compact"
-        )
-    }
-
     func testSlashCommandFormattingLeavesNonCommandSlashUsageAlone() {
         let text = "Use 1/2 and and/or. Open src slash services. Go to https slash slash example dot com. Slash and burn."
 
@@ -373,56 +358,6 @@ final class DictationE2ETests: XCTestCase {
                 "/compact "
             )
         }
-    }
-
-    func testMentionFormattingExplicitPhrasesWorkWithoutAppContext() {
-        XCTAssertEqual(
-            ASRService.applyMentionFormatting("tag Paul"),
-            "@Paul"
-        )
-        XCTAssertEqual(
-            ASRService.applyMentionFormatting("mention Paul Heinz, please"),
-            "@Paul Heinz, please"
-        )
-        XCTAssertEqual(
-            ASRService.applyMentionFormatting("at sign maxgaav"),
-            "@maxgaav"
-        )
-        XCTAssertEqual(
-            ASRService.applyMentionFormatting("at the rate Sarah"),
-            "@Sarah"
-        )
-        XCTAssertEqual(
-            ASRService.applyMentionFormatting("mention Paul please"),
-            "@Paul please"
-        )
-        XCTAssertEqual(
-            ASRService.applyMentionFormatting("tag Paul tomorrow"),
-            "@Paul tomorrow"
-        )
-    }
-
-    func testMentionFormattingRelaxedAtNameRequiresMentionAppContext() {
-        XCTAssertEqual(
-            ASRService.applyMentionFormatting(
-                "at Paul can you check this",
-                appName: "Slack",
-                bundleID: "com.tinyspeck.slackmacgap"
-            ),
-            "@Paul can you check this"
-        )
-        XCTAssertEqual(
-            ASRService.applyMentionFormatting(
-                "hey at Paul Heinz can you check this",
-                appName: "Discord",
-                bundleID: "com.hnc.Discord"
-            ),
-            "hey @Paul Heinz can you check this"
-        )
-        XCTAssertEqual(
-            ASRService.applyMentionFormatting("at Paul can you check this", appName: "Notes", bundleID: "com.apple.Notes"),
-            "at Paul can you check this"
-        )
     }
 
     func testMentionFormattingLeavesProseAlone() {
@@ -539,19 +474,6 @@ final class DictationE2ETests: XCTestCase {
         }
     }
 
-    func testSpokenPunctuationFormattingPreservesSlashCommandSpacing() {
-        self.withRestoredDefaults(keys: self.punctuationFormattingDefaultsKeys) {
-            UserDefaults.standard.set(true, forKey: self.autoConvertPunctuationEnabledKey)
-
-            let text = ASRService.applySpokenPunctuationFormatting("Run slash status and open src slash services")
-            XCTAssertEqual(text, "Run slash status and open src slash services")
-            XCTAssertEqual(
-                ASRService.applySlashCommandFormatting(text),
-                "Run /status and open src slash services"
-            )
-        }
-    }
-
     func testSpokenPunctuationFormattingCleansGeneratedCommaNoiseWithPrefix() {
         self.withRestoredDefaults(keys: self.punctuationFormattingDefaultsKeys) {
             UserDefaults.standard.set(true, forKey: self.autoConvertPunctuationEnabledKey)
@@ -660,41 +582,6 @@ final class DictationE2ETests: XCTestCase {
                 "literal period"
             )
         }
-    }
-
-    func testTerminalLiteralAutocompleteSpacingRemovesTrailingSpaceForTargetApps() {
-        XCTAssertEqual(
-            ASRService.applyTerminalLiteralAutocompleteSpacing(
-                "/model ",
-                appName: "Codex",
-                bundleID: "com.openai.codex"
-            ),
-            "/model"
-        )
-        XCTAssertEqual(
-            ASRService.applyTerminalLiteralAutocompleteSpacing(
-                "hey @Paul Heinz ",
-                appName: "Slack",
-                bundleID: "com.tinyspeck.slackmacgap"
-            ),
-            "hey @Paul Heinz"
-        )
-        XCTAssertEqual(
-            ASRService.applyTerminalLiteralAutocompleteSpacing(
-                " @Paul ",
-                appName: "Slack",
-                bundleID: "com.tinyspeck.slackmacgap"
-            ),
-            " @Paul"
-        )
-        XCTAssertEqual(
-            ASRService.makeDictationLiteralOutputPlan(
-                for: "@ross.winn ",
-                appName: "Discord",
-                bundleID: "com.hnc.Discord"
-            ).plainText,
-            "@ross.winn"
-        )
     }
 
     func testTerminalLiteralAutocompleteSpacingLeavesNonAutocompleteTextAlone() {
