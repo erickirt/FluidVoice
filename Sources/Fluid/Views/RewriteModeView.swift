@@ -179,10 +179,7 @@ struct RewriteModeView: View {
                     selectedProviderID: Binding(
                         get: { self.settings.rewriteModeSelectedProviderID },
                         set: { newValue in
-                            // Prevent selecting disabled Apple Intelligence
-                            if newValue == "apple-intelligence-disabled" {
-                                return
-                            } else if self.isPrivateAIProviderID(newValue) {
+                            if self.isPrivateAIProviderID(newValue) {
                                 return
                             } else {
                                 self.settings.rewriteModeSelectedProviderID = newValue
@@ -192,18 +189,15 @@ struct RewriteModeView: View {
                     )
                 )
 
-                // Model Selector (hidden for Apple Intelligence)
-                if self.settings.rewriteModeSelectedProviderID != "apple-intelligence" {
-                    SearchableModelPicker(
-                        models: self.availableModels,
-                        selectedModel: Binding(
-                            get: { self.settings.rewriteModeSelectedModel ?? self.availableModels.first ?? "" },
-                            set: { self.settings.rewriteModeSelectedModel = $0 }
-                        ),
-                        onRefresh: nil,
-                        isRefreshing: false
-                    )
-                }
+                SearchableModelPicker(
+                    models: self.availableModels,
+                    selectedModel: Binding(
+                        get: { self.settings.rewriteModeSelectedModel ?? self.availableModels.first ?? "" },
+                        set: { self.settings.rewriteModeSelectedModel = $0 }
+                    ),
+                    onRefresh: nil,
+                    isRefreshing: false
+                )
 
                 // Input field (flexible)
                 TextField(
@@ -297,12 +291,6 @@ struct RewriteModeView: View {
             return
         }
 
-        // Apple Intelligence has only one model
-        if currentProviderID == "apple-intelligence" {
-            self.availableModels = ["System Model"]
-            return
-        }
-
         // Pull models from the shared pool configured in AI Settings
         let possibleKeys = self.providerKeys(for: currentProviderID)
         let storedList = possibleKeys.lazy
@@ -326,10 +314,7 @@ struct RewriteModeView: View {
     }
 
     private var builtInProvidersList: [(id: String, name: String)] {
-        ModelRepository.shared.builtInProvidersList(
-            includeAppleIntelligence: true,
-            appleIntelligenceAvailable: AppleIntelligenceService.isAvailable
-        ).filter { !self.isPrivateAIProviderID($0.id) }
+        ModelRepository.shared.builtInProvidersList().filter { !self.isPrivateAIProviderID($0.id) }
     }
 
     private func isPrivateAIProviderID(_ providerID: String) -> Bool {

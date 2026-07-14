@@ -22,34 +22,42 @@ enum DictationAIPostProcessingGate {
         }
 
         if promptSelection == .privateAI {
-            return self.isPrivateProviderConfigured(settings: settings)
+            let route = DictationProviderRoute.resolve(
+                settings: settings,
+                dictationSlot: slot,
+                appBundleID: appBundleID
+            )
+            return route.usesPrivateAI && self.isPrivateProviderConfigured(settings: settings)
         }
 
-        if self.isSelectedPrivateProvider(settings: settings) { return false }
-
-        return self.isProviderConfigured()
+        let route = DictationProviderRoute.resolve(
+            settings: settings,
+            dictationSlot: slot,
+            appBundleID: appBundleID
+        )
+        guard !route.usesPrivateAI else { return false }
+        return self.isProviderConfigured(route: route, settings: settings)
     }
 
     /// Returns true if the selected AI provider is currently verified/configured,
     /// regardless of the AI toggle or prompt selection. Used to gate prompt-mode hotkey AI processing.
     static func isProviderConfigured() -> Bool {
         let settings = SettingsStore.shared
-        let providerID = settings.selectedProviderID
-        if PrivateFeatures.privateAIProvider,
-           providerID == PrivateAIProviderFeature.shared.providerID
-        {
+        let route = DictationProviderRoute.resolve(settings: settings)
+        if route.usesPrivateAI {
             return self.isPrivateProviderConfigured(settings: settings)
         }
+        return self.isProviderConfigured(route: route, settings: settings)
+    }
 
-        let key = self.providerKey(for: providerID)
-        guard let storedFingerprint = settings.verifiedProviderFingerprints[key] else { return false }
+    private static func isProviderConfigured(route: DictationProviderRoute, settings: SettingsStore) -> Bool {
+        let providerID = route.providerID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = route.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !providerID.isEmpty, !model.isEmpty else { return false }
+        guard let storedFingerprint = settings.verifiedProviderFingerprints[route.providerKey] else { return false }
 
-        if providerID == "apple-intelligence" {
-            return storedFingerprint == "apple-intelligence" && AppleIntelligenceService.isAvailable
-        }
-
-        let baseURL = self.baseURL(for: providerID, settings: settings)
-        let apiKey = (settings.getAPIKey(for: providerID) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseURL = route.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiKey = route.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard self.isLocalEndpoint(baseURL) || !apiKey.isEmpty else { return false }
 
         return self.providerFingerprint(baseURL: baseURL, apiKey: apiKey) == storedFingerprint
@@ -87,11 +95,6 @@ enum DictationAIPostProcessingGate {
 
     private static func isPrivateProviderConfigured(settings: SettingsStore) -> Bool {
         PrivateAIProviderPromptFormat.verifiedModelID(settings: settings) != nil
-    }
-
-    private static func isSelectedPrivateProvider(settings: SettingsStore) -> Bool {
-        PrivateFeatures.privateAIProvider &&
-            settings.selectedProviderID == PrivateAIProviderFeature.shared.providerID
     }
 
     static func isLocalEndpoint(_ urlString: String) -> Bool {

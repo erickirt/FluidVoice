@@ -40,7 +40,7 @@ final class SettingsStore: ObservableObject {
         self.migrateSecondaryPromptShortcutIfNeeded()
         self.retireLegacySecondaryPromptShortcutIfNeeded()
         self.normalizePromptSelectionsIfNeeded()
-        self.normalizeProviderSelectionForCurrentVerificationState()
+        self.purgeRetiredAppleIntelligenceState()
         self.repairForcedOnboardingResetIfNeeded()
         self.migrateOverlayBottomOffsetTo50IfNeeded()
         self.migratePrivateAIContextDefaultTo4KIfNeeded()
@@ -1473,14 +1473,55 @@ final class SettingsStore: ObservableObject {
         }
     }
 
-    /// No-op: never override the user's provider selection on launch.
-    ///
-    /// The per-prompt shortcut system means the global default provider is no longer the
-    /// authoritative routing source — each shortcut can bind to its own provider/model, or be off.
-    /// The only time we set a provider is during onboarding (Fluid Intelligence flow); after that
-    /// the selection is sticky across restarts and updates. Default is off (empty).
-    func normalizeProviderSelectionForCurrentVerificationState() {
-        // Intentionally empty. Selection is sticky.
+    func purgeRetiredAppleIntelligenceState() {
+        let retiredProviderIDs = Set(["apple-intelligence", "apple-intelligence-disabled"])
+        let rawSelectedProviderID = self.defaults.string(forKey: Keys.selectedProviderID)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let rawSelectedProviderID, retiredProviderIDs.contains(rawSelectedProviderID) {
+            self.selectedProviderID = ""
+            self.selectedModel = nil
+        }
+
+        if retiredProviderIDs.contains(self.commandModeSelectedProviderID) {
+            self.commandModeSelectedProviderID = ""
+            self.commandModeSelectedModel = nil
+        }
+        if retiredProviderIDs.contains(self.rewriteModeSelectedProviderID) {
+            self.rewriteModeSelectedProviderID = ""
+            self.rewriteModeSelectedModel = nil
+        }
+
+        var fingerprints = self.verifiedProviderFingerprints
+        var availableModels = self.availableModelsByProvider
+        var selectedModels = self.selectedModelByProvider
+        for providerID in retiredProviderIDs {
+            fingerprints.removeValue(forKey: providerID)
+            availableModels.removeValue(forKey: providerID)
+            selectedModels.removeValue(forKey: providerID)
+            fingerprints.removeValue(forKey: "custom:\(providerID)")
+            availableModels.removeValue(forKey: "custom:\(providerID)")
+            selectedModels.removeValue(forKey: "custom:\(providerID)")
+        }
+        if fingerprints != self.verifiedProviderFingerprints {
+            self.verifiedProviderFingerprints = fingerprints
+        }
+        if availableModels != self.availableModelsByProvider {
+            self.availableModelsByProvider = availableModels
+        }
+        if selectedModels != self.selectedModelByProvider {
+            self.selectedModelByProvider = selectedModels
+        }
+
+        let configurations = self.dictationPromptConfigurations.compactMapValues { configuration in
+            let providerID = configuration.providerID.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard retiredProviderIDs.contains(providerID) else { return configuration }
+            guard configuration.shortcut != nil else { return nil }
+            return DictationPromptConfiguration(shortcut: configuration.shortcut)
+        }
+        if configurations != self.dictationPromptConfigurations {
+            self.dictationPromptConfigurations = configurations
+        }
     }
 
     var privateAIPrefixKVCacheEnabled: Bool {
@@ -1572,10 +1613,7 @@ final class SettingsStore: ObservableObject {
     var isAIConfigured: Bool {
         let providerID = self.selectedProviderID
 
-        // 1. Apple Intelligence is always considered configured
-        if providerID == "apple-intelligence" { return true }
-
-        // 2. Get base URL to check for local endpoints
+        // Get base URL to check for local endpoints
         var baseURL = ""
         if let saved = self.savedProviders.first(where: { $0.id == providerID }) {
             baseURL = saved.baseURL
@@ -1585,7 +1623,7 @@ final class SettingsStore: ObservableObject {
 
         let isLocal = ModelRepository.shared.isLocalEndpoint(baseURL)
 
-        // 3. Check for API key and selected model
+        // Check for API key and selected model
         let key = self.canonicalProviderKey(for: providerID)
         let hasApiKey = !(self.providerAPIKeys[key]?.isEmpty ?? true)
 
@@ -3119,6 +3157,7 @@ final class SettingsStore: ObservableObject {
         self.promptModeSelectedPromptID = payload.promptModeSelectedPromptID
         self.isSecondaryDictationPromptOff = payload.secondaryDictationPromptOff ?? false
         self.normalizePromptSelectionsIfNeeded()
+        self.purgeRetiredAppleIntelligenceState()
     }
 
     // MARK: - Private Methods
@@ -3478,11 +3517,6 @@ final class SettingsStore: ObservableObject {
     private func isVerifiedProviderForCurrentConfiguration(_ providerID: String) -> Bool {
         let trimmed = providerID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
-
-        if trimmed == "apple-intelligence" {
-            return AppleIntelligenceService.isAvailable &&
-                self.verifiedProviderFingerprints[self.canonicalProviderKey(for: trimmed)] == "apple-intelligence"
-        }
 
         if PrivateFeatures.privateAIProvider,
            trimmed == PrivateAIProviderFeature.shared.providerID

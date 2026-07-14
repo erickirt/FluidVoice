@@ -51,9 +51,6 @@ extension SettingsStore {
 
     var commandModeReadinessIssue: String? {
         let sourceProviderID = self.commandModeLinkedToGlobal ? self.selectedProviderID : self.commandModeSelectedProviderID
-        if sourceProviderID == "apple-intelligence" || sourceProviderID == "apple-intelligence-disabled" {
-            return "Command Mode cannot use Apple Intelligence because terminal tools require a chat API. Choose a verified chat provider or turn Sync off."
-        }
         if self.isPrivateAIProviderID(sourceProviderID) {
             return "\(PrivateAIProviderFeature.displayName) for Command Mode is coming soon. Choose a verified chat provider or turn Sync off."
         }
@@ -93,7 +90,6 @@ extension SettingsStore {
     private func supportedCommandModeProviderID(_ providerID: String) -> String? {
         let trimmed = providerID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        guard trimmed != "apple-intelligence", trimmed != "apple-intelligence-disabled" else { return nil }
         guard !self.isPrivateAIProviderID(trimmed) else { return nil }
         return trimmed
     }

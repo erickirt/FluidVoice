@@ -17,7 +17,7 @@ final class ModelRepository {
     /// All built-in provider IDs (not including custom/saved providers)
     static var builtInProviderIDs: [String] {
         var providers = [
-            "openai", "anthropic", "xai", "groq", "cerebras", "google", "openrouter", "ollama", "lmstudio", "apple-intelligence",
+            "openai", "anthropic", "xai", "groq", "cerebras", "google", "openrouter", "ollama", "lmstudio",
         ]
         if PrivateFeatures.privateAIProvider {
             providers.insert(PrivateAIProviderFeature.shared.providerID, at: 0)
@@ -50,8 +50,6 @@ final class ModelRepository {
         case "ollama", "lmstudio":
             // Local providers - models vary per user, they must add their own
             return []
-        case "apple-intelligence":
-            return ["System Model"]
         default:
             // Custom providers start with no default models; user must add them
             return []
@@ -100,7 +98,6 @@ final class ModelRepository {
         case "openrouter": return "OpenRouter"
         case "ollama": return "Ollama"
         case "lmstudio": return "LM Studio"
-        case "apple-intelligence": return "Apple Intelligence"
         default: return providerID.capitalized
         }
     }
@@ -111,7 +108,7 @@ final class ModelRepository {
     }
 
     /// Returns the website URL for getting an API key or downloading the provider software.
-    /// Returns nil for providers that don't have a relevant URL (e.g., Apple Intelligence).
+    /// Returns nil for providers that don't have a relevant URL.
     func providerWebsiteURL(for providerID: String) -> (url: String, label: String)? {
         switch providerID {
         case "openai":
@@ -153,14 +150,7 @@ final class ModelRepository {
     }
 
     /// Returns the list of built-in providers for UI pickers
-    /// - Parameter includeAppleIntelligence: Whether to include Apple Intelligence
-    /// - Parameter appleIntelligenceAvailable: Whether Apple Intelligence is available on this device
-    /// - Parameter appleIntelligenceDisabledReason: Optional reason if disabled (e.g., "No tools")
-    func builtInProvidersList(
-        includeAppleIntelligence: Bool = true,
-        appleIntelligenceAvailable: Bool = false,
-        appleIntelligenceDisabledReason: String? = nil
-    ) -> [(id: String, name: String)] {
+    func builtInProvidersList() -> [(id: String, name: String)] {
         var list: [(id: String, name: String)] = [
             ("openai", "OpenAI"),
             ("anthropic", "Anthropic"),
@@ -175,16 +165,6 @@ final class ModelRepository {
 
         if PrivateFeatures.privateAIProvider {
             list.insert((PrivateAIProviderFeature.shared.providerID, PrivateAIProviderFeature.shared.providerName), at: 0)
-        }
-
-        if includeAppleIntelligence {
-            if appleIntelligenceAvailable {
-                list.append(("apple-intelligence", "Apple Intelligence"))
-            } else if let reason = appleIntelligenceDisabledReason {
-                list.append(("apple-intelligence-disabled", "Apple Intelligence (\(reason))"))
-            } else {
-                list.append(("apple-intelligence-disabled", "Apple Intelligence (Unavailable)"))
-            }
         }
 
         return list

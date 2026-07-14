@@ -42,7 +42,6 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
     @Published var editingReasoningEnabled: Bool = false
 
     // Provider Management
-    @Published var appleIntelligenceAvailable: Bool = false
     @Published var providerAPIKeys: [String: String] = [:]
     @Published var currentProvider: String = ""
     @Published var savedProviders: [SettingsStore.SavedProvider] = []
@@ -155,13 +154,11 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
     // MARK: - Load Settings
 
     func loadSettings() {
-        self.settings.normalizeProviderSelectionForCurrentVerificationState()
         self.settings.reconcilePromptStateAfterProfileChanges()
         self.selectedProviderID = self.settings.selectedProviderID
 
         self.availableModelsByProvider = self.settings.availableModelsByProvider
         self.selectedModelByProvider = self.settings.selectedModelByProvider
-        self.appleIntelligenceAvailable = AppleIntelligenceService.isAvailable
         self.providerAPIKeys = self.settings.providerAPIKeys
         self.savedProviders = self.settings.savedProviders
         self.dictationPromptProfiles = self.settings.dictationPromptProfiles
@@ -282,7 +279,6 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         case "": return "No Provider"
         case "openai": return "OpenAI"
         case "groq": return "Groq"
-        case "apple-intelligence": return "Apple Intelligence"
         default:
             return self.savedProviders.first(where: { $0.id == providerID })?.name ?? providerID.capitalized
         }
@@ -320,10 +316,7 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         var seen = Set<String>()
 
         // Built-in providers list
-        let builtInList = ModelRepository.shared.builtInProvidersList(
-            includeAppleIntelligence: true,
-            appleIntelligenceAvailable: self.appleIntelligenceAvailable
-        )
+        let builtInList = ModelRepository.shared.builtInProvidersList()
 
         for provider in builtInList {
             guard !seen.contains(provider.id) else { continue }
@@ -366,13 +359,6 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         if providerID == self.selectedProviderID {
             self.connectionErrorMessage = ""
         }
-    }
-
-    func verifyAppleIntelligence() {
-        let providerID = "apple-intelligence"
-        let key = self.providerKey(for: providerID)
-        self.settings.verifiedProviderFingerprints[key] = "apple-intelligence"
-        self.updateConnectionStatus(.success, for: providerID)
     }
 
     func verifyPrivateAIProvider(model: PrivateAIRegisteredModel) async -> Bool {
@@ -1028,15 +1014,6 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
             return
         }
 
-        // Handle Apple Intelligence specially (no base URL)
-        if newValue == "apple-intelligence" {
-            self.openAIBaseURL = ""
-            self.updateCurrentProvider()
-            self.availableModels = ["System Model"]
-            self.selectedModel = "System Model"
-            return
-        }
-
         // Check if it's a built-in provider
         if ModelRepository.shared.isBuiltIn(newValue) {
             self.openAIBaseURL = ModelRepository.shared.defaultBaseURL(for: newValue)
@@ -1425,14 +1402,6 @@ final class AIEnhancementSettingsViewModel: ObservableObject {
         let providers = ModelRepository.builtInProviderIDs + self.savedProviders.map { $0.id }
         for providerID in providers {
             let key = self.providerKey(for: providerID)
-            if providerID == "apple-intelligence" {
-                if self.settings.verifiedProviderFingerprints[key] == "apple-intelligence" {
-                    statuses[providerID] = .success
-                } else if statuses[providerID] == .success {
-                    statuses[providerID] = .unknown
-                }
-                continue
-            }
             if providerID == PrivateAIProviderFeature.shared.providerID {
                 if PrivateAIProviderPromptFormat.verifiedModelID(settings: self.settings) != nil {
                     statuses[providerID] = .success

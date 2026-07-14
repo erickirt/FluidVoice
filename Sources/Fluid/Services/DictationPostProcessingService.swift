@@ -1,5 +1,137 @@
 import Foundation
 
+struct DictationProviderRoute: Equatable {
+    let providerID: String
+    let providerKey: String
+    let baseURL: String
+    let model: String
+    let apiKey: String
+
+    var usesPrivateAI: Bool {
+        self.providerID == PrivateAIProviderFeature.shared.providerID ||
+            self.providerKey == PrivateAIProviderFeature.shared.providerID ||
+            self.providerKey == "custom:\(PrivateAIProviderFeature.shared.providerID)"
+    }
+
+    static func resolve(
+        settings: SettingsStore,
+        dictationSlot: SettingsStore.DictationShortcutSlot? = nil,
+        appBundleID: String? = nil
+    ) -> Self {
+        let selectedProviderID: String
+        let configuredModel: String?
+
+        if let dictationSlot {
+            let selection = self.effectivePromptSelection(
+                settings: settings,
+                dictationSlot: dictationSlot,
+                appBundleID: appBundleID
+            )
+            if selection == .off {
+                return Self(providerID: "", providerKey: "", baseURL: "", model: "", apiKey: "")
+            }
+            if selection == .privateAI {
+                return self.privateAIRoute(settings: settings)
+            }
+
+            let configuration = settings.dictationPromptConfiguration(for: selection)
+            let providerID = configuration.providerID.trimmingCharacters(in: .whitespacesAndNewlines)
+            let model = configuration.modelName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !providerID.isEmpty, !model.isEmpty {
+                selectedProviderID = providerID
+                configuredModel = model
+            } else {
+                selectedProviderID = settings.selectedProviderID
+                configuredModel = nil
+            }
+        } else {
+            selectedProviderID = settings.selectedProviderID
+            configuredModel = nil
+        }
+
+        let selectedModels = settings.selectedModelByProvider
+        let providerKeys = settings.providerAPIKeys
+
+        if let saved = settings.savedProviders.first(where: { $0.id == selectedProviderID }) {
+            let key = "custom:\(saved.id)"
+            return Self(
+                providerID: selectedProviderID,
+                providerKey: key,
+                baseURL: saved.baseURL,
+                model: configuredModel ?? selectedModels[key] ?? saved.models.first ?? "",
+                apiKey: providerKeys[key] ?? providerKeys[selectedProviderID] ?? ""
+            )
+        }
+
+        if ModelRepository.shared.isBuiltIn(selectedProviderID) {
+            return Self(
+                providerID: selectedProviderID,
+                providerKey: selectedProviderID,
+                baseURL: ModelRepository.shared.defaultBaseURL(for: selectedProviderID),
+                model: configuredModel ?? selectedModels[selectedProviderID] ?? ModelRepository.shared.defaultModels(for: selectedProviderID).first ?? "",
+                apiKey: providerKeys[selectedProviderID] ?? ""
+            )
+        }
+
+        return Self(
+            providerID: selectedProviderID,
+            providerKey: selectedProviderID,
+            baseURL: "",
+            model: configuredModel ?? selectedModels[selectedProviderID] ?? "",
+            apiKey: providerKeys[selectedProviderID] ?? ""
+        )
+    }
+
+    static func privateAIRoute(settings: SettingsStore) -> Self {
+        guard let modelID = PrivateAIProviderPromptFormat.verifiedModelID(settings: settings) else {
+            return Self(providerID: "", providerKey: "", baseURL: "", model: "", apiKey: "")
+        }
+        return Self(
+            providerID: PrivateAIProviderFeature.shared.providerID,
+            providerKey: PrivateAIProviderFeature.shared.providerID,
+            baseURL: ModelRepository.shared.defaultBaseURL(for: PrivateAIProviderFeature.shared.providerID),
+            model: modelID,
+            apiKey: ""
+        )
+    }
+
+    static func resolveForPostProcessing(
+        settings: SettingsStore,
+        dictationSlot: SettingsStore.DictationShortcutSlot
+    ) -> Self {
+        if settings.dictationPromptSelection(for: dictationSlot) == .privateAI {
+            return self.privateAIRoute(settings: settings)
+        }
+        if settings.promptRoutingScope(for: .dictate) == .selectedAppsOnly {
+            return self.resolve(settings: settings)
+        }
+        return self.resolve(settings: settings, dictationSlot: dictationSlot)
+    }
+
+    private static func effectivePromptSelection(
+        settings: SettingsStore,
+        dictationSlot: SettingsStore.DictationShortcutSlot,
+        appBundleID: String?
+    ) -> SettingsStore.DictationPromptSelection {
+        let selection = settings.dictationPromptSelection(for: dictationSlot)
+        guard selection != .off, selection != .privateAI else { return selection }
+
+        let usesOnlyAppBindings = settings.promptRoutingScope(for: .dictate) == .selectedAppsOnly
+        guard usesOnlyAppBindings || selection == .default else { return selection }
+        guard let binding = settings.appPromptBinding(for: .dictate, appBundleID: appBundleID) else {
+            return usesOnlyAppBindings ? .off : selection
+        }
+        guard let promptID = binding.promptID,
+              settings.dictationPromptProfiles.contains(where: {
+                  $0.id == promptID && $0.mode.normalized == .dictate
+              })
+        else {
+            return .default
+        }
+        return .profile(promptID)
+    }
+}
+
 @MainActor
 final class DictationPostProcessingService {
     static let shared = DictationPostProcessingService()
@@ -12,14 +144,6 @@ final class DictationPostProcessingService {
         let model: String
     }
 
-    private struct ResolvedProvider {
-        let providerID: String
-        let providerKey: String
-        let baseURL: String
-        let model: String
-        let apiKey: String
-    }
-
     func process(_ inputText: String, dictationSlot: SettingsStore.DictationShortcutSlot = .primary) async throws -> Result {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -27,7 +151,10 @@ final class DictationPostProcessingService {
         }
 
         let settings = SettingsStore.shared
-        let resolved = self.resolveProvider(settings: settings, dictationSlot: dictationSlot)
+        let resolved = DictationProviderRoute.resolveForPostProcessing(
+            settings: settings,
+            dictationSlot: dictationSlot
+        )
         guard !resolved.providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw AIProcessingError.noVerifiedProvider
         }
@@ -37,16 +164,12 @@ final class DictationPostProcessingService {
         )
 
         let usesPrivateAISelection = settings.dictationPromptSelection(for: dictationSlot) == .privateAI
-        let isPrivateAIProvider = resolved.providerID == PrivateAIProviderFeature.shared.providerID ||
-            resolved.providerKey == PrivateAIProviderFeature.shared.providerID ||
-            resolved.providerKey == "custom:\(PrivateAIProviderFeature.shared.providerID)"
-
-        guard usesPrivateAISelection || !isPrivateAIProvider else {
+        guard usesPrivateAISelection || !resolved.usesPrivateAI else {
             throw AIProcessingError.noVerifiedProvider
         }
 
         if usesPrivateAISelection,
-           isPrivateAIProvider || PrivateAIIntegrationService.shouldHandleDictation(model: resolved.model)
+           resolved.usesPrivateAI || PrivateAIIntegrationService.shouldHandleDictation(model: resolved.model)
         {
             let response = try await PrivateAIIntegrationService.shared.enhanceDictation(
                 trimmed,
@@ -81,18 +204,6 @@ final class DictationPostProcessingService {
             promptText: promptText,
             transcript: trimmed
         )
-
-        if resolved.providerID == "apple-intelligence" {
-            #if canImport(FoundationModels)
-            if #available(macOS 26.0, *) {
-                let provider = AppleIntelligenceProvider()
-                let output = try await provider.process(systemPrompt: systemPrompt, userText: userMessageContent)
-                guard !output.isEmpty else { throw AIProcessingError.emptyResponse }
-                return Result(text: ASRService.applyGAAVFormatting(output), providerID: resolved.providerID, model: resolved.model)
-            }
-            #endif
-            return Result(text: trimmed, providerID: resolved.providerID, model: resolved.model)
-        }
 
         guard !resolved.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw AIProcessingError.missingModel(provider: resolved.providerKey)
@@ -136,54 +247,6 @@ final class DictationPostProcessingService {
             text: ASRService.applyGAAVFormatting(response.content),
             providerID: resolved.providerID,
             model: resolved.model
-        )
-    }
-
-    private func resolveProvider(settings: SettingsStore, dictationSlot: SettingsStore.DictationShortcutSlot) -> ResolvedProvider {
-        if settings.dictationPromptSelection(for: dictationSlot) == .privateAI,
-           let modelID = PrivateAIProviderPromptFormat.verifiedModelID(settings: settings)
-        {
-            let providerID = PrivateAIProviderFeature.shared.providerID
-            return ResolvedProvider(
-                providerID: providerID,
-                providerKey: providerID,
-                baseURL: ModelRepository.shared.defaultBaseURL(for: providerID),
-                model: modelID,
-                apiKey: ""
-            )
-        }
-
-        let providerID = settings.selectedProviderID
-        let selectedModels = settings.selectedModelByProvider
-        let providerKeys = settings.providerAPIKeys
-
-        if let saved = settings.savedProviders.first(where: { $0.id == providerID }) {
-            let key = "custom:\(saved.id)"
-            return ResolvedProvider(
-                providerID: providerID,
-                providerKey: key,
-                baseURL: saved.baseURL,
-                model: selectedModels[key] ?? saved.models.first ?? "",
-                apiKey: providerKeys[key] ?? providerKeys[providerID] ?? ""
-            )
-        }
-
-        if ModelRepository.shared.isBuiltIn(providerID) {
-            return ResolvedProvider(
-                providerID: providerID,
-                providerKey: providerID,
-                baseURL: ModelRepository.shared.defaultBaseURL(for: providerID),
-                model: selectedModels[providerID] ?? ModelRepository.shared.defaultModels(for: providerID).first ?? "",
-                apiKey: providerKeys[providerID] ?? ""
-            )
-        }
-
-        return ResolvedProvider(
-            providerID: providerID,
-            providerKey: providerID,
-            baseURL: "",
-            model: selectedModels[providerID] ?? "",
-            apiKey: providerKeys[providerID] ?? ""
         )
     }
 }

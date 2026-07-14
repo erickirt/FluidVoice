@@ -262,28 +262,6 @@ final class RewriteModeService: ObservableObject {
             self.logPromptTrace("Conversation input (Q/history)", value: messageDump.isEmpty ? "<empty>" : messageDump)
         }
 
-        // Route to Apple Intelligence if selected
-        if providerID == "apple-intelligence" {
-            #if canImport(FoundationModels)
-            if #available(macOS 26.0, *) {
-                let provider = AppleIntelligenceProvider()
-                let messageTuples = messages
-                    .map { (role: $0.role == .user ? "user" : "assistant", content: $0.content) }
-                DebugLogger.shared.debug("Using Apple Intelligence for edit mode", source: "RewriteModeService")
-                let output = try await provider.processRewrite(messages: messageTuples, systemPrompt: systemPrompt)
-                if self.shouldTracePromptProcessing {
-                    self.logPromptTrace("Model answer (A)", value: output)
-                }
-                return output
-            }
-            #endif
-            throw NSError(
-                domain: "RewriteMode",
-                code: -1,
-                userInfo: [NSLocalizedDescriptionKey: "Apple Intelligence not available"]
-            )
-        }
-
         let model: String = {
             if settings.rewriteModeLinkedToGlobal {
                 let key: String
@@ -473,9 +451,6 @@ final class RewriteModeService: ObservableObject {
         guard !self.isPrivateAIProviderID(providerID) else { return false }
         let key = self.providerKey(for: providerID)
         guard let stored = settings.verifiedProviderFingerprints[key] else { return false }
-        if providerID == "apple-intelligence" {
-            return stored == "apple-intelligence"
-        }
         let baseURL = self.providerBaseURL(for: providerID, settings: settings)
         let apiKey = settings.getAPIKey(for: providerID) ?? ""
         let current = self.providerFingerprint(baseURL: baseURL, apiKey: apiKey)

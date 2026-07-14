@@ -532,10 +532,8 @@ extension AIEnhancementSettingsView {
     }
 
     private func providerCard(_ item: ProviderItem) -> some View {
-        let isAppleDisabled = item.id == "apple-intelligence-disabled"
         let isPrivateAIProvider = item.id == PrivateAIProviderFeature.shared.providerID
-        let isComingSoon = isAppleDisabled
-        let isExpanded = self.expandedProviderID == item.id && !isAppleDisabled
+        let isExpanded = self.expandedProviderID == item.id
         let status = self.providerStatus(for: item)
         let borderColor = isExpanded
             ? self.theme.palette.accent.opacity(0.5)
@@ -551,7 +549,7 @@ extension AIEnhancementSettingsView {
         .foregroundStyle(status.color)
 
         return VStack(alignment: .leading, spacing: 0) {
-            Button(action: { if !isComingSoon { self.toggleProviderExpansion(item.id) } }) {
+            Button(action: { self.toggleProviderExpansion(item.id) }) {
                 HStack(alignment: .center, spacing: 10) {
                     self.providerLogoView(for: item)
                         .frame(width: 34, height: 34)
@@ -559,24 +557,21 @@ extension AIEnhancementSettingsView {
                     HStack(spacing: 8) {
                         Text(item.name)
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(isComingSoon ? self.theme.palette.accent : self.theme.palette.primaryText)
+                            .foregroundStyle(self.theme.palette.primaryText)
 
                         statusView
                     }
 
                     Spacer()
 
-                    if !isComingSoon {
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.secondary.opacity(0.7))
-                    }
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary.opacity(0.7))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(isComingSoon)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
 
@@ -618,12 +613,6 @@ extension AIEnhancementSettingsView {
     }
 
     private func providerStatus(for item: ProviderItem) -> (text: String, color: Color, icon: String) {
-        if item.id == "apple-intelligence-disabled" {
-            return ("Unavailable", .secondary, "lock.slash")
-        }
-        if item.id == "apple-intelligence" {
-            return ("On-device", .secondary, "lock.shield")
-        }
         switch self.viewModel.connectionStatus(for: item.id) {
         case .success:
             return ("Connection verified", Color.fluidGreen, "checkmark.circle.fill")
@@ -634,10 +623,6 @@ extension AIEnhancementSettingsView {
         case .unknown:
             return ("Connection not tested", .orange, "exclamationmark.circle.fill")
         }
-    }
-
-    private var isComingSoonProvider: (ProviderItem) -> Bool {
-        { $0.id == "apple-intelligence-disabled" }
     }
 
     private func toggleProviderExpansion(_ providerID: String) {
@@ -1314,31 +1299,7 @@ extension AIEnhancementSettingsView {
     }
 
     private func providerDetailsSection(for item: ProviderItem) -> AnyView {
-        let isAppleDisabled = item.id == "apple-intelligence-disabled"
-        let isApple = item.id == "apple-intelligence"
         let providerKey = self.viewModel.providerKey(for: item.id)
-        if isAppleDisabled {
-            return AnyView(
-                HStack(spacing: 10) {
-                    Image(systemName: "lock.slash")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
-                    Text("Apple Intelligence is unavailable on this device. Enable it in System Settings → Apple Intelligence & Siri.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(self.theme.palette.contentBackground.opacity(0.6))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(self.theme.palette.cardBorder.opacity(0.35), lineWidth: 1)
-                        )
-                )
-            )
-        }
         let isCustom = !ModelRepository.shared.isBuiltIn(item.id)
         let baseURL = self.viewModel.openAIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let isLocal = self.viewModel.isLocalEndpoint(baseURL)
@@ -1350,7 +1311,6 @@ extension AIEnhancementSettingsView {
         let hasName = isCustom ? !(self.viewModel.savedProviders.first { $0.id == item.id }?.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty : true
         let canFetchModels = hasName && (isLocal ? !baseURL.isEmpty : (hasAPIKey && !baseURL.isEmpty))
         let canVerify = hasModels && !self.viewModel.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && canFetchModels
-        let isVerified = self.viewModel.connectionStatus(for: item.id) == .success
         let apiKeyBinding = Binding(
             get: { self.viewModel.providerAPIKey(for: item.id) },
             set: { self.viewModel.updateProviderAPIKey($0, for: item.id, persistEmptyValue: true) }
@@ -1369,43 +1329,7 @@ extension AIEnhancementSettingsView {
         )
 
         return AnyView(VStack(alignment: .leading, spacing: 10) {
-            if isApple {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "lock.shield.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.fluidGreen)
-                        Text("Apple Intelligence runs on-device and does not require an API key.")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack(spacing: 10) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.orange)
-                        Text("Output quality can be poor and inconsistent. Use it at your discretion.")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.fluidGreen.opacity(0.08))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(Color.fluidGreen.opacity(0.2), lineWidth: 1)
-                        )
-                )
-                if !isVerified {
-                    Button("Verify") {
-                        self.viewModel.verifyAppleIntelligence()
-                    }
-                    .fluidButton(.glass, size: .compact)
-                }
-            } else {
+            Group {
                 if isCustom {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 6) {
@@ -1931,9 +1855,6 @@ extension AIEnhancementSettingsView {
         if id.contains("lmstudio") || name.contains("lm studio") || name.contains("lmstudio") {
             return Color(red: 0.15, green: 0.55, blue: 0.35) // Green
         }
-        if id.contains("apple") || name.contains("apple intelligence") {
-            return Color(red: 0.6, green: 0.4, blue: 0.7) // Purple for Apple Intelligence
-        }
         // Default fallback
         return Color(red: 0.9, green: 0.9, blue: 0.92)
     }
@@ -1977,9 +1898,6 @@ extension AIEnhancementSettingsView {
         }
         if id.contains("lmstudio") || name.contains("lm studio") || name.contains("lmstudio") {
             return "Provider_LMStudio"
-        }
-        if id.contains("apple") || name.contains("apple intelligence") {
-            return "Provider_AppleIntelligence"
         }
         if id.contains("compatible") || name.contains("compatible") {
             return "Provider_Compatible"
@@ -2063,10 +1981,7 @@ extension AIEnhancementSettingsView {
     }
 
     var builtInProvidersList: [(id: String, name: String)] {
-        ModelRepository.shared.builtInProvidersList(
-            includeAppleIntelligence: true,
-            appleIntelligenceAvailable: self.viewModel.appleIntelligenceAvailable
-        )
+        ModelRepository.shared.builtInProvidersList()
     }
 
     func privateAIEditProviderSection(
