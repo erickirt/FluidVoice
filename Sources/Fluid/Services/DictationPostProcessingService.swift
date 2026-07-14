@@ -95,6 +95,19 @@ struct DictationProviderRoute: Equatable {
         )
     }
 
+    static func resolveForPostProcessing(
+        settings: SettingsStore,
+        dictationSlot: SettingsStore.DictationShortcutSlot
+    ) -> Self {
+        if settings.dictationPromptSelection(for: dictationSlot) == .privateAI {
+            return self.privateAIRoute(settings: settings)
+        }
+        if settings.promptRoutingScope(for: .dictate) == .selectedAppsOnly {
+            return self.resolve(settings: settings)
+        }
+        return self.resolve(settings: settings, dictationSlot: dictationSlot)
+    }
+
     private static func effectivePromptSelection(
         settings: SettingsStore,
         dictationSlot: SettingsStore.DictationShortcutSlot,
@@ -138,7 +151,10 @@ final class DictationPostProcessingService {
         }
 
         let settings = SettingsStore.shared
-        let resolved = DictationProviderRoute.resolve(settings: settings, dictationSlot: dictationSlot)
+        let resolved = DictationProviderRoute.resolveForPostProcessing(
+            settings: settings,
+            dictationSlot: dictationSlot
+        )
         guard !resolved.providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw AIProcessingError.noVerifiedProvider
         }

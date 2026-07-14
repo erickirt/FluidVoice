@@ -1682,6 +1682,32 @@ final class DictationE2ETests: XCTestCase {
         }
     }
 
+    func testPostProcessingRouteUsesGlobalProviderWithoutAppContext() {
+        self.withRestoredDefaults(
+            keys: [
+                self.dictationPromptRoutingScopeKey,
+                self.selectedProviderIDKey,
+                self.selectedModelByProviderKey,
+                self.dictationPromptOffKey,
+                self.selectedDictationPromptIDKey,
+            ]
+        ) {
+            let settings = SettingsStore.shared
+            settings.dictationPromptRoutingScope = .selectedAppsOnly
+            settings.selectedProviderID = "openai"
+            settings.selectedModelByProvider = ["openai": "gpt-4.1"]
+            settings.setDictationPromptSelection(.default, for: .primary)
+
+            let route = DictationProviderRoute.resolveForPostProcessing(
+                settings: settings,
+                dictationSlot: .primary
+            )
+
+            XCTAssertEqual(route.providerID, "openai")
+            XCTAssertEqual(route.model, "gpt-4.1")
+        }
+    }
+
     func testPrivateAIProviderDictationPromptSelection_allowsOffAndRestoresNonFluidPrompt() {
         self.withPromptAndProviderSettingsRestored {
             let settings = SettingsStore.shared
