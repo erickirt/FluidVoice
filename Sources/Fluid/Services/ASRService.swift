@@ -613,7 +613,7 @@ final class ASRService: ObservableObject {
         if self.engineStorage != nil {
             let retired = RetiredAudioEngineReference(self.engineStorage)
             self.engineStorage = nil
-            DispatchQueue.global(qos: .utility).async { retired.drain() }
+            retired.scheduleRelease()
         }
         DebugLogger.shared.debug("Audio engine retired (\(reason))", source: "ASRService")
     }
@@ -2310,10 +2310,9 @@ final class ASRService: ObservableObject {
         self.scheduleAudioRouteRecovery(reason: "default output changed")
     }
 
-    private func handleEngineConfigurationChanged(_ changedEngine: AVAudioEngine?) {
-        guard let changedEngine,
-              let currentEngine = self.engineStorage as? AVAudioEngine,
-              changedEngine === currentEngine
+    private func handleEngineConfigurationChanged(_ changedEngineIdentifier: ObjectIdentifier) {
+        guard let currentEngine = self.engineStorage as? AVAudioEngine,
+              ObjectIdentifier(currentEngine) == changedEngineIdentifier
         else { return }
 
         self.scheduleAudioRouteRecovery(reason: "engine configuration changed")
@@ -2335,8 +2334,9 @@ final class ASRService: ObservableObject {
             queue: nil
         ) { [weak self] notification in
             guard let changedEngine = notification.object as? AVAudioEngine else { return }
-            Task { @MainActor [weak self, weak changedEngine] in
-                self?.handleEngineConfigurationChanged(changedEngine)
+            let changedEngineIdentifier = ObjectIdentifier(changedEngine)
+            Task { @MainActor [weak self] in
+                self?.handleEngineConfigurationChanged(changedEngineIdentifier)
             }
         }
     }
@@ -3580,7 +3580,13 @@ private final nonisolated class RetiredAudioEngineReference: @unchecked Sendable
         self.engine = engine
     }
 
-    func drain() {
+    /// Schedules the retained engine's release off the main thread. Keeping the
+    /// actual drain private prevents callers from bypassing this queue hop.
+    func scheduleRelease() {
+        DispatchQueue.global(qos: .utility).async { self.drain() }
+    }
+
+    private func drain() {
         self.engine = nil
     }
 }
