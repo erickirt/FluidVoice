@@ -75,6 +75,28 @@ struct SettingsView: View {
     let revealAppInFinder: () -> Void
     let openApplicationsFolder: () -> Void
 
+    private var inputDeviceSelection: Binding<String> {
+        Binding(
+            get: { self.selectedInputUID },
+            set: { newUID in
+                guard !newUID.isEmpty else { return }
+                guard !self.asr.isRunning else {
+                    DebugLogger.shared.warning(
+                        "Cannot change input device during recording",
+                        source: "SettingsView"
+                    )
+                    return
+                }
+
+                self.selectedInputUID = newUID
+                SettingsStore.shared.recordInputDeviceSelection(newUID)
+                if SettingsStore.shared.shouldSyncInputSelectionToSystemDefault() {
+                    _ = AudioDevice.setDefaultInputDevice(uid: newUID)
+                }
+            }
+        )
+    }
+
     private var isRecordingAnyShortcut: Bool {
         self.activeShortcutRecordingTarget != nil
     }
@@ -1093,7 +1115,7 @@ struct SettingsView: View {
                                     .font(self.theme.typography.bodyStrong)
                                     .foregroundStyle(self.settingsTitleText)
                                 Spacer()
-                                Picker("", selection: self.$selectedInputUID) {
+                                Picker("", selection: self.inputDeviceSelection) {
                                     // Handle empty state gracefully
                                     if self.inputDevices.isEmpty {
                                         Text("Loading...").tag("")
@@ -1108,22 +1130,6 @@ struct SettingsView: View {
                                 .pickerStyle(.menu)
                                 .frame(width: 240)
                                 .disabled(self.asr.isRunning)
-                                .onChange(of: self.selectedInputUID) { oldUID, newUID in
-                                    guard !newUID.isEmpty else { return }
-
-                                    // Prevent device changes during active recording
-                                    if self.asr.isRunning {
-                                        DebugLogger.shared.warning("Cannot change input device during recording", source: "SettingsView")
-                                        // Revert to previous value
-                                        self.selectedInputUID = oldUID
-                                        return
-                                    }
-
-                                    SettingsStore.shared.recordInputDeviceSelection(newUID)
-                                    if SettingsStore.shared.shouldSyncInputSelectionToSystemDefault() {
-                                        _ = AudioDevice.setDefaultInputDevice(uid: newUID)
-                                    }
-                                }
                                 // Sync selection when devices load or change
                                 .onChange(of: self.inputDevices) { _, newDevices in
                                     // Update cached default device name when device list changes
@@ -1145,6 +1151,12 @@ struct SettingsView: View {
                                            newDevices.contains(where: { $0.uid == preferredUID })
                                         {
                                             self.selectedInputUID = preferredUID
+                                        } else if let defaultUID = AudioDevice.getDefaultInputDevice()?.uid,
+                                                  newDevices.contains(where: { $0.uid == defaultUID })
+                                        {
+                                            self.selectedInputUID = defaultUID
+                                        } else {
+                                            self.selectedInputUID = newDevices.first?.uid ?? ""
                                         }
                                     }
                                 }

@@ -389,9 +389,8 @@ struct ContentView: View {
                         self.selectedInputUID = sysIn
                     }
                 case .manual:
-                    if let prefIn = SettingsStore.shared.preferredInputDeviceUID {
-                        self.selectedInputUID = prefIn
-                    }
+                    // The refreshed device list drives the displayed selection.
+                    break
                 }
 
                 if let sysOut = AudioDevice.getDefaultOutputDevice()?.uid {
