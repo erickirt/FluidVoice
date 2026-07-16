@@ -66,14 +66,28 @@ jobs:
 
           ARTIFACT_URL="https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts/$ARTIFACT_ID"
           RUN_URL="https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID"
+          APP_NAME="FluidVoice #$EVENT_PR_NUMBER"
           MARKER='<!-- fluidvoice-pr-archive -->'
           BODY=$(cat <<EOF
           $MARKER
           ### FluidVoice PR build ready
 
-          [Download \`$ARTIFACT_NAME\`]($ARTIFACT_URL)
+          [Download **$ARTIFACT_NAME**]($ARTIFACT_URL)
 
           The artifact contains the ad-hoc-signed app ZIP, Xcode archive, build manifest, and installation instructions. It expires 5 days after the build.
+
+          #### Install the app
+
+          1. Extract the downloaded artifact, then extract **FluidVoice-PR-$EVENT_PR_NUMBER.app.zip**.
+          2. Move **$APP_NAME.app** into the **/Applications** folder.
+          3. Open Terminal and remove the download quarantine marker:
+
+                 xattr -dr com.apple.quarantine "/Applications/$APP_NAME.app"
+
+          4. In Applications, Control-click **$APP_NAME.app** and choose **Open**.
+          5. If macOS still blocks it, open **System Settings → Privacy & Security**, click **Open Anyway**, and confirm.
+
+          This build has its own app identity, so its permissions are separate from the release version of FluidVoice.
 
           [View workflow run]($RUN_URL)
           EOF
