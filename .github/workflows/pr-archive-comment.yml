@@ -73,7 +73,7 @@ jobs:
 
           [Download \`$ARTIFACT_NAME\`]($ARTIFACT_URL)
 
-          The artifact contains the app ZIP, Xcode archive, build manifest, and unsigned-app instructions. It expires 5 days after the build.
+          The artifact contains the ad-hoc-signed app ZIP, Xcode archive, build manifest, and installation instructions. It expires 5 days after the build.
 
           [View workflow run]($RUN_URL)
           EOF

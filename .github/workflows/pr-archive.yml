@@ -81,7 +81,7 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
-      - name: Archive unsigned PR build
+      - name: Archive PR build
         env:
           ARCHIVE_PATH: ${{ runner.temp }}/FluidVoice-PR-${{ github.event.pull_request.number }}.xcarchive
         run: |
@@ -93,9 +93,11 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=macOS' \
             -archivePath "$ARCHIVE_PATH" \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM=""
 
       - name: Validate and package archive
         id: package
@@ -116,12 +118,24 @@ jobs:
           ARCHIVE_ZIP="$STAGING_PATH/FluidVoice-PR-$PR_NUMBER.xcarchive.zip"
           APP_ZIP="$STAGING_PATH/FluidVoice-PR-$PR_NUMBER.app.zip"
           VERIFY_PATH="$RUNNER_TEMP/FluidVoice-PR-$PR_NUMBER-verify"
+          EFFECTIVE_ENTITLEMENTS="$RUNNER_TEMP/FluidVoice-PR-$PR_NUMBER.entitlements"
+          VERIFIED_ENTITLEMENTS="$RUNNER_TEMP/FluidVoice-PR-$PR_NUMBER-verified.entitlements"
           SHORT_SHA="${PR_HEAD_SHA:0:12}"
           ARTIFACT_NAME="FluidVoice-PR-$PR_NUMBER-$SHORT_SHA"
 
           test -d "$ARCHIVE_PATH"
           test -d "$ORIGINAL_APP_PATH"
           test -f "$ARCHIVE_INFO_PLIST"
+
+          # Preserve Xcode's expanded entitlements, which combine Fluid.entitlements
+          # with target capabilities such as Hardened Runtime Audio Input.
+          codesign -d --entitlements - --xml "$ORIGINAL_APP_PATH" \
+            > "$EFFECTIVE_ENTITLEMENTS" 2>/dev/null
+          plutil -lint "$EFFECTIVE_ENTITLEMENTS"
+          if [[ "$(plutil -extract 'com\.apple\.security\.device\.audio-input' raw -o - "$EFFECTIVE_ENTITLEMENTS")" != "true" ]]; then
+            echo "Xcode's effective entitlements are missing Audio Input." >&2
+            exit 1
+          fi
 
           mv "$ORIGINAL_APP_PATH" "$APP_PATH"
           /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_IDENTIFIER" "$INFO_PLIST"
@@ -131,10 +145,37 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :ApplicationProperties:ApplicationPath Applications/$APP_NAME.app" "$ARCHIVE_INFO_PLIST"
           /usr/libexec/PlistBuddy -c "Set :ApplicationProperties:CFBundleIdentifier $BUNDLE_IDENTIFIER" "$ARCHIVE_INFO_PLIST"
 
+          # Xcode's XCFramework copy flattens CTranscribe's version symlinks.
+          # Restore the canonical framework layout before replacing its stale
+          # upstream signature.
+          CTRANSCRIBE_FRAMEWORK="$APP_PATH/Contents/Frameworks/CTranscribe.framework"
+          test -d "$CTRANSCRIBE_FRAMEWORK/Versions/A"
+          rm -rf \
+            "$CTRANSCRIBE_FRAMEWORK/Versions/Current" \
+            "$CTRANSCRIBE_FRAMEWORK/CTranscribe" \
+            "$CTRANSCRIBE_FRAMEWORK/Resources" \
+            "$CTRANSCRIBE_FRAMEWORK/Versions/A/_CodeSignature"
+          ln -s A "$CTRANSCRIBE_FRAMEWORK/Versions/Current"
+          ln -s Versions/Current/CTranscribe "$CTRANSCRIBE_FRAMEWORK/CTranscribe"
+          ln -s Versions/Current/Resources "$CTRANSCRIBE_FRAMEWORK/Resources"
+
+          # Ad-hoc signing requires no certificate or secret, but gives macOS
+          # TCC a valid code identity for permissions such as Accessibility.
+          codesign --force --sign - --timestamp=none "$CTRANSCRIBE_FRAMEWORK"
+          codesign --force --sign - --timestamp=none \
+            "$APP_PATH/Contents/Frameworks/MediaRemoteAdapter.framework"
+          codesign --force --sign - --timestamp=none --options runtime \
+            --entitlements "$EFFECTIVE_ENTITLEMENTS" \
+            --identifier "$BUNDLE_IDENTIFIER" \
+            "$APP_PATH"
+
           test -d "$APP_PATH"
           test -f "$INFO_PLIST"
           test -x "$EXECUTABLE_PATH"
           test -x "$APP_PATH/Contents/Frameworks/MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter"
+          test -L "$CTRANSCRIBE_FRAMEWORK/Versions/Current"
+          test -L "$CTRANSCRIBE_FRAMEWORK/CTranscribe"
+          test -L "$CTRANSCRIBE_FRAMEWORK/Resources"
 
           RPATH_DEPENDENCY_COUNT=0
           while IFS= read -r DEPENDENCY; do
@@ -156,7 +197,22 @@ jobs:
             exit 1
           fi
 
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          codesign -d --entitlements - --xml "$APP_PATH" \
+            > "$VERIFIED_ENTITLEMENTS" 2>/dev/null
+          if [[ "$(plutil -extract 'com\.apple\.security\.device\.audio-input' raw -o - "$VERIFIED_ENTITLEMENTS")" != "true" ]]; then
+            echo "The signed PR app is missing the Audio Input entitlement." >&2
+            exit 1
+          fi
           SIGNATURE_DETAILS=$(codesign -dv --verbose=4 "$APP_PATH" 2>&1 || true)
+          if ! grep -q '^Signature=adhoc$' <<< "$SIGNATURE_DETAILS"; then
+            echo "Expected a valid ad-hoc signature on the PR app." >&2
+            exit 1
+          fi
+          if ! grep -q "^Identifier=$BUNDLE_IDENTIFIER$" <<< "$SIGNATURE_DETAILS"; then
+            echo "The code-signing identifier does not match '$BUNDLE_IDENTIFIER'." >&2
+            exit 1
+          fi
           if grep -q '^Authority=' <<< "$SIGNATURE_DETAILS"; then
             echo "Expected no signing authority on the PR app." >&2
             exit 1
@@ -181,6 +237,8 @@ jobs:
           plutil -insert xcode_version -string "$XCODE_VERSION" "$MANIFEST_PLIST"
           plutil -insert app_name -string "$APP_NAME" "$MANIFEST_PLIST"
           plutil -insert bundle_identifier -string "$BUNDLE_IDENTIFIER" "$MANIFEST_PLIST"
+          plutil -insert signing -string ad-hoc "$MANIFEST_PLIST"
+          plutil -insert audio_input_entitlement -bool true "$MANIFEST_PLIST"
           plutil -insert build_timestamp -string "$BUILD_TIMESTAMP" "$MANIFEST_PLIST"
           plutil -convert json -o "$MANIFEST_PATH" "$MANIFEST_PLIST"
           rm "$MANIFEST_PLIST"
@@ -189,14 +247,15 @@ jobs:
           FluidVoice PR #$PR_NUMBER
           ========================
 
-          This is an unsigned test build from pull request #$PR_NUMBER.
+          This is an ad-hoc-signed test build from pull request #$PR_NUMBER.
 
           App name: $APP_NAME.app
           Bundle identifier: $BUNDLE_IDENTIFIER
           PR head SHA: $PR_HEAD_SHA
           PR merge SHA: $PR_MERGE_SHA
 
-          Because the app is unsigned, macOS may prevent it from opening normally.
+          Because the app is not Developer ID signed or notarized, macOS may prevent
+          it from opening normally.
           Try opening the app from Finder, then use Open Anyway under
           System Settings > Privacy & Security if macOS offers that option.
 
@@ -204,8 +263,9 @@ jobs:
 
             xattr -dr com.apple.quarantine "/path/to/$APP_NAME.app"
 
-          Unsigned builds may not support signature-dependent features such as
-          Login Items. This PR build has a separate bundle identifier, so macOS
+          The ad-hoc signature provides a local code identity for permissions such
+          as Accessibility, but a new build may need to be removed and re-added in
+          Privacy & Security. This PR build has a separate bundle identifier, so
           permissions and preferences are separate from the release app.
           EOF
 
@@ -220,7 +280,14 @@ jobs:
           unzip -tq "$APP_ZIP"
 
           ditto -x -k "$APP_ZIP" "$VERIFY_PATH"
-          test -x "$VERIFY_PATH/$APP_NAME.app/Contents/MacOS/FluidVoice"
+          VERIFIED_APP_PATH="$VERIFY_PATH/$APP_NAME.app"
+          test -x "$VERIFIED_APP_PATH/Contents/MacOS/FluidVoice"
+          test -L "$VERIFIED_APP_PATH/Contents/Frameworks/CTranscribe.framework/Versions/Current"
+          codesign --verify --deep --strict --verbose=2 "$VERIFIED_APP_PATH"
+          if [[ "$(codesign -d --entitlements - --xml "$VERIFIED_APP_PATH" 2>/dev/null | plutil -extract 'com\.apple\.security\.device\.audio-input' raw -o - -)" != "true" ]]; then
+            echo "The packaged PR app is missing the Audio Input entitlement." >&2
+            exit 1
+          fi
 
           echo "artifact-name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
           echo "artifact-path=$STAGING_PATH" >> "$GITHUB_OUTPUT"
@@ -231,7 +298,7 @@ jobs:
             echo "- Artifact: \`$ARTIFACT_NAME\`"
             echo "- App: \`$APP_NAME.app\`"
             echo "- Bundle identifier: \`$BUNDLE_IDENTIFIER\`"
-            echo "- Signing: unsigned"
+            echo "- Signing: ad-hoc (no certificate required)"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload PR archive artifact
