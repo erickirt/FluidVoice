@@ -224,7 +224,7 @@ Contributions are welcome! Please create an issue first to discuss major changes
 ### Development Setup
 
 1. Clone and open in Xcode as above.
-2. **Signing:** `FluidVoice → Signing & Capabilities → Automatically manage signing → pick your Team` (Personal Team is fine). Alternatively, leave the project unchanged and run `FLUIDVOICE_DEVELOPMENT_TEAM=YOUR_TEAM_ID ./build.sh`.
+2. **Signing:** `FluidVoice → Signing & Capabilities → Automatically manage signing → pick your Team` (Personal Team is fine). If you have certificates for multiple teams, select one without changing the project by running `FLUIDVOICE_DEVELOPMENT_TEAM=YOUR_TEAM_ID ./build.sh`.
 3. Build and run — SPM handles dependencies.
 4. **(Optional) Pre-commit hook** to prevent accidental team ID commits:
    ```bash

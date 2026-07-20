@@ -21,7 +21,7 @@ resolve_development_team() {
     identity="$(security find-identity -v -p codesigning 2>/dev/null \
         | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' \
         | awk 'NR == 1 { identity = $0 } END { print identity }')"
-    [ -n "${identity}" ] || return
+    [ -n "${identity}" ] || return 0
 
     if [ -n "${FLUIDVOICE_DEVELOPMENT_TEAM:-}" ]; then
         printf '%s\n' "${FLUIDVOICE_DEVELOPMENT_TEAM}"
@@ -55,9 +55,16 @@ run_public_build() {
 
     development_team="$(resolve_development_team)"
     if [ -z "${development_team}" ]; then
-        cat >&2 <<'EOF'
-No Apple Development signing identity was found.
+        if [ -n "${FLUIDVOICE_DEVELOPMENT_TEAM:-}" ]; then
+            printf >&2 'FLUIDVOICE_DEVELOPMENT_TEAM is set to %s, but no Apple Development signing identity was found.\n\n' \
+                "${FLUIDVOICE_DEVELOPMENT_TEAM}"
+            printf >&2 '%s\n\n' \
+                "The team override selects an installed signing identity; it does not replace a certificate."
+        else
+            printf >&2 'No Apple Development signing identity was found.\n\n'
+        fi
 
+        cat >&2 <<'EOF'
 For stable Accessibility permission across rebuilds, add any Apple Account in:
   Xcode > Settings > Accounts
 
